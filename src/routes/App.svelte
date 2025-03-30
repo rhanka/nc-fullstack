@@ -220,7 +220,7 @@
 </script>
 
 <Header bind:expand></Header>
-<Rail>
+<Rail bind:expand>
 	{#each tabs as tab}
 		<RailItem
 			{...tab.rail}
@@ -231,25 +231,6 @@
 <Drawer bind:expand={expand}>
 	{#each tabs as tab}
     {#if tab.drawer && $activeTabValue === tab.rail.value}
-      <div style="position:relative;">
-        <div
-          style="display:flex;align-items:right;flex-direction: row-reverse;padding:0.2rem;    background: rgb(248, 248, 248);"
-        >
-
-          <button
-            style="cursor:pointer;align:right;border:none;padding:0.1rem;background:none;"
-            on:click={() => {expand=false;}}
-          >
-            <Icon icon="mdi:chevron-left" height="1rem"/>
-          </button>
-          <button
-            style="cursor:pointer;align:right;border:none;padding-top:0.2rem;background:none;"
-            on:click={tab.drawer.cleanCallBack}
-          >
-            <Icon icon="mdi:trash-can-outline" height="1rem"/>
-          </button>
-        </div>
-      </div>
       <svelte:component
         this={tab.drawer.component}
         {...tab.drawer.arguments}
@@ -258,7 +239,7 @@
 	{/each}
 </Drawer>
 
-<main style={expand ? "margin-left:25rem" : "margin-left:5rem"}>
+<main class={expand ? "container-expanded" : "container"}>
   <div class="pane right">
 	{#each tabs as tab}
 	<div style="display: {$activeTabValue === tab.rail.value ? 'block' : 'none'};">
@@ -285,9 +266,10 @@
 
 
 <div
-	style="position: absolute;bottom:1rem;right:1rem;display: {$showChatbot ? 'block' : 'none'};"
+  class="chatbot-container"
+	style="display: {$showChatbot ? 'block' : 'none'};"
 >
-	<Chatbot stream={true}></Chatbot>
+	<Chatbot bind:expand stream={true}></Chatbot>
 </div>
 
 <style>
@@ -295,12 +277,24 @@
     padding: 0rem;
     height: calc(100vh - 75px);
   }
+
   .container {
-    display: flex;
-    flex-direction: row;
-    margin: 0px;
-    padding: 0px;
+    margin-left: 5rem;
   }
+  .container-expanded {
+    margin-left: 25rem;
+  }
+  @media (max-width: 768px) {
+    .container {
+      margin-top:5rem;
+      margin-left: 0rem;
+    }
+    .container-expanded {
+      margin-top:15rem;
+      margin-left: 0rem;
+    }
+  }
+
   .pane {
     padding: 0rem;
     transition: width 0.3s;
@@ -325,5 +319,19 @@
 	background: #fff;
 	border: none;
 	filter: drop-shadow(rgba(0, 0, 0, 0.267) 0px 2px 5px);
+  }
+
+  .chatbot-container {
+    position: absolute;
+    bottom:1rem;
+    right:1rem;
+    z-index: 100;
+  }
+
+  @media (max-width: 768px) {
+    .chatbot-container {
+      bottom:0;
+      right:0;
+    }
   }
 </style>
