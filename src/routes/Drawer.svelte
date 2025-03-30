@@ -22,20 +22,19 @@
 <style>
   .MuiDrawer-root-custom .MuiDrawer-paper {
     box-sizing: border-box;
-    top: 75px;
+    position: fixed;
+    top: 5rem;
+    left: 5rem;
     width: 20rem;
     box-shadow: none;
     filter: drop-shadow(rgba(104, 114, 116, 0.267) 0px 2px 5px);
-    border-left: 1px solid rgb(214, 217, 219);
-    transition: display 0.3s ease 0s;
-    margin-left: 5rem;
-    background: rgb(248, 248, 248);
-    z-index: 200;
+    border-left: 1px solid rgb(214, 217, 219)oxbackground: rgb(248, 248, 248);
+    z-index: 150;
   }
   @media (max-width: 768px) {
     .MuiDrawer-root-custom .MuiDrawer-paper {
-      margin-left: 0rem;
-      margin-top: 5rem;
+      left: 0rem;
+      top: 10rem;
       width: 100%;
     }
   }
@@ -48,7 +47,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    z-index: 1200;
+    z-index: 150;
     position: fixed;
     top: 0px;
     left: 0px;

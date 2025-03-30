@@ -65,6 +65,7 @@
   .Rail {
     display: flex;
     position: fixed;
+    top: 5rem;
     flex-direction: column;
     justify-content: space-between;
     height: 100%;
@@ -72,7 +73,7 @@
     overflow-y: auto;
     background: #fff;
     filter: drop-shadow(rgba(104, 114, 116, 0.267) 0px 2px 5px);
-    z-index: 250;
+    z-index: 200;
   }
 
   .RailNav {
@@ -89,6 +90,7 @@
   @media (max-width: 768px) {
     /* Adjust the container to be a top bar */
     .Rail {
+      margin-top: 0;
       flex-direction: row; /* Layout horizontally */
       height: auto; /* Height based on content */
       min-height: 5rem; /* Minimum height for the bar */
@@ -100,7 +102,7 @@
       overflow-x: hidden; /* No horizontal scrolling for the bar itself */
       border-bottom: 1px solid #e0e0e0; /* Bottom border as separator */
       filter: drop-shadow(rgba(104, 114, 116, 0.15) 0px 2px 3px); /* Adjusted shadow */
-      z-index: 1200; /* Ensure it's above other content */
+      z-index: 200; /* Ensure it's above other content */
     } /* End of .Rail in media query */
 
     /* Adjust the navigation list for horizontal layout */

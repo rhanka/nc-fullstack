@@ -37,7 +37,7 @@
   });
 
   $: dynamicWidth = (windowInnerWidth !== undefined && windowInnerWidth <= 768) ? '100dvw' : width;
-  $: dynamicHeight = (windowInnerWidth !== undefined && windowInnerWidth <= 768) ? `calc(100dvh - ${expand ? 21.2 : 11.2}rem)` : height;
+  $: dynamicHeight = (windowInnerWidth !== undefined && windowInnerWidth <= 768) ? `calc(100dvh - ${expand ? 21.5 : 11.5}rem)` : height;
 
   let dynamicInputWidth = inputWidth; // default value
   $: dynamicInputWidth = (windowInnerWidth !== undefined && windowInnerWidth <= 768) ? 'calc(100vw - 1.5rem)' : inputWidth;

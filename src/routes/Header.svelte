@@ -42,7 +42,7 @@
         box-sizing: border-box;
         flex-shrink: 0;
         position: fixed;
-        z-index: 1300;
+        z-index: 300;
         top: 0px;
         left: auto;
         right: 0px;
