@@ -254,7 +254,8 @@
 
 
 <div
-	style="position: absolute;bottom:1.5rem;right:2rem;display: {$showChatbot ? 'none' : 'block'};"
+  class="chatbot-button-container"
+	style="display: {$showChatbot ? 'none' : 'block'};"
 >
 	<button
 		class="chatbot-button"
@@ -311,14 +312,28 @@
     height: inherit;
   }
 
+.chatbot-button-container {
+  position: fixed;
+  bottom:1.5rem;
+  right:2rem;
+}
+
+  @media (max-width: 768px) {
+    .chatbot-button-container {
+      bottom:1rem;
+      right:1rem;
+    }
+  }
+
+
   .chatbot-button {
-	border-radius: 50%;
-	font-size: 1.5rem;
-	padding: 0.5rem;
-	padding-bottom:0;
-	background: #fff;
-	border: none;
-	filter: drop-shadow(rgba(0, 0, 0, 0.267) 0px 2px 5px);
+    border-radius: 50%;
+    font-size: 1.5rem;
+    padding: 0.5rem;
+    padding-bottom:0;
+    background: #fff;
+    border: none;
+    filter: drop-shadow(rgba(0, 0, 0, 0.267) 0px 2px 5px);
   }
 
   .chatbot-container {
