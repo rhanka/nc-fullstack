@@ -1,12 +1,5 @@
 <script>
   export let expand = false;
-  function MWCDrawer (node) {
-		function handleNav(event) {
-			console.log(node, event.target);
-            expand = !expand;
-            node.open = expand;
-		}
-  }
 </script>
 
 <div
@@ -39,6 +32,13 @@
     background: rgb(248, 248, 248);
     z-index: 200;
   }
+  @media (max-width: 768px) {
+    .MuiDrawer-root-custom .MuiDrawer-paper {
+      margin-left: 0rem;
+      margin-top: 5rem;
+      width: 100%;
+    }
+  }
 
   .MuiDrawer-custom {
     background-color: rgb(255, 255, 255);
@@ -56,5 +56,12 @@
     flex: 1 0 auto;
     outline: 0px;
     border-right: 1px solid rgba(0, 0, 0, 0.12);
+  }
+
+  @media (max-width: 768px) {
+    .MuiDrawer-custom {
+      height: 10rem;
+      width: 100%;
+    }
   }
 </style>
