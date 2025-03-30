@@ -332,7 +332,7 @@
     position: absolute;
     bottom:1rem;
     right:1rem;
-    z-index: 100;
+    z-index: 400;
   }
 
   @media (max-width: 768px) {
@@ -344,6 +344,7 @@
       width: 100%;
       bottom:0;
       right:0;
+      z-index: 100;
     }
   }
 </style>
