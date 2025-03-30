@@ -72,6 +72,7 @@
 .selected::after {
   content: '';
   position: absolute;
+  /* Default gradient direction: top-to-bottom */
   background: linear-gradient(rgb(227, 25, 55), rgb(82, 54, 171));
 }
 
@@ -87,20 +88,48 @@
 /* --- Mobile Styles (Line on Bottom) --- */
 @media (max-width: 768px) {
   .selected::after {
+    /* Positioning for bottom line (correct) */
     left: 0;
     right: 0;
-    bottom: 0;     /* <<< Position at the bottom */
-    height: 0.25rem;/* <<< Set height for thickness */
-    top: auto;     /* Reset top */
-    width: auto;   /* Reset width */
+    bottom: 0;
+    height: 0.25rem; /* Thickness */
+    top: auto;
+    width: auto;
+
+    /* --- Override background for HORIZONTAL gradient --- */
+    background: linear-gradient(to right, rgb(227, 25, 55), rgb(82, 54, 171));
+    /* You could also use 'to left' or '90deg' depending on desired direction */
   }
 }
 
-  .desactivated {
-    opacity: 0.5;
-  }
+/* --- Other styles --- */
+i {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
 
-  .label {
-    font-size: 0.7rem;
-  }
+button {
+  border: none;
+  background: none;
+  border-left: 0.25rem solid rgb(0,0,0,0); /* Transparent initial border */
+  width: 100%;
+  height: 100%;
+}
+
+.MuiListItemText-root-custom {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding-top:1rem;
+  padding-bottom:0.5rem;
+}
+
+.desactivated {
+  opacity: 0.5;
+}
+
+.label {
+  font-size: 0.7rem;
+}
 </style>
