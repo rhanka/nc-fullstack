@@ -3,18 +3,21 @@
   import { DeepChat } from "deep-chat";
   import { filteredNonConformities, showChatbot } from "./store.js";
   import Icon from "@iconify/svelte";
+  import { onMount } from 'svelte';
 
   let aiUrl =
     "https://dataiku.genai-cgi.com/web-apps-backends/NONCONFORMITIES/3DGvs3v/ai";
+  export let expand = false;
   export let stream = false;
   export let height = "70vh";
   export let width = "25rem";
   let inputWidth = "23.5rem";
+  let windowInnerWidth = undefined;
+  let dynamicWidth = width;
+  let dynamicHeight = height;
 
   let currentMsg = {};
   let nativeStream = true;
-
-
 
   import {
     createdItem,
@@ -24,13 +27,25 @@
     chatElementRef,
     defaultAction,
   } from "./store.js";
-  import { slide } from "svelte/transition";
-  import { ssrModuleExportsKey } from "vite/module-runner";
-    import { calcRT } from "./ShowDocumentHelper.svelte";
 
   $: console.log(
     `Chatbot stream mode: ${stream}; use nativeStream: ${stream && nativeStream}`,
   );
+
+  onMount(() => {
+      windowInnerWidth = window.innerWidth;
+  });
+
+  $: dynamicWidth = (windowInnerWidth !== undefined && windowInnerWidth <= 768) ? '100vw' : width;
+  $: dynamicHeight = (windowInnerWidth !== undefined && windowInnerWidth <= 768) ? `calc(100vh - ${expand ? 21.2 : 11.2}rem)` : height;
+
+  let dynamicInputWidth = inputWidth; // default value
+  $: dynamicInputWidth = (windowInnerWidth !== undefined && windowInnerWidth <= 768) ? 'calc(100vw - 1.5rem)' : inputWidth;
+
+  $: if ($chatElementRef && dynamicWidth) {
+    $chatElementRef.style.width = dynamicWidth;
+    $chatElementRef.style.height = dynamicHeight;
+  }
 
   const history = [];
 
@@ -292,15 +307,17 @@
   };
 </script>
 
+<svelte:window bind:innerWidth={windowInnerWidth}/>
+
 <main class="deep-chat-container">
 <div
-	style="display:flex;align-items:right;flex-direction: row-reverse;padding:0.2rem;background: rgb(248, 248, 248);border-bottom: 1px solid rgba(0,0,0,.1)"
+	style="display:flex;align-items:right;flex-direction: row-reverse;padding:0.1rem;height:1.25rem;background: rgb(248, 248, 248);border-bottom: 1px solid rgba(0,0,0,.1)"
 >
 	<button
 		style="cursor:pointer;align:right;border:none;padding:0.1rem;background:none;"
 		on:click={() => {$showChatbot=false;}}
 	>
-		<Icon icon="mdi:chevron-down" height="1rem"/>
+		<Icon icon="mdi:chevron-down" height="1.25rem"/>
 	</button>
 	<button
 		style="cursor:pointer;align:right;border:none;padding:0.1rem;background:none;"
@@ -322,8 +339,7 @@
         nativeStream && stream
           ? {}
           : {
-              "Content-Type": "application/json",
-              Accept: stream
+              "Accept": stream
                 ? "text/event-stream"
                 : "application/json",
             },
@@ -335,7 +351,7 @@
           "font-family": "Source Sans Pro, sans-serif",
         },
         container: {
-          width: inputWidth,
+          width: dynamicInputWidth,
         },
         focus: { border: "1px solid #ccc" },
       },
@@ -391,8 +407,8 @@
     {history}
     chatStyle={{
       border: "0px",
-      width: width,
-      height: height,
+      width: dynamicWidth,
+      height: dynamicHeight,
     }}
     htmlClassUtilities={{
       "custom-button": {
@@ -448,8 +464,12 @@
     text-align: center;
     justify-content: center;
     display: grid;
-	margin:0px;
-	border: 1px grey;
-	filter: drop-shadow(rgba(104, 114, 116, 0.267) 0px 2px 5px);
+    margin:0px;
+    border: 1px grey;
+    filter: drop-shadow(rgba(104, 114, 116, 0.267) 0px 2px 5px);
   }
+    @media (max-width: 768px) {
+      .deep-chat-container {
+      }
+    }
 </style>
