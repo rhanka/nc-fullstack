@@ -329,7 +329,7 @@
   }
 
   .chatbot-container {
-    position: absolute;
+    position: fixed;
     bottom:1rem;
     right:1rem;
     z-index: 400;
@@ -337,7 +337,6 @@
 
   @media (max-width: 768px) {
     .chatbot-container {
-      position: fixed;   /* <<< FIXER le conteneur */
       bottom: 0;
       right: 0;
       left: 0;
