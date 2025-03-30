@@ -45,10 +45,11 @@
   }
 </script>
 
-{#if $createdItem && $createdItem.analysis_history}
-  <div
-    style="padding-left: 16px;padding-right: 8px; background-color: #f9f9f9;"
-  >
+<div
+  style="margin-top:-16px;padding-left: 16px;padding-right: 8px; background-color: #f9f9f9;"
+>
+  {#if $createdItem && $createdItem.analysis_history}
+
     <h2
       style="display: flex;justify-content: space-between;align-items:center"
     >
@@ -83,8 +84,8 @@
         bind:history={$createdItem.analysis_history[task]}
       ></NonConformityTaskCreation>
     {/each}
-  </div>
-{/if}
+  {/if}
+</div>
 
 <style>
   li:hover {

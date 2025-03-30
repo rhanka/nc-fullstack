@@ -240,15 +240,15 @@
 </Drawer>
 
 <main class={expand ? "container-expanded" : "container"}>
-  <div class="pane right">
-	{#each tabs as tab}
-	<div style="display: {$activeTabValue === tab.rail.value ? 'block' : 'none'};">
-		<svelte:component
-			this={tab.content.component}
-			{...tab.content.arguments}
-		/>
-	</div>
-	{/each}
+  <div class="pane">
+    {#each tabs as tab}
+      <div style="padding-top:0;display: {$activeTabValue === tab.rail.value ? 'block' : 'none'};">
+        <svelte:component
+          this={tab.content.component}
+          {...tab.content.arguments}
+        />
+      </div>
+    {/each}
   </div>
 </main>
 
@@ -280,18 +280,20 @@
   }
 
   .container {
+    margin-top: 5rem;
     margin-left: 5rem;
   }
   .container-expanded {
+    margin-top: 5rem;
     margin-left: 25rem;
   }
   @media (max-width: 768px) {
     .container {
-      margin-top:5rem;
+      margin-top:10rem;
       margin-left: 0rem;
     }
     .container-expanded {
-      margin-top:15rem;
+      margin-top:20rem;
       margin-left: 0rem;
     }
   }
@@ -299,17 +301,7 @@
   .pane {
     padding: 0rem;
     transition: width 0.3s;
-    height: 100vh;
     overflow-y: auto;
-  }
-  .left {
-    width: 25vw;
-    display: flex;
-    flex-direction: column;
-  }
-  .right {
-    transition: width 0.3s;
-    height: inherit;
   }
 
 .chatbot-button-container {
