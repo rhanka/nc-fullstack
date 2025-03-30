@@ -41,13 +41,13 @@
         width: 100%;
         box-sizing: border-box;
         flex-shrink: 0;
-        position: sticky;
-        z-index: 1100;
+        position: fixed;
+        z-index: 1300;
         top: 0px;
         left: auto;
         right: 0px;
         box-shadow: rgba(105, 108, 110, 0.27) 0px 2px 5px;
-        height: 75px;
+        height: 5rem;
         -webkit-box-pack: center;
         justify-content: center;
         background-color: white;

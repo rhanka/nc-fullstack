@@ -330,6 +330,11 @@
 
   @media (max-width: 768px) {
     .chatbot-container {
+      position: fixed;   /* <<< FIXER le conteneur */
+      bottom: 0;
+      right: 0;
+      left: 0;
+      width: 100%;
       bottom:0;
       right:0;
     }
