@@ -47,6 +47,8 @@
     border: none;
     background: none;
   	border-left: 0.25rem solid rgb(0,0,0,0);
+    width: 100%;
+    height: 100%;
  }
 
   .MuiListItemText-root-custom {
@@ -59,12 +61,40 @@
 
   }
 
-  .selected {
-    border-left: 0.25rem solid;
-    background: rgb(230, 227, 243);
-    border-image: linear-gradient(rgb(227, 25, 55), rgb(82, 54, 171)) 0 100% /
-      1 / 0 stretch;
+/* --- Base Styles --- */
+.selected {
+  position: relative; /* Needed for absolute positioning of pseudo-element */
+  background: rgb(230, 227, 243);
+  border: none;       /* Remove standard borders if not needed */
+}
+
+/* Create the gradient line using ::after */
+.selected::after {
+  content: '';
+  position: absolute;
+  background: linear-gradient(rgb(227, 25, 55), rgb(82, 54, 171));
+}
+
+/* --- Desktop Styles (Line on Left) --- */
+.selected::after {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0.25rem; /* Thickness */
+  height: auto;   /* Reset height */
+}
+
+/* --- Mobile Styles (Line on Bottom) --- */
+@media (max-width: 768px) {
+  .selected::after {
+    left: 0;
+    right: 0;
+    bottom: 0;     /* <<< Position at the bottom */
+    height: 0.25rem;/* <<< Set height for thickness */
+    top: auto;     /* Reset top */
+    width: auto;   /* Reset width */
   }
+}
 
   .desactivated {
     opacity: 0.5;
