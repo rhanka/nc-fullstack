@@ -49,6 +49,62 @@
 
   const history = [];
 
+  const actionInit = (data) => {
+    console.log("actionInit", data);
+    currentMsg[data.metatada] = "";
+    // $chatElementRef.updateMessage({ html: `<div class="tool">${data.text} ...</div>`}, 0);
+    return { text: `*${data.text}...*\n` };
+  };
+
+  const actionStream = (data) => {
+    currentMsg[data.metadata] += data.v;
+  };
+
+  const actionCanevasStream = (data) => {
+    if (!currentMsg[data.metadata]) {
+      currentMsg[data.metadata] = { v: "", jsonString: "" };
+    }
+    currentMsg[data.metadata].jsonString += data.v;
+    const json = parsePartialJSON(currentMsg[data.metadata].jsonString);
+    if (json) {
+      $updateCreatedItem = {
+        role: $createdItem.currentTask,
+        label: json.label,
+        description: json.description,
+      };
+      if (json.comment) {
+        console.log(json.comment,currentMsg[data.metadata])
+        const output = {
+          text: json.comment.slice(currentMsg[data.metadata].v.length),
+          metadata: data.metadata,
+        };
+        currentMsg[data.metadata].v = json.comment;
+        return output;
+      }
+    }
+  };
+
+  const parsePartialJSON = (chunk) => {
+    // On concatène le nouveau bout et on tente une fermeture
+    if (chunk) {
+      let buffer = completeJSON(chunk).replace(/\\n/g, "\n");
+      buffer = buffer.replace(/"([^"]*)"/g, function(match) {
+        return match.replace(/\n/g, "\\n");
+      });
+      const attempt = buffer;
+      // console.log(attempt);
+      try {
+        const parsed = JSON.parse(attempt);
+        // console.log("json parsed ok");
+        return parsed;
+      } catch {
+        return null;
+      }
+    } else {
+      return null;
+    }
+  };
+
   // Fonction naïve qui ferme guillemets, crochets et accolades restants
   const completeJSON = (str) => {
     let openCurly = 0,
@@ -79,57 +135,6 @@
       openCurly--;
     }
     return fixed;
-  };
-
-  const parsePartialJSON = (chunk) => {
-    // On concatène le nouveau bout et on tente une fermeture
-    if (chunk) {
-      const buffer = chunk.replace(/\\n/g, "\n");
-      const attempt = completeJSON(buffer);
-      // console.log(attempt);
-      try {
-        const parsed = JSON.parse(attempt);
-        return parsed;
-      } catch {
-        return null;
-      }
-    } else {
-      return null;
-    }
-  };
-
-  const actionInit = (data) => {
-    console.log("actionInit", data);
-    currentMsg[data.metatada] = "";
-    // $chatElementRef.updateMessage({ html: `<div class="tool">${data.text} ...</div>`}, 0);
-    return { text: `*${data.text}...*\n` };
-  };
-
-  const actionStream = (data) => {
-    currentMsg[data.metadata] += data.v;
-  };
-
-  const actionCanevasStream = (data) => {
-    if (!currentMsg[data.metadata]) {
-      currentMsg[data.metadata] = { v: "", jsonString: "" };
-    }
-    currentMsg[data.metadata].jsonString += data.v;
-    const json = parsePartialJSON(currentMsg[data.metadata].jsonString);
-    if (json) {
-      $updateCreatedItem = {
-        role: $createdItem.currentTask,
-        label: json.label,
-        description: json.description,
-      };
-      if (json.comment) {
-        const output = {
-          v: json.comment.slice(currentMsg[data.metadata].v.length),
-          metadata: data.metadata,
-        };
-        currentMsg[data.metadata].v = json.comment;
-        return output;
-      }
-    }
   };
 
   const updateReferencesList = (data) => {
@@ -163,7 +168,8 @@
         label: json.label,
         description: json.description,
       };
-      return { text: json.comment };
+      // return { text: json.comment };
+      return { };
     }
   };
 
