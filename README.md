@@ -1,5 +1,7 @@
 # Non conformities canevas edition based on Agentic Rag using Dataiku & Svelte.js
 
+This demo is deployed on [Github pages](https://nc.genai-cgi.com/)
+
 ## Global Architecture
 
 Global components used :
