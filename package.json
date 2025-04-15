@@ -14,7 +14,7 @@
     "@iconify/svelte": "^4.2.0",
     "@sveltejs/adapter-auto": "^3.3.1",
     "@sveltejs/adapter-static": "^3.0.8",
-    "@sveltejs/kit": "^2.15.1",
+    "@sveltejs/kit": "^2.20.6",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "deep-chat": "2.1.1",
     "marked": "^15.0.5",
