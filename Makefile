@@ -23,7 +23,8 @@ export $(shell sed -n 's/=.*//p' .env 2>/dev/null)
 
 dev: config
 	@echo "▶ Starting API in dev mode (reload)…"
-	$(UVICORN) api.app:app --reload --host 0.0.0.0 --port 8000
+	$(UVICORN) api.app:app --reload --host 0.0.0.0 --port 8000 & \
+	cd $(UI_DIR) && npm run dev
 
 run: config
 	@echo "▶ Running API (prod)…"
