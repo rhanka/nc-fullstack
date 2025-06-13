@@ -20,13 +20,8 @@ jobs:
         cache: npm
         cache-dependency-path: ui/package-lock.json
 
-    - name: Install dependencies
-      working-directory: ui
-      run: npm install --legacy-peer-deps
-
-    - name: Build the project
-      working-directory: ui
-      run: npm run build
+    - name: Build UI with Makefile
+      run: make ui-build
       env:
         BASE_PATH: '/${{ github.event.repository.name }}'
 
