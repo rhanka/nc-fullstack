@@ -1,4 +1,16 @@
-node_modules
+# Node
+node_modules/
+ui/node_modules/
+
+# Python
+api/__pycache__/
+api/venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
 
 # Output
 .output
