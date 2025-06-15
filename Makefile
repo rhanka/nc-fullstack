@@ -15,20 +15,19 @@ UVICORN      := $(VENV_DIR)/bin/uvicorn
 # ----------------------------
 # Helpers
 # ----------------------------
-export $(shell sed -n 's/=.*//p' .env 2>/dev/null)
+-include .env
 
 # ----------------------------
-# Cibles principales
+# Env variables
 # ----------------------------
-
-dev: config
-	@echo "▶ Starting API in dev mode (reload)…"
-	$(UVICORN) api.app:app --reload --host 0.0.0.0 --port 8000 & \
-	cd $(UI_DIR) && npm run dev
-
-run: config
-	@echo "▶ Running API (prod)…"
-	$(UVICORN) api.app:app --host 0.0.0.0 --port 8000
+export UI_DIR          ?= ui
+export IMAGE_NAME      ?= nc-chatbot
+export TAG             ?= $(shell git rev-parse --short HEAD)
+export REGISTRY        ?= rg.fr-par.scw.cloud/$(IMAGE_NAME)
+export S3_BUCKET_DOCS  ?= a220-tech-docs
+export S3_BUCKET_NC    ?= a220-non-conformities
+export S3_REGION       ?= fr-par
+export S3_ENDPOINT_URL ?= https://s3.fr-par.scw.cloud
 
 # ----------------------------
 # Préparation environnement Python & .env
@@ -90,7 +89,81 @@ build: ui-build docker-build
 deploy: build docker-push
 	@echo "▶ Deploying container to Scaleway Container Registry/Namespace"
 	@echo "   (Adapt this command to your infra)"
-	# Exemple : scw container container deploy name=$(IMAGE_NAME) image=$(REGISTRY):$(TAG)
+	# Example: scw container container deploy name=$(IMAGE_NAME) image=$(REGISTRY):$(TAG)
+
+# ----------------------------
+# Data upload to Scaleway
+# ----------------------------
+
+check-s5cmd:
+	@if ! command -v s5cmd >/dev/null 2>&1; then \
+		echo "❌ s5cmd not found. Installing..."; \
+		curl -L https://github.com/peak/s5cmd/releases/download/v2.3.0/s5cmd_2.3.0_Linux-64bit.tar.gz | tar xz -C /tmp; \
+		sudo mv /tmp/s5cmd /usr/local/bin/; \
+	fi
+
+check-env:
+	@echo "Checking environment variables..."
+	@test -n "$(S3_DATAPREP_ACCESS_KEY)" || (echo "❌ S3_DATAPREP_ACCESS_KEY not set" && exit 1)
+	@test -n "$(S3_DATAPREP_SECRET_KEY)" || (echo "❌ S3_DATAPREP_SECRET_KEY not set" && exit 1)
+	@test -n "$(S3_ENDPOINT_URL)" || (echo "❌ S3_ENDPOINT_URL not set" && exit 1)
+	@test -n "$(S3_BUCKET_NC)" || (echo "❌ S3_BUCKET_NC not set" && exit 1)
+	@test -n "$(S3_BUCKET_DOCS)" || (echo "❌ S3_BUCKET_DOCS not set" && exit 1)
+	@echo "✅ All environment variables are set"
+
+dataprep-upload-nc-data: check-s5cmd
+	@if [ -z "${S3_DATAPREP_ACCESS_KEY}" ] || [ -z "${S3_DATAPREP_SECRET_KEY}" ]; then \
+		echo "❌ Error: S3_DATAPREP_ACCESS_KEY and S3_DATAPREP_SECRET_KEY must be set in env"; \
+		exit 1; \
+	fi
+	@echo "▶ Uploading non-conformities data to Scaleway..."
+	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY} &&\
+	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY} &&\
+	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
+		sync 'api/data/${S3_BUCKET_NC}/*' s3://${S3_BUCKET_NC}/
+
+dataprep-upload-tech-docs: check-s5cmd
+	@if [ -z "${S3_DATAPREP_ACCESS_KEY}" ] || [ -z "${S3_DATAPREP_SECRET_KEY}" ]; then \
+		echo "❌ Error: S3_DATAPREP_ACCESS_KEY and S3_DATAPREP_SECRET_KEY must be set in env"; \
+		exit 1; \
+	fi
+	@echo "▶ Uploading technical documentation to Scaleway..."
+	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY} &&\
+	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY} &&\
+	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
+		sync 'api/data/${S3_BUCKET_DOCS}/*' s3://${S3_BUCKET_DOCS}/
+
+dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
+	@echo "✔️  All data upload completed."
+
+# ----------------------------
+# Data download from Scaleway
+# ----------------------------
+
+dataprep-download-nc-data: check-s5cmd
+	@if [ -z "${S3_API_ACCESS_KEY}" ] || [ -z "${S3_API_SECRET_KEY}" ]; then \
+		echo "❌ Error: S3_API_ACCESS_KEY and S3_API_SECRET_KEY must be set in env"; \
+		exit 1; \
+	fi
+	@echo "▶ Downloading non-conformities data from Scaleway..."
+	export AWS_ACCESS_KEY_ID=${S3_API_ACCESS_KEY} &&\
+	export AWS_SECRET_ACCESS_KEY=${S3_API_SECRET_KEY} &&\
+	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_NC}/* 'api/data/${S3_BUCKET_NC}/'
+
+dataprep-download-tech-docs: check-s5cmd
+	@if [ -z "${S3_API_ACCESS_KEY}" ] || [ -z "${S3_API_SECRET_KEY}" ]; then \
+		echo "❌ Error: S3_API_ACCESS_KEY and S3_API_SECRET_KEY must be set in env"; \
+		exit 1; \
+	fi
+	@echo "▶ Downloading technical documentation from Scaleway..."
+	export AWS_ACCESS_KEY_ID=${S3_API_ACCESS_KEY} &&\
+	export AWS_SECRET_ACCESS_KEY=${S3_API_SECRET_KEY} &&\
+	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_DOCS}/* 'api/data/${S3_BUCKET_DOCS}/'
+
+dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
+	@echo "✔️  All data download completed."
 
 .PHONY: deps env config clean
 clean:
