@@ -2,17 +2,6 @@
 .PHONY: dev run ui-install ui-build docker-build docker-push build deploy deps env config clean
 
 # ----------------------------
-# Variables configurables
-# ----------------------------
-UI_DIR       ?= ui
-IMAGE_NAME   ?= nc-chatbot
-TAG          ?= $(shell git rev-parse --short HEAD)
-REGISTRY     ?= rg.fr-par.scw.cloud/$(IMAGE_NAME)
-VENV_DIR     := api/venv
-PIP          := $(VENV_DIR)/bin/pip
-UVICORN      := $(VENV_DIR)/bin/uvicorn
-
-# ----------------------------
 # Helpers
 # ----------------------------
 -include .env
@@ -30,25 +19,16 @@ export S3_REGION       ?= fr-par
 export S3_ENDPOINT_URL ?= https://s3.fr-par.scw.cloud
 
 # ----------------------------
-# Préparation environnement Python & .env
+# Main targets
 # ----------------------------
 
-# Si la création du venv échoue, installez manuellement :
-# sudo apt update && sudo apt install python3.12-venv python3-pip python3-full
-# puis supprimez le dossier venv (rm -rf venv) et relancez.
+dev:
+	@echo "▶ Starting API and UI in dev mode with Docker..."
+	docker-compose up --build
 
-config: env $(PIP)
-	@echo "▶ Installing/updating Python dependencies..."
-	$(PIP) install -r api/requirements.txt
-	@echo "▶ Environment ready"
-
-$(PIP):
-	@echo "▶ Setting up Python virtual environment..."
-	@if ! dpkg -l | grep -q python3-venv; then \
-		echo "   python3-venv not found. Attempting to install it with sudo..."; \
-		sudo apt-get update && sudo apt-get install -y python3-venv; \
-	fi
-	python3 -m venv $(VENV_DIR)
+run:
+	@echo "▶ Running API and UI in production mode with Docker..."
+	docker-compose up --build
 
 env:
 	@if [ ! -f .env ]; then \
@@ -83,7 +63,7 @@ docker-push:
 build: ui-build docker-build
 
 # ----------------------------
-# Déploiement (exemple Scaleway CLI)
+# Deployment (example Scaleway CLI)
 # ----------------------------
 
 deploy: build docker-push
@@ -167,9 +147,9 @@ dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 
 .PHONY: deps env config clean
 clean:
-	@echo "▶ Nettoyage de l'environnement..."
+	@echo "▶ Cleaning environment..."
 	rm -rf api/venv
 	rm -rf api/__pycache__
 	rm -rf ui/node_modules
 	rm -rf ui/build
-	@echo "✔️  Nettoyage terminé." 
+	@echo "✔️  Cleaning done." 
