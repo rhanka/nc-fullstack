@@ -1,0 +1,81 @@
+import os
+from typing import List, Dict
+
+class BaseLLM:
+    async def chat(self, messages: List[Dict[str, str]], temperature: float = 0) -> str:
+        raise NotImplementedError
+
+class OpenAILLM(BaseLLM):
+    def __init__(self, model="gpt-4.1-nano"):
+        import openai
+        self.client = openai
+        self.client.api_key = os.getenv("OPENAI_API_KEY")
+        self.model = model
+
+    async def chat(self, messages, temperature=0):
+        resp = self.client.ChatCompletion.create(model=self.model, messages=messages, temperature=temperature)
+        return resp.choices[0].message["content"]
+
+class AnthropicLLM(BaseLLM):
+    def __init__(self, model="claude-3-opus-20240229"):
+        import anthropic
+        self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.model = model
+
+    async def chat(self, messages, temperature=0):
+        prompt = "".join([f"\n\n{m['role'].upper()}: {m['content']}" for m in messages]) + "\n\nASSISTANT:"
+        resp = self.client.completions.create(
+            model=self.model,
+            max_tokens=1024,
+            temperature=temperature,
+            prompt=prompt,
+        )
+        return resp.completion.strip()
+
+class GeminiLLM(BaseLLM):
+    def __init__(self, model="gemini-pro"):
+        import google.generativeai as genai
+        self.client = genai
+        self.client.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+        self.model = self.client.GenerativeModel(model)
+
+    async def chat(self, messages, temperature=0):
+        gemini_messages = []
+        system_prompt = ""
+        for m in messages:
+            if m["role"] == "system":
+                system_prompt += m["content"] + "\n\n"
+            else:
+                role = "user" if m["role"] == "user" else "model"
+                content = m["content"]
+                if role == "user" and system_prompt:
+                    content = system_prompt + content
+                    system_prompt = ""
+                gemini_messages.append({"role": role, "parts": [content]})
+        generation_config = self.client.types.GenerationConfig(temperature=temperature)
+        resp = self.model.generate_content(gemini_messages, generation_config=generation_config)
+        return resp.text
+
+class MistralLLM(BaseLLM):
+    def __init__(self, model="mistral-large-latest"):
+        from mistralai.client import MistralClient
+        from mistralai.models.chat_completion import ChatMessage
+        self.client = MistralClient(api_key=os.getenv("MISTRAL_API_KEY"))
+        self.model = model
+        self.ChatMessage = ChatMessage
+
+    async def chat(self, messages, temperature=0):
+        mistral_messages = [self.ChatMessage(role=m["role"], content=m["content"]) for m in messages]
+        resp = self.client.chat(
+            model=self.model,
+            messages=mistral_messages,
+            temperature=temperature,
+        )
+        return resp.choices[0].message.content
+
+PROVIDERS = {
+    "openai": OpenAILLM,
+    "anthropic": AnthropicLLM,
+    "google": GeminiLLM,
+    "mistral": MistralLLM,
+} 
