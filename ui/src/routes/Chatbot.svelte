@@ -5,8 +5,7 @@
   import Icon from "@iconify/svelte";
   import { onMount } from 'svelte';
 
-  let aiUrl =
-    "https://dataiku.genai-cgi.com/web-apps-backends/NONCONFORMITIES/3DGvs3v/ai";
+  let aiUrl = `${import.meta.env.VITE_API_URL}/ai`;
   export let expand = false;
   export let stream = false;
   export let height = "70vh";
@@ -242,7 +241,7 @@
           label: json.label,
           description: json.description,
         };
-        return { html: marked(json.text) }; // Retourner le JSON � DeepChat
+        return { html: marked(json.text) }; // Retourner le JSON à DeepChat
       } catch (e) {
         console.error("Erreur lors du parsing du JSON:", e);
         return { error: "Invalid JSON format" }; // Retourner une erreur si le JSON est invalide
