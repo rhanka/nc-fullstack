@@ -5,6 +5,7 @@ ui/node_modules/
 # Python
 api/__pycache__/
 api/venv/
+api/data
 __pycache__/
 *.pyc
 *.pyo
