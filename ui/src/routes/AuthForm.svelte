@@ -24,7 +24,7 @@
       return;
     }
 
-    const apiUrl = `https://dataiku.genai-cgi.com/web-apps-backends/NONCONFORMITIES/3DGvs3v/${type}`;
+    const apiUrl = `${import.meta.env.VITE_API_URL}/${type}`;
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {

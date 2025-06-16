@@ -30,7 +30,7 @@
   } from "./store.js";
 
   let maxRows = 5000;
-  let apiUrl = `https://dataiku.genai-cgi.com/web-apps-backends/NONCONFORMITIES/3DGvs3v/nc?max_rows=${maxRows}`;
+  let apiUrl = `${import.meta.env.VITE_API_URL}/nc?max_rows=${maxRows}`;
   let nonConformitiesList = sortNC(nonConformities);
   let nonConformitiesFilter = [];
   let nc_num = 0;
@@ -49,7 +49,7 @@
 
 
   $: if ($selectDoc !== null) {
-    selectDocUrl = `https://dataiku.genai-cgi.com/web-apps-backends/NONCONFORMITIES/3DGvs3v/doc/${encodeURIComponent($selectDoc.doc.replace(/\.md/, ".pdf"))}`;
+    selectDocUrl = `${import.meta.env.VITE_API_URL}/doc/${encodeURIComponent($selectDoc.doc.replace(/\.md/, ".pdf"))}`;
   }
 
   async function getData() {
@@ -65,7 +65,7 @@
         nonConformitiesList = sortNC(await response.json());
         console.log(
           `fetched ${nonConformitiesList.length} non conformities`,
-        ); // Affiche les donn�es JSON
+        ); // Affiche les données JSON
       } else {
         console.error("HTTP error", response.status);
       }
