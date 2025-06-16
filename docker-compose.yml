@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - JWT_SECRET
+      - JWT_EXPIRE
+      - S3_API_ACCESS_KEY
+      - S3_API_SECRET_KEY
+      - S3_ENDPOINT_URL
+      - S3_BUCKET_DOCS
+      - S3_BUCKET_NC
+      - S3_REGION
+    volumes:
+      - ./api:/app
+    networks:
+      - app-network
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./ui:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./rpa/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - api
+      - ui
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge 
