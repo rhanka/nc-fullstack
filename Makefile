@@ -17,6 +17,8 @@ export S3_BUCKET_DOCS  ?= a220-tech-docs
 export S3_BUCKET_NC    ?= a220-non-conformities
 export S3_REGION       ?= fr-par
 export S3_ENDPOINT_URL ?= https://s3.fr-par.scw.cloud
+export VITE_API_URL    ?=
+
 
 # ----------------------------
 # Main targets
