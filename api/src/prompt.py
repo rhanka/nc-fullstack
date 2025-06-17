@@ -28,4 +28,22 @@ def load_prompts_from_dir() -> Dict[str, PromptTemplate]:
         if fname.endswith('.prompt'):
             key = fname.replace('.prompt', '')
             prompts[key] = PromptTemplate(os.path.join(prompt_dir, fname))
+    return prompts
+
+# Ajout d'alias lisibles/compatibilité legacy
+def build_prompt_registry() -> Dict[str, PromptTemplate]:
+    prompts = load_prompts_from_dir()
+
+    alias_map = {
+        "000": "compute_nc_scenarios_propose_000",
+        "100": "compute_nc_scenarios_propose_100",
+        "query": "compute_nc_scenarios_query",
+        "nc_search": "compute_nc_scenarios_search_nc",
+        "doc_search": "compute_nc_scenarios_search_techdocs",
+    }
+
+    for alias, target in alias_map.items():
+        if target in prompts:
+            prompts[alias] = prompts[target]
+
     return prompts 

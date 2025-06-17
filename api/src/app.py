@@ -7,10 +7,13 @@ import json
 import os
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
+import logging
+import time
+import asyncio
 
 from src.s3_utils import fetch_s3_object, list_json_keys, S3_BUCKET_DOCS, S3_BUCKET_NC
-from src.prompt import PromptTemplate, load_prompts_from_dir
-from src.llm import PROVIDERS
+from src.core import run_prompt, PROMPTS, PROVIDERS
+from src.ai_stream import AGENTS, AGENTS_MSG, exec_agent, stream_agent, sse_encode
 
 # ===============================================================
 # Configuration et constantes
@@ -19,6 +22,9 @@ from src.llm import PROVIDERS
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "CHANGE_ME")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE", "60"))
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+logger = logging.getLogger("nc_api")
 
 # ===============================================================
 # Initialisation
@@ -56,21 +62,16 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 # ===============================================================
-# Prompts
-# ===============================================================
-PROMPTS = load_prompts_from_dir()
-
-# ===============================================================
 # Routes
 # ===============================================================
 @app.get("/doc/{file_path:path}", response_class=Response)
 async def get_doc(file_path: str):
-    data = fetch_s3_object(S3_BUCKET_DOCS, file_path)
+    data = await asyncio.to_thread(fetch_s3_object, S3_BUCKET_DOCS, file_path)
     return Response(content=data, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename={os.path.basename(file_path)}"})
 
 @app.get("/json/{file_path:path}", response_class=JSONResponse)
 async def get_json(file_path: str):
-    data = fetch_s3_object(S3_BUCKET_NC, file_path)
+    data = await asyncio.to_thread(fetch_s3_object, S3_BUCKET_NC, file_path)
     try:
         payload = json.loads(data)
     except json.JSONDecodeError:
@@ -79,44 +80,147 @@ async def get_json(file_path: str):
 
 @app.get("/nc")
 async def list_non_conformities(max_rows: int = 500, id: str | None = None):
-    keys: List[str] = list_json_keys(S3_BUCKET_NC)
+    keys: List[str] = await asyncio.to_thread(list_json_keys, S3_BUCKET_NC)
+
+    # If an ID is provided, we fetch everything from the first page and filter.
+    # If not, we can limit the number of files to fetch.
+    if not id:
+        keys = keys[:max_rows]
+
+    if not keys:
+        return []
+
+    # Concurrently fetch all the required S3 objects.
+    tasks = [asyncio.to_thread(fetch_s3_object, S3_BUCKET_NC, key) for key in keys]
+    blobs_or_errors = await asyncio.gather(*tasks, return_exceptions=True)
+
     records: List[Dict[str, Any]] = []
-    for key in keys:
-        blob = fetch_s3_object(S3_BUCKET_NC, key)
-        try:
-            obj = json.loads(blob)
-            records.append(obj)
-        except Exception:
-            continue
-        if len(records) >= max_rows:
-            break
+    for key, result in zip(keys, blobs_or_errors):
+        if isinstance(result, bytes):
+            try:
+                records.append(json.loads(result))
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to decode JSON from S3 object: {key}")
+                continue
+        elif isinstance(result, Exception):
+            logger.error(f"Failed to fetch S3 object {key}: {result}")
+
     if id:
         records = [r for r in records if str(r.get("nc_event_id")) == id]
-    return records
 
-async def run_prompt(name: str, provider: str, **variables):
-    if name not in PROMPTS:
-        raise HTTPException(status_code=404, detail=f"Prompt {name} not found")
-    prompt = PROMPTS[name]
-    rendered = prompt.render(**variables)
-    llm_class = PROVIDERS.get(provider)
-    if not llm_class:
-        raise HTTPException(status_code=400, detail=f"Provider {provider} not supported")
-    llm = llm_class()
-    messages = []
-    if rendered["system"]:
-        messages.append({"role": "system", "content": rendered["system"]})
-    messages.append({"role": "user", "content": rendered["user"]})
-    return await llm.chat(messages, temperature=prompt.temperature)
+    return records[:max_rows]
+
+# ===============================================================
+# AI Endpoint (Streaming / Non-Streaming)
+# ===============================================================
 
 @app.post("/ai")
 async def ai_endpoint(request: Request):
     body = await request.json()
-    prompt_name = body.get("prompt")
+
+    # --- Parsing du payload ---
+    messages = body.get("messages", [])
+    if not messages:
+        raise HTTPException(status_code=400, detail="messages field required")
+    last = messages[-1]
+    role = last.get("role", "000")
+    user_message = last.get("text", "")
+    description = last.get("description", "")
+    history = last.get("history", {}) or {}
+    sources = last.get("sources")
+
     provider = body.get("provider", "openai")
-    variables = body.get("variables", {})
-    result = await run_prompt(prompt_name, provider, **variables)
-    return {"result": result}
+
+    # Détecter si le client veut un stream
+    accept_header = request.headers.get("accept", "")
+    wants_stream = "text/event-stream" in accept_header
+
+    async def compute_non_stream():
+        nonlocal sources
+        if not sources:
+            query = await run_prompt("query", provider, role=role, user_message=user_message, description=description)
+            sources = {
+                "tech_docs": await run_prompt("doc_search", provider, input=query),
+                "non_conformities": await run_prompt("nc_search", provider, input=query),
+            }
+        final_json = await run_prompt(role, provider,
+                                      role=role,
+                                      user_message=user_message,
+                                      description=description,
+                                      search_docs=json.dumps(sources["tech_docs"]),
+                                      search_nc=json.dumps(sources["non_conformities"]),
+                                      history=json.dumps(history))
+        try:
+            final_payload = json.loads(final_json)
+        except Exception:
+            final_payload = {"comment": final_json}
+        return {
+            "text": final_payload.get("comment"),
+            "label": final_payload.get("label"),
+            "description": final_payload.get("description"),
+            "sources": sources,
+            "user_query": user_message,
+            "input_description": description,
+            "role": "ai",
+            "user_role": role,
+        }
+
+    if not wants_stream:
+        return await compute_non_stream()
+
+    # --- Version streaming SSE ---
+    async def event_generator():
+        # delta encoding header
+        yield sse_encode("delta_encoding", json.dumps("v1"))
+
+        # Steps
+        query = None
+        if not sources:
+            # action query
+            yield sse_encode(None, json.dumps({"type": "action", "text": "Build appropriate request", "metadata": "query"}))
+            query = await run_prompt("query", provider, role=role, user_message=user_message, description=description)
+            yield sse_encode(None, json.dumps({"type": "result", "text": query, "metadata": "query"}))
+
+            # doc_search
+            yield sse_encode(None, json.dumps({"type": "action", "text": "Search for relevant technical documents", "metadata": "doc_search"}))
+            tech_docs = await run_prompt("doc_search", provider, input=query)
+            yield sse_encode(None, json.dumps({"type": "result", "text": tech_docs, "metadata": "doc_search"}))
+
+            # nc_search
+            yield sse_encode(None, json.dumps({"type": "action", "text": "Search for similar non-conformities", "metadata": "nc_search"}))
+            non_conf = await run_prompt("nc_search", provider, input=query)
+            yield sse_encode(None, json.dumps({"type": "result", "text": non_conf, "metadata": "nc_search"}))
+
+            current_sources = {"tech_docs": tech_docs, "non_conformities": non_conf}
+        else:
+            current_sources = sources
+
+        # final action
+        yield sse_encode(None, json.dumps({"type": "action", "text": "Generate final answer", "metadata": role}))
+        final_json = await run_prompt(role, provider,
+                                      role=role,
+                                      user_message=user_message,
+                                      description=description,
+                                      search_docs=json.dumps(current_sources["tech_docs"]),
+                                      search_nc=json.dumps(current_sources["non_conformities"]),
+                                      history=json.dumps(history))
+        try:
+            final_payload = json.loads(final_json)
+        except Exception:
+            final_payload = {"comment": final_json}
+        result_block = {
+            "text": final_payload.get("comment"),
+            "label": final_payload.get("label"),
+            "description": final_payload.get("description"),
+            "sources": current_sources,
+            "user_query": user_message,
+            "input_description": description,
+            "role": "ai",
+            "user_role": role,
+        }
+        yield sse_encode(None, json.dumps({"type": "result", "text": result_block, "metadata": "final"}))
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 @app.post("/register")
 async def register(payload: Dict[str, str]):
@@ -143,4 +247,13 @@ async def login(payload: Dict[str, str]):
 
 @app.get("/ping")
 async def ping():
-    return {"status": "ok"} 
+    return {"status": "ok"}
+
+# Middleware de log des requêtes
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = (time.time() - start_time) * 1000  # ms
+    logger.info("%s %s - %s - %.2fms", request.client.host, request.method, request.url.path, process_time)
+    return response 

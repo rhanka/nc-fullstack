@@ -7,14 +7,17 @@ class BaseLLM:
 
 class OpenAILLM(BaseLLM):
     def __init__(self, model="gpt-4.1-nano"):
-        import openai
-        self.client = openai
-        self.client.api_key = os.getenv("OPENAI_API_KEY")
+        from openai import OpenAI
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model = model
 
     async def chat(self, messages, temperature=0):
-        resp = self.client.ChatCompletion.create(model=self.model, messages=messages, temperature=temperature)
-        return resp.choices[0].message["content"]
+        resp = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=temperature
+        )
+        return resp.choices[0].message.content
 
 class AnthropicLLM(BaseLLM):
     def __init__(self, model="claude-3-opus-20240229"):

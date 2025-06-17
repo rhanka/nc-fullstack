@@ -27,8 +27,15 @@ def fetch_s3_object(bucket: str, key: str) -> bytes:
         raise HTTPException(status_code=500, detail=str(e))
 
 def list_json_keys(bucket: str) -> List[str]:
-    paginator = s3.get_paginator("list_objects_v2")
-    keys = []
-    for page in paginator.paginate(Bucket=bucket):
-        keys += [item["Key"] for item in page.get("Contents", []) if item["Key"].endswith(".json")]
+    """Lists JSON keys from an S3 bucket.
+
+    This function retrieves only the first page of results (up to 1000)
+    for performance reasons. It does not paginate through the entire bucket.
+    """
+    response = s3.list_objects_v2(Bucket=bucket)
+    keys = [
+        item["Key"]
+        for item in response.get("Contents", [])
+        if item["Key"].endswith(".json")
+    ]
     return keys 
