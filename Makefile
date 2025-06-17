@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev run ui-install ui-build docker-build docker-push build deploy deps env config clean
+.PHONY: dev run ui-install ui-build docker-build docker-push build deploy deps env config clean help dataprep-nc-csv-to-json
 
 # ----------------------------
 # Helpers
@@ -146,6 +146,15 @@ dataprep-download-tech-docs: check-s5cmd
 
 dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 	@echo "✔️  All data download completed."
+
+# ==============================================================================
+# Data
+# ==============================================================================
+
+dataprep-nc-csv-to-json:
+	@echo "Extracting non-conformity JSON files from source CSV..."
+	@chmod +x dataprep/extract_jsons.py
+	@./dataprep/extract_jsons.py
 
 .PHONY: deps env config clean
 clean:
