@@ -15,9 +15,8 @@ services:
       - S3_ENDPOINT_URL
       - S3_BUCKET_DOCS
       - S3_BUCKET_NC
-      - S3_REGION
-    volumes:
-      - ./api:/app
+      - OPENAI_API_KEY
+    #volumes:
     networks:
       - app-network
 
