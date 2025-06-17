@@ -26,11 +26,11 @@ export VITE_API_URL    ?=
 
 dev:
 	@echo "▶ Starting API and UI in dev mode with Docker..."
-	docker-compose up --build
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 run:
 	@echo "▶ Running API and UI in production mode with Docker..."
-	docker-compose up --build
+	docker compose -f docker-compose.yml up --build -d
 
 env:
 	@if [ ! -f .env ]; then \
@@ -163,4 +163,44 @@ clean:
 	rm -rf api/__pycache__
 	rm -rf ui/node_modules
 	rm -rf ui/build
-	@echo "✔️  Cleaning done." 
+	@echo "✔️  Cleaning done."
+
+help:
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  help          Show this help message"
+	@echo "  dev           Start all services in development mode with hot-reloading"
+	@echo "  build         Build or rebuild services"
+	@echo "  up            Start services in detached mode"
+	@echo "  down          Stop and remove containers, networks"
+	@echo "  logs          Follow log output"
+	@echo "  shell         Access the api container shell"
+	@echo "  dataprep-nc-csv-to-json  Extract JSON data from the source CSV"
+	@echo "  clean         Remove build artifacts"
+
+# ==============================================================================
+# Development
+# ==============================================================================
+
+dev:
+	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# ==============================================================================
+# Production
+# ==============================================================================
+
+build:
+	docker-compose build
+
+up:
+	docker-compose up -d
+
+down:
+	docker-compose down
+
+logs:
+	docker-compose logs -f
+
+shell:
+	docker-compose exec api bash
