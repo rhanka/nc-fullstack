@@ -293,6 +293,7 @@
     // console.log('ici', $createdItem, $createdItem.currentTask);
     requestDetails.body.messages[0].description =
       $createdItem["analysis_history"][$createdItem.currentTask][0];
+    console.log('requestDetails', requestDetails);
     if ($referencesList) {
       requestDetails.body.messages[0].sources = $referencesList;
       requestDetails.body.messages[0].sources[

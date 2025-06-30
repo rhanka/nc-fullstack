@@ -14,6 +14,7 @@ import asyncio
 from src.s3_utils import fetch_s3_object, list_json_keys, S3_BUCKET_DOCS, S3_BUCKET_NC
 from src.core import run_prompt, PROMPTS, PROVIDERS
 from src.ai_stream import AGENTS, AGENTS_MSG, exec_agent, stream_agent, sse_encode
+from src.search import search_documents, search_non_conformities, format_search_results
 
 # ===============================================================
 # Configuration et constantes
@@ -138,10 +139,18 @@ async def ai_endpoint(request: Request):
     async def compute_non_stream():
         nonlocal sources
         if not sources:
+            logger.info("Sources not provided, performing search...")
             query = await run_prompt("query", provider, role=role, user_message=user_message, description=description)
+            
+            logger.info("doc_search")
+            tech_docs_results = await asyncio.to_thread(search_documents, query)
+            
+            logger.info("nc_search")
+            nc_results = await asyncio.to_thread(search_non_conformities, query)
+            
             sources = {
-                "tech_docs": await run_prompt("doc_search", provider, input=query),
-                "non_conformities": await run_prompt("nc_search", provider, input=query),
+                "tech_docs": format_search_results(tech_docs_results),
+                "non_conformities": format_search_results(nc_results),
             }
         final_json = await run_prompt(role, provider,
                                       role=role,
@@ -181,15 +190,19 @@ async def ai_endpoint(request: Request):
             query = await run_prompt("query", provider, role=role, user_message=user_message, description=description)
             yield sse_encode(None, json.dumps({"type": "result", "text": query, "metadata": "query"}))
 
-            # doc_search
+            # doc_search - utiliser directement la recherche vectorielle
+            logger.info("doc_search")
             yield sse_encode(None, json.dumps({"type": "action", "text": "Search for relevant technical documents", "metadata": "doc_search"}))
-            tech_docs = await run_prompt("doc_search", provider, input=query)
-            yield sse_encode(None, json.dumps({"type": "result", "text": tech_docs, "metadata": "doc_search"}))
+            tech_docs_results = await asyncio.to_thread(search_documents, query)
+            tech_docs = format_search_results(tech_docs_results)
+            yield sse_encode(None, {"type": "result", "text": tech_docs, "metadata": "doc_search"})
 
-            # nc_search
+            # nc_search - utiliser directement la recherche vectorielle
+            logger.info("nc_search")
             yield sse_encode(None, json.dumps({"type": "action", "text": "Search for similar non-conformities", "metadata": "nc_search"}))
-            non_conf = await run_prompt("nc_search", provider, input=query)
-            yield sse_encode(None, json.dumps({"type": "result", "text": non_conf, "metadata": "nc_search"}))
+            nc_results = await asyncio.to_thread(search_non_conformities, query)
+            non_conf = format_search_results(nc_results)
+            yield sse_encode(None, {"type": "result", "text": non_conf, "metadata": "nc_search"})
 
             current_sources = {"tech_docs": tech_docs, "non_conformities": non_conf}
         else:

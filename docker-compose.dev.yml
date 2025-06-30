@@ -4,4 +4,6 @@ services:
   api:
     volumes:
       - ./api/src/:/app/src
+      - ./api/data/a220-tech-docs/vectordb:/app/data/a220-tech-docs/vectordb
+      - ./api/data/a220-non-conformities/vectordb:/app/data/a220-non-conformities/vectordb
     command: ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] 

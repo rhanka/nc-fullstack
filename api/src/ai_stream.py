@@ -43,13 +43,12 @@ def exec_agent(agent_key: str, provider: str, **inputs):
     return asyncio.run(run_prompt(prompt_key, provider, **inputs))
 
 # ------------------------------------------------------------
-# Streaming très simplifié : on simule des chunks en découpant la
-# réponse sur les sauts de ligne. Si provider futur supporte le
-# streaming natif, il suffira de remplacer cette logique.
+# Streaming très simplifié
 # ------------------------------------------------------------
 
 def stream_agent(agent_key: str, provider: str, **inputs) -> Generator[str, None, str]:
     prompt_key = AGENTS.get(agent_key, agent_key)
+
     full_resp: str = asyncio.run(run_prompt(prompt_key, provider, **inputs))
     # On tente de parser JSON
     try:

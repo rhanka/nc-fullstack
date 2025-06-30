@@ -46,6 +46,17 @@ services:
     networks:
       - app-network
 
+  dataprep:
+    build:
+      context: ./dataprep
+      dockerfile: Dockerfile
+    volumes:
+      - ./dataprep/src:/app
+      - ./api/data:/data
+    working_dir: /app
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
 networks:
   app-network:
     driver: bridge 
