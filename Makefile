@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev run ui-install ui-build docker-build docker-push build deploy deps env config clean help dataprep-nc-csv-to-json
+.PHONY: dev run ui-install ui-build docker-build docker-push build deploy deps env config clean help dataprep-nc-csv-to-json check-db create-tech-docs-db
 
 # ----------------------------
 # Helpers
@@ -155,10 +155,13 @@ dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 # Data
 # ==============================================================================
 
-dataprep-nc-csv-to-json:
+dataprep-non-conformities-csv-to-json:
 	@echo "Extracting non-conformity JSON files from source CSV..."
-	@chmod +x dataprep/extract_jsons.py
-	@./dataprep/extract_jsons.py
+	@docker-compose run --rm dataprep python extract_jsons.py
+
+create-tech-docs-db:
+	@echo "Creating tech docs ChromaDB from source CSV..."
+	@docker-compose run --rm dataprep python create_tech_docs_db.py
 
 .PHONY: deps env config clean
 clean:
