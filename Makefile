@@ -182,6 +182,7 @@ help:
 	@echo "  shell         Access the api container shell"
 	@echo "  dataprep-nc-csv-to-json  Extract JSON data from the source CSV"
 	@echo "  clean         Remove build artifacts"
+	@echo "  check-db      Check the health of ChromaDB databases"
 
 # ==============================================================================
 # Development
@@ -208,3 +209,13 @@ logs:
 
 shell:
 	docker-compose exec api bash
+
+# ==============================================================================
+# Utils
+# ==============================================================================
+
+check-db:
+	@echo "Rebuilding dataprep service to ensure dependencies are up to date..."
+	@docker-compose build --no-cache dataprep
+	@echo "Running ChromaDB health check..."
+	@docker-compose run --rm dataprep python check_chroma_health.py
