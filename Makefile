@@ -28,6 +28,10 @@ dev:
 	@echo "▶ Starting API and UI in dev mode with Docker..."
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
+dev-stop:
+	@echo "▶ Stopping API and UI in dev mode with Docker..."
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+
 run:
 	@echo "▶ Running API and UI in production mode with Docker..."
 	docker compose -f docker-compose.yml up --build -d
