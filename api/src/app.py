@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, status
-from fastapi.responses import StreamingResponse, Response, JSONResponse
+from fastapi.responses import StreamingResponse, Response, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from passlib.context import CryptContext
 from jose import jwt
@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional
 import logging
 import time
 import asyncio
+import pathlib
 
 from src.s3_utils import fetch_s3_object, list_json_keys, S3_BUCKET_DOCS, S3_BUCKET_NC
 from src.core import run_prompt, PROMPTS, PROVIDERS
@@ -65,10 +66,20 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 # ===============================================================
 # Routes
 # ===============================================================
-@app.get("/doc/{file_path:path}", response_class=Response)
-async def get_doc(file_path: str):
-    data = await asyncio.to_thread(fetch_s3_object, S3_BUCKET_DOCS, file_path)
-    return Response(content=data, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename={os.path.basename(file_path)}"})
+@app.get("/doc/{filename}", response_class=FileResponse)
+async def get_doc(filename: str):
+    # Sécuriser le nom de fichier pour éviter les traversées de répertoire
+    if ".." in filename or filename.startswith("/"):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    # Construire le chemin local
+    script_dir = pathlib.Path(__file__).parent.parent
+    file_path = script_dir / "data/a220-tech-docs/pages" / filename
+
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(file_path, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename={filename}"})
 
 @app.get("/json/{file_path:path}", response_class=JSONResponse)
 async def get_json(file_path: str):
