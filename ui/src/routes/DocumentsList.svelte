@@ -32,7 +32,7 @@
           style="cursor: pointer; padding: 8px; width: 100%; text-align: left; border: none; background: none;border-bottom: 1px solid rgba(0,0,0,.1)"
         >
           <strong
-            >{doc.doc.replace(/\.md$/, ".pdf")}
+            >{doc.doc}
           </strong>
           <p style="margin-top:0.2rem;margin-bottom:0rem;">
             {doc.chunks[0].chunk.slice(0, 100)}...
