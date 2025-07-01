@@ -13,7 +13,7 @@ import asyncio
 import pathlib
 
 from src.s3_utils import fetch_s3_object, list_json_keys, S3_BUCKET_DOCS, S3_BUCKET_NC
-from src.core import run_prompt, PROMPTS, PROVIDERS
+from src.core import run_prompt, stream_prompt, PROMPTS, PROVIDERS
 from src.ai_stream import AGENTS, AGENTS_MSG, exec_agent, stream_agent, sse_encode
 from src.search import search_documents, search_non_conformities, format_search_results
 
@@ -197,26 +197,26 @@ async def ai_endpoint(request: Request):
     # --- Version streaming SSE ---
     async def event_generator():
         # delta encoding header
-        yield sse_encode("delta_encoding", json.dumps("v1"))
+        yield sse_encode("delta_encoding", "v1")
 
         # Steps
         query = None
         if not sources:
             # action query
-            yield sse_encode(None, json.dumps({"type": "action", "text": "Build appropriate request", "metadata": "query"}))
+            yield sse_encode(None, {"type": "action", "text": "Build appropriate request", "metadata": "query"})
             query = await run_prompt("query", provider, role=role, user_message=user_message, description=description)
-            yield sse_encode(None, json.dumps({"type": "result", "text": query, "metadata": "query"}))
+            yield sse_encode(None, {"type": "result", "text": query, "metadata": "query"})
 
             # doc_search - utiliser directement la recherche vectorielle
             logger.info("doc_search")
-            yield sse_encode(None, json.dumps({"type": "action", "text": "Search for relevant technical documents", "metadata": "doc_search"}))
+            yield sse_encode(None, {"type": "action", "text": "Search for relevant technical documents", "metadata": "doc_search"})
             tech_docs_results = await asyncio.to_thread(search_documents, query)
             tech_docs = format_search_results(tech_docs_results)
             yield sse_encode(None, {"type": "result", "text": tech_docs, "metadata": "doc_search"})
 
             # nc_search - utiliser directement la recherche vectorielle
             logger.info("nc_search")
-            yield sse_encode(None, json.dumps({"type": "action", "text": "Search for similar non-conformities", "metadata": "nc_search"}))
+            yield sse_encode(None, {"type": "action", "text": "Search for similar non-conformities", "metadata": "nc_search"})
             nc_results = await asyncio.to_thread(search_non_conformities, query)
             non_conf = format_search_results(nc_results)
             yield sse_encode(None, {"type": "result", "text": non_conf, "metadata": "nc_search"})
@@ -226,18 +226,24 @@ async def ai_endpoint(request: Request):
             current_sources = sources
 
         # final action
-        yield sse_encode(None, json.dumps({"type": "action", "text": "Generate final answer", "metadata": role}))
-        final_json = await run_prompt(role, provider,
+        yield sse_encode(None, {"type": "action", "text": "Generate final answer", "metadata": role})
+
+        full_response_text = ""
+        async for chunk in stream_prompt(role, provider,
                                       role=role,
                                       user_message=user_message,
                                       description=description,
                                       search_docs=json.dumps(current_sources["tech_docs"]),
                                       search_nc=json.dumps(current_sources["non_conformities"]),
-                                      history=json.dumps(history))
+                                      history=json.dumps(history)):
+            full_response_text += chunk
+            yield sse_encode("delta", {"v": chunk, "metadata": role})
+
         try:
-            final_payload = json.loads(final_json)
+            final_payload = json.loads(full_response_text)
         except Exception:
-            final_payload = {"comment": final_json}
+            final_payload = {"comment": full_response_text}
+
         result_block = {
             "text": final_payload.get("comment"),
             "label": final_payload.get("label"),
@@ -248,7 +254,7 @@ async def ai_endpoint(request: Request):
             "role": "ai",
             "user_role": role,
         }
-        yield sse_encode(None, json.dumps({"type": "result", "text": result_block, "metadata": "final"}))
+        yield sse_encode(None, {"type": "result", "text": result_block, "metadata": "final"})
 
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
