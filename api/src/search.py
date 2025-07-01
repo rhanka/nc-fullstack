@@ -78,7 +78,7 @@ def search_documents(query: str, n_results: int = 5) -> Dict[str, Any]:
 
 def search_non_conformities(query: str, n_results: int = 5) -> Dict[str, Any]:
     """
-    Searches for non-conformities in the non-conformities ChromaDB.
+    Searches for non-conformities and ensures 'nc_event_id' is present in metadata.
     """
     if not COLLECTION_NC:
         logger.warning("No non-conformities collection available. Returning empty search results.")
@@ -94,11 +94,19 @@ def search_non_conformities(query: str, n_results: int = 5) -> Dict[str, Any]:
             query_texts=[query],
             n_results=n_results
         )
+        
+        # Copier 'doc' vers 'nc_event_id' si 'doc' existe
+        if 'metadatas' in results and results['metadatas']:
+            for metadata_list in results['metadatas']:
+                for metadata in metadata_list:
+                    if metadata and 'doc' in metadata and 'nc_event_id' not in metadata:
+                        metadata['nc_event_id'] = metadata['doc']
+        
         count = len(results.get('documents', [[]])[0])
         logger.info("Found %d results for non-conformities.", count)
         return results
     except Exception as e:
-        logger.error("Failed to query non-conformities collection '%s': %s", COLLECTION_NC, e)
+        logger.error(f"Failed to query non-conformities collection '{COLLECTION_NC}': {e}")
         return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
 
 def format_search_results(results: Any) -> Dict[str, Any]:
@@ -108,13 +116,13 @@ def format_search_results(results: Any) -> Dict[str, Any]:
         documents = results['documents'][0] if results['documents'] else []
         metadatas = results['metadatas'][0] if results['metadatas'] else []
         
-        # Formater les documents avec leurs métadonnées
+        # Formater les documents avec leurs métadonnées au premier niveau
         formatted_docs = []
         for i, doc in enumerate(documents):
-            # Le contenu du document peut lui-même être une chaîne JSON
+            # On fusionne le contenu et les métadonnées
             doc_info = {
                 "content": doc,
-                "metadata": metadatas[i] if i < len(metadatas) else {}
+                **(metadatas[i] if i < len(metadatas) and metadatas[i] is not None else {})
             }
             formatted_docs.append(doc_info)
     else:
