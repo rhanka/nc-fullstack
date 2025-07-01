@@ -92,35 +92,41 @@ async def get_json(file_path: str):
 
 @app.get("/nc")
 async def list_non_conformities(max_rows: int = 500, id: str | None = None):
-    keys: List[str] = await asyncio.to_thread(list_json_keys, S3_BUCKET_NC)
+    # Construire le chemin local
+    script_dir = pathlib.Path(__file__).parent.parent
+    json_dir = script_dir / "data/a220-non-conformities/json"
 
-    # If an ID is provided, we fetch everything from the first page and filter.
-    # If not, we can limit the number of files to fetch.
-    if not id:
-        keys = keys[:max_rows]
-
-    if not keys:
+    if not json_dir.is_dir():
         return []
 
-    # Concurrently fetch all the required S3 objects.
-    tasks = [asyncio.to_thread(fetch_s3_object, S3_BUCKET_NC, key) for key in keys]
-    blobs_or_errors = await asyncio.gather(*tasks, return_exceptions=True)
-
     records: List[Dict[str, Any]] = []
-    for key, result in zip(keys, blobs_or_errors):
-        if isinstance(result, bytes):
-            try:
-                records.append(json.loads(result))
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to decode JSON from S3 object: {key}")
-                continue
-        elif isinstance(result, Exception):
-            logger.error(f"Failed to fetch S3 object {key}: {result}")
+
+    # Limiter le nombre de fichiers à lire si aucun ID n'est spécifié
+    file_paths = list(json_dir.glob("*.json"))
+    if not id:
+        file_paths = file_paths[:max_rows]
+
+    for file_path in file_paths:
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = {
+                    "doc": file_path.name.replace(".json", ""),
+                    "nc_event_id": file_path.name.replace(".json", ""),
+                    "analysis_history": json.load(f)
+                }
+                if isinstance(data, dict):
+                    records.append(data)
+                else:
+                    logger.warning(f"Skipping non-object JSON from local file: {file_path.name}")
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to decode JSON from local file: {file_path.name}")
+        except Exception as e:
+            logger.error(f"Failed to read local file {file_path.name}: {e}")
 
     if id:
         records = [r for r in records if str(r.get("nc_event_id")) == id]
 
-    return records[:max_rows]
+    return records[:max_rows] if not id else records
 
 # ===============================================================
 # AI Endpoint (Streaming / Non-Streaming)
