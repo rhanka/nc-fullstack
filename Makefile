@@ -19,14 +19,14 @@ export S3_REGION       ?= fr-par
 export S3_ENDPOINT_URL ?= https://s3.fr-par.scw.cloud
 export VITE_API_URL    ?=
 
-
+export DC_OPTS ?= --build --force-recreate
 # ----------------------------
 # Main targets
 # ----------------------------
 
 dev:
 	@echo "▶ Starting API and UI in dev mode with Docker..."
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up ${DC_OPTS}
 
 dev-stop:
 	@echo "▶ Stopping API and UI in dev mode with Docker..."
