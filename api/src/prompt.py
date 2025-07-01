@@ -12,6 +12,7 @@ class PromptTemplate:
         self.user_template: str = p["textPromptTemplate"]
         self.input_names: List[str] = [i["name"] for i in p["textPromptTemplateInputs"]]
         self.temperature: float = data.get("completionSettings", {}).get("temperature", 0)
+        self.json_mode: bool = data.get("completionSettings", {}).get("responseFormat") == "json"
 
     def render(self, **kwargs) -> Dict[str, str]:
         system = self.system_template

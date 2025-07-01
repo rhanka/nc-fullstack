@@ -1,23 +1,47 @@
 import os
-from typing import List, Dict
+from typing import List, Dict, AsyncGenerator
 
 class BaseLLM:
     async def chat(self, messages: List[Dict[str, str]], temperature: float = 0) -> str:
         raise NotImplementedError
 
+    async def stream_chat(self, messages: List[Dict[str, str]], temperature: float = 0) -> AsyncGenerator[str, None]:
+        # Fallback pour les modèles qui ne supportent pas le streaming
+        yield await self.chat(messages, temperature)
+
 class OpenAILLM(BaseLLM):
     def __init__(self, model="gpt-4.1-nano"):
-        from openai import OpenAI
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        from openai import AsyncOpenAI
+        self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model = model
 
-    async def chat(self, messages, temperature=0):
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=temperature
-        )
+    async def chat(self, messages, temperature=0, json_mode=False):
+        params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        if json_mode:
+            params["response_format"] = {"type": "json_object"}
+
+        resp = await self.client.chat.completions.create(**params)
         return resp.choices[0].message.content
+
+    async def stream_chat(self, messages: List[Dict[str, str]], temperature: float = 0, json_mode=False) -> AsyncGenerator[str, None]:
+        params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True,
+        }
+        if json_mode:
+            params["response_format"] = {"type": "json_object"}
+
+        stream = await self.client.chat.completions.create(**params)
+        async for chunk in stream:
+            content = chunk.choices[0].delta.content or ""
+            if content:
+                yield content
 
 class AnthropicLLM(BaseLLM):
     def __init__(self, model="claude-3-opus-20240229"):
