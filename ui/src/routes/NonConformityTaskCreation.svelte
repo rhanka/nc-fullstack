@@ -1,5 +1,4 @@
 <script>
-  import { marked } from "marked"; // Import the marked library
   import Input from "./Input.svelte";
   import Dropzone from "svelte-file-dropzone";
   import { taskLabel, createdItem, isUpdating, askForHelp } from "./store.js";
@@ -144,11 +143,9 @@
               {:else if typeof step.description === "object"}
                 {#each Object.entries(step.description) as [key, value]}
                   {#if Array.isArray(value)}
-                    <Input
-                      value={JSON.stringify(
-                        step.description[key],
-                      )}
-                      label={key}
+                  <h4>{smartLabel(key)}</h4>
+                  <Input
+                      value={value.join("\n")}
                       markdown={true}
                     />
                   {:else if typeof step.description[key] === "string"}
