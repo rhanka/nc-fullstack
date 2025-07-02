@@ -1,6 +1,5 @@
 <script>
   import { onMount } from "svelte";
-  import { marked } from "marked";
   import TipTap from "./TipTap.svelte";
   export let label = ""; // Le label affich� au-dessus
   export let value = ""; // La valeur de l'input
