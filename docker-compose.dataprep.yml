@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  dataprep:
+    build:
+      context: ./dataprep
+      dockerfile: Dockerfile
+    volumes:
+      # Mount src for live changes if needed for debugging
+      - ./dataprep/src:/app
+      # Mount the data directory to be processed
+      - ./api/data:/data
+    working_dir: /app
+    environment:
+      # Pass API keys from .env file
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      # Pass data directory names from .env file
+      - TECH_DOCS_DIR=${TECH_DOCS_DIR}
+      - NC_DIR=${NC_DIR} 
