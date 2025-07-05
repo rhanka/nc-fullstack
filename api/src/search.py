@@ -78,7 +78,7 @@ def search_documents(query: str, n_results: int = 5) -> Dict[str, Any]:
 
 def search_non_conformities(query: str, n_results: int = 5) -> Dict[str, Any]:
     """
-    Searches for non-conformities and ensures 'nc_event_id' is present in metadata.
+    Searches for non-conformities
     """
     if not COLLECTION_NC:
         logger.warning("No non-conformities collection available. Returning empty search results.")
@@ -94,13 +94,6 @@ def search_non_conformities(query: str, n_results: int = 5) -> Dict[str, Any]:
             query_texts=[query],
             n_results=n_results
         )
-        
-        # Copier 'doc' vers 'nc_event_id' si 'doc' existe
-        if 'metadatas' in results and results['metadatas']:
-            for metadata_list in results['metadatas']:
-                for metadata in metadata_list:
-                    if metadata and 'doc' in metadata and 'nc_event_id' not in metadata:
-                        metadata['nc_event_id'] = metadata['doc']
         
         count = len(results.get('documents', [[]])[0])
         logger.info("Found %d results for non-conformities.", count)
