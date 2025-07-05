@@ -1,0 +1,33 @@
+NC-2024-003 Airbus A220-200 0070    Revêtement extérieur -Pare-brise droit  "Description du Problème :
+Lors du contrôle de qualité du numéro d’avion MSN 0070, une non-conformité a été identifiée concernant le perçage d'une série de rivets sur le revêtement extérieur, sous la glace du pare-brise droit. Un désaffleurement a été mesuré entre -0,20 mm et -0,25 mm, dépassant les tolérances spécifiées dans les normes d'assemblage.
+Détails Techniques :
+•       Localisation : Zone en dessous du pare-brise droit
+•       Mesure de Désaffleurement : -0,20 mm à -0,25 mm
+•       Norme Acceptable : Tolérance maximale de -0,10 mm selon la spécification interne (Réf. SP-2023-078)"
+NC-2024-005 Airbus A220-200 0070    Système de carburant - Réservoir principal aile gauche  "Description du Problème :
+Lors des tests de débit effectués sur le réservoir principal de l'aile gauche du numéro d’avion 0070, une non-conformité a été identifiée : un débit faible a été mesuré au niveau de la crépine d’aspiration. Ce problème pourrait compromettre l'alimentation en carburant et nécessite une investigation approfondie pour évaluer les causes et les impacts.
+Détails Techniques :
+•       Localisation : Réservoir principal aile gauche.
+•       Problème identifié : Débit faible de la crépine d'aspiration.
+•       Norme Acceptable : Débit minimum requis selon la spécification interne (Réf. SP-2023-101)."
+NC-2024-006     Airbus A220-200 0070    Système de décharge électrostatique - Réservoir secondaire aile droit   "Description du Problème :
+Lors de l'inspection des systèmes de décharge électrostatique du numéro d’avion 0070, une non-conformité a été détectée concernant la conductivité des fils de décharge électrostatique entre le tuyau et la structure au niveau du réservoir secondaire de l’aile droite. Les tests ont révélé des valeurs de conductivité supérieures aux tolérances spécifiées, ce qui pourrait compromettre l'efficacité du système.
+Détails Techniques :
+•       Localisation : Réservoir secondaire aile droite.
+•       Problème identifié : Conductivité des fils de décharge électrostatique non conforme.
+•       Norme Acceptable : Conductivité requise selon la spécification interne (Réf. SP-2023-115)."
+NC-2024-004     Airbus A220-200 0070    Structure aluminium - Zone C2-2 "Description du Problème :
+Lors d’un contrôle qualité sur le numéro d’avion 0070, une non-conformité a été identifiée : une rayure de 10 cm de long et 0,1 cm de profondeur a été observée sur une structure en aluminium dans la zone C2-2. Ce défaut soulève des préoccupations concernant le risque potentiel de corrosion, nécessitant la validation d’un expert pour évaluer l'impact sur l'intégrité structurelle.
+Détails Techniques :
+•       Localisation : Zone C2-2, structure en aluminium.
+•       Dimensions de la Rayure : 10 cm de long, 0,1 cm de profondeur.
+•       Norme Acceptable : Aucun défaut de surface n'est toléré selon les spécifications (Réf. SP-2023-092)."
+NC-2025-007     Airbus A220-200 0070    Porte avant droite      "Avion 0012
+Section 11
+Porte avant droite
+ATA-521-15553-202
+Date: 2025-01-06
+Plusieurs cas de délaminages au niveau de la lisse 53 entre le cadre 20 et 21 coté structure de la porte. Le problème a été identifié en sortie de perçage, lors de la phase d'assemblage de la structure de la porte.
+Les délaminages se sont propagés sur 5 à 10 mm autour des perçages
+Les délaminages ont été observé sur 5 plis de carbone
+Nous supposons un outillage de perçage défectueux"
