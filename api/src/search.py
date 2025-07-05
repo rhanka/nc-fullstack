@@ -50,7 +50,7 @@ COLLECTION_NC = "langchain"
 logger.info("Using tech docs collection: %s", COLLECTION_TECH_DOCS)
 logger.info("Using non-conformities collection: %s", COLLECTION_NC)
 
-def search_documents(query: str, n_results: int = 5) -> Dict[str, Any]:
+def search_documents(query: str, n_results: int = 10) -> Dict[str, Any]:
     """
     Searches for documents in the technical documentation ChromaDB.
     Gracefully handles a corrupted database by returning empty results.
