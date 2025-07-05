@@ -15,9 +15,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # --- Configuration ---
-SCRIPT_DIR = pathlib.Path(__file__).parent.parent.parent
+DATA_DIR = pathlib.Path("/data")
 NC_DIR_NAME = os.getenv("NC_DIR", "a220-non-conformities")
-NC_PATH = SCRIPT_DIR / "data" / NC_DIR_NAME
+NC_PATH = DATA_DIR / NC_DIR_NAME
 
 DB_PATH = NC_PATH / "vectordb"
 SOURCE_FILE = NC_PATH / "managed_dataset/NC_types_random_500_pre_embed.csv.gz"
