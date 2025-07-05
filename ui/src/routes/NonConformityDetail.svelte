@@ -17,9 +17,7 @@
       <span style="margin-left:-16px; padding: 0 8px; color: #aaa" title="close"
         ></span
       >
-      {selectedItem["ATA_category"]} - {selectedItem["nc_event_id"]} - {selectedItem[
-        "nc_event_date"
-      ].replace(/:..\..*/, "")}
+      {selectedItem["ATA_category"]} - {selectedItem["nc_event_id"]} - {selectedItem["analysis_history"]["000"][0]["date"].replace(/:..\..*/, "")}
     </h2>
   </button>
   <p><strong>{selectedItem["analysis_history"]["000"][0]["label"]}</strong></p>

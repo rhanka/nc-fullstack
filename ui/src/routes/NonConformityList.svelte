@@ -38,7 +38,7 @@
 
   $: num = $filteredNonConformities.length;
 
-  $: console.log(nonConformitiesFilter);
+  $: console.log("nc", nonConformitiesFilter);
 </script>
 
 <div class="scrollable">
@@ -62,9 +62,7 @@
           style="cursor: pointer; padding: 8px; width: 100%; text-align: left; border: none; background: none;border-bottom: 1px solid rgba(0,0,0,.1)"
         >
           <strong
-            >{item["ATA_code"]} - {item["ATA_category"]} - {item[
-              "nc_event_date"
-            ].slice(0, 10)}
+            >{item["ATA_code"]} - {item["ATA_category"]} - {item["analysis_history"]["000"][0]["date"].slice(0, 10)}
           </strong>
           <p style="margin-top:0.2rem;margin-bottom:0;">
             {item["analysis_history"]["000"][0]["label"]}
