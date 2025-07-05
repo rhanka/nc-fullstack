@@ -4,9 +4,18 @@ import logging
 import os
 from typing import List, Dict, Any
 import chromadb.utils.embedding_functions as embedding_functions
+import cohere
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
+# Facteurs pour le seuil de pertinence dynamique
+TECH_DOCS_DISTANCE_FACTOR = 1.2
+NC_DISTANCE_FACTOR = 1.2
+
+# Limites finales du nombre de résultats
+MAX_TECH_DOCS_RESULTS = 15
+MAX_NC_RESULTS = 15
 
 # Build paths relative to this script's location
 SCRIPT_DIR = pathlib.Path(__file__).parent.parent
@@ -50,76 +59,137 @@ COLLECTION_NC = "non_conformities"
 logger.info("Using tech docs collection: %s", COLLECTION_TECH_DOCS)
 logger.info("Using non-conformities collection: %s", COLLECTION_NC)
 
-def search_documents(query: str, n_results: int = 10) -> List[Dict[str, Any]]:
+# --- Configuration ---
+RERANKING_ENABLED = os.getenv("RERANKING_ENABLED", "false").lower() in ("true", "1", "t")
+
+# Cohere Client (initialisé uniquement si le reranking est activé)
+co = None
+if RERANKING_ENABLED:
+    COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+    if COHERE_API_KEY:
+        logger.info("Reranking is enabled. Initializing Cohere client...")
+        co = cohere.Client(COHERE_API_KEY)
+    else:
+        logger.warning("RERANKING_ENABLED is true, but COHERE_API_KEY is not found. Reranking will be disabled.")
+else:
+    logger.info("Reranking is disabled.")
+
+def search_documents(query: str, n_results: int = 30) -> List[Dict[str, Any]]:
     """
-    Searches for documents in the technical documentation ChromaDB.
-    Gracefully handles a corrupted database by returning empty results.
+    Searches for documents, then optionally reranks them using Cohere for relevance.
     """
     if not COLLECTION_TECH_DOCS:
         logger.warning("No tech docs collection available. Returning empty search results.")
-        return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+        return []
     
     logger.info("Querying tech docs collection '%s' for: '%s'", COLLECTION_TECH_DOCS, query)
     try:
-        collection = client_tech_docs.get_collection(
-            name=COLLECTION_TECH_DOCS,
-            embedding_function=openai_ef
-        )
-        results = collection.query(
-            query_texts=[query],
-            n_results=n_results
-        )
-        count = len(results.get('documents', [[]])[0])
-        logger.info("Found %d results for tech docs.", count)
-        return results
-    except Exception as e:
-        logger.error(f"Failed to query tech docs collection '{COLLECTION_TECH_DOCS}'. This is likely due to a corrupted database. Returning empty results. Error: {e}")
-        return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+        collection = client_tech_docs.get_collection(name=COLLECTION_TECH_DOCS, embedding_function=openai_ef)
+        results = collection.query(query_texts=[query], n_results=n_results)
+        
+        documents = results.get('documents', [[]])[0]
+        metadatas = results.get('metadatas', [[]])[0]
 
-def search_non_conformities(query: str, n_results: int = 10) -> List[Dict[str, Any]]:
+        if not documents:
+            return []
+
+        # Reranking avec Cohere si activé et disponible
+        if co and RERANKING_ENABLED:
+            logger.info("Reranking %d tech docs with Cohere...", len(documents))
+            reranked_results = co.rerank(
+                model='rerank-english-v2.0',
+                query=query,
+                documents=[doc for doc in documents],
+                top_n=MAX_TECH_DOCS_RESULTS
+            )
+            
+            final_results = []
+            for hit in reranked_results.results:
+                original_doc = documents[hit.index]
+                metadata = metadatas[hit.index]
+                metadata['relevance_score'] = hit.relevance_score
+                final_results.append({
+                    "content": original_doc,
+                    **metadata
+                })
+            logger.info("Returning %d reranked results for tech docs.", len(final_results))
+            return final_results
+        else:
+            # Fallback si Cohere n'est pas utilisé : on retourne les N meilleurs résultats bruts
+            logger.info("Returning top %d results for tech docs without reranking.", MAX_TECH_DOCS_RESULTS)
+            top_results = []
+            distances = results.get('distances', [[]])[0]
+            for i in range(len(documents)):
+                metadata = metadatas[i]
+                metadata['distance'] = distances[i] if i < len(distances) else -1.0
+                top_results.append({
+                    "content": documents[i],
+                    **metadata
+                })
+            return top_results[:MAX_TECH_DOCS_RESULTS]
+
+    except Exception as e:
+        logger.error(f"Failed to query or rerank tech docs. Error: {e}", exc_info=True)
+        return []
+
+def search_non_conformities(query: str, n_results: int = 30) -> List[Dict[str, Any]]:
     """
-    Search for similar non-conformities in the vector database.
+    Searches for non-conformities, then optionally reranks them using Cohere for relevance.
     """
     if not COLLECTION_NC:
         logger.warning("No non-conformities collection available. Returning empty search results.")
-        return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+        return []
     
     logger.info("Querying non-conformities collection '%s' for: '%s'", COLLECTION_NC, query)
     try:
-        collection = client_nc.get_collection(
-            name=COLLECTION_NC,
-            embedding_function=openai_ef
-        )
-        results = collection.query(
-            query_texts=[query],
-            n_results=n_results
-        )
+        collection = client_nc.get_collection(name=COLLECTION_NC, embedding_function=openai_ef)
+        results = collection.query(query_texts=[query], n_results=n_results)
         
-        count = len(results.get('documents', [[]])[0])
-        logger.info("Found %d results for non-conformities.", count)
-        return results
+        documents = results.get('documents', [[]])[0]
+        metadatas = results.get('metadatas', [[]])[0]
+
+        if not documents:
+            return []
+
+        # Reranking avec Cohere si activé et disponible
+        if co and RERANKING_ENABLED:
+            logger.info("Reranking %d non-conformities with Cohere...", len(documents))
+            reranked_results = co.rerank(
+                model='rerank-english-v2.0',
+                query=query,
+                documents=[doc for doc in documents],
+                top_n=MAX_NC_RESULTS
+            )
+            
+            final_results = []
+            for hit in reranked_results.results:
+                original_doc = documents[hit.index]
+                metadata = metadatas[hit.index]
+                metadata['relevance_score'] = hit.relevance_score
+                final_results.append({
+                    "content": original_doc,
+                    **metadata
+                })
+            logger.info("Returning %d reranked results for non-conformities.", len(final_results))
+            return final_results
+        else:
+            logger.info("Returning top %d results for non-conformities without reranking.", MAX_NC_RESULTS)
+            top_results = []
+            distances = results.get('distances', [[]])[0]
+            for i in range(len(documents)):
+                metadata = metadatas[i]
+                metadata['distance'] = distances[i] if i < len(distances) else -1.0
+                top_results.append({
+                    "content": documents[i],
+                    **metadata
+                })
+            return top_results[:MAX_NC_RESULTS]
+
     except Exception as e:
-        logger.error(f"Failed to query non-conformities collection '{COLLECTION_NC}': {e}")
-        return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+        logger.error(f"Failed to query or rerank non-conformities. Error: {e}", exc_info=True)
+        return []
 
 def format_search_results(results: Any) -> Dict[str, Any]:
     """Formate les résultats de recherche pour le frontend pour contenir une clé 'sources'."""
-    # ChromaDB retourne un dictionnaire avec 'documents', 'metadatas', 'distances', etc.
-    if isinstance(results, dict) and 'documents' in results:
-        documents = results['documents'][0] if results['documents'] else []
-        metadatas = results['metadatas'][0] if results['metadatas'] else []
-        
-        # Formater les documents avec leurs métadonnées au premier niveau
-        formatted_docs = []
-        for i, doc in enumerate(documents):
-            # On fusionne le contenu et les métadonnées
-            doc_info = {
-                "content": doc,
-                **(metadatas[i] if i < len(metadatas) and metadatas[i] is not None else {})
-            }
-            formatted_docs.append(doc_info)
-    else:
-        # Fallback si ce n'est pas le format attendu
-        formatted_docs = results if isinstance(results, list) else []
-    
-    return {"sources": formatted_docs} 
+    # Cette fonction reçoit maintenant une liste de dictionnaires déjà formatés
+    return {"sources": results if isinstance(results, list) else []} 
