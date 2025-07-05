@@ -15,9 +15,12 @@ logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 SCRIPT_DIR = pathlib.Path(__file__).parent.parent.parent
-DB_PATH = SCRIPT_DIR / "data/a220-tech-docs/vectordb"
-SOURCE_FILE = SCRIPT_DIR / "data/a220-tech-docs/managed_dataset/a220_tech_docs_content_prepared.csv.gz"
-PAGES_PATH = SCRIPT_DIR / "data/a220-tech-docs/pages"
+TECH_DOCS_DIR_NAME = os.getenv("TECH_DOCS_DIR", "a220-tech-docs")
+TECH_DOCS_PATH = SCRIPT_DIR / "data" / TECH_DOCS_DIR_NAME
+
+DB_PATH = TECH_DOCS_PATH / "vectordb"
+SOURCE_FILE = TECH_DOCS_PATH / "managed_dataset/a220_tech_docs_content_prepared.csv.gz"
+PAGES_PATH = TECH_DOCS_PATH / "pages"
 COLLECTION_NAME = "langchain"
 BATCH_SIZE = 500  # Réduire la taille du lot
 
