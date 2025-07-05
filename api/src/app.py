@@ -28,6 +28,13 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger("nc_api")
 
+# Chemins des données (configurable via env vars)
+SCRIPT_DIR = pathlib.Path(__file__).parent.parent
+TECH_DOCS_DIR_NAME = os.getenv("TECH_DOCS_DIR", "a220-tech-docs")
+NC_DIR_NAME = os.getenv("NC_DIR", "a220-non-conformities")
+TECH_DOCS_PATH = SCRIPT_DIR / "data" / TECH_DOCS_DIR_NAME
+NC_PATH = SCRIPT_DIR / "data" / NC_DIR_NAME
+
 # ===============================================================
 # Initialisation
 # ===============================================================
@@ -73,8 +80,7 @@ async def get_doc(filename: str):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
     # Construire le chemin local
-    script_dir = pathlib.Path(__file__).parent.parent
-    file_path = script_dir / "data/a220-tech-docs/pages" / filename
+    file_path = TECH_DOCS_PATH / "pages" / filename
 
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
@@ -90,20 +96,29 @@ async def get_doc(filename: str):
         headers={"Content-Disposition": content_disposition}
     )
 
-@app.get("/json/{file_path:path}", response_class=JSONResponse)
-async def get_json(file_path: str):
-    data = await asyncio.to_thread(fetch_s3_object, S3_BUCKET_NC, file_path)
+@app.get("/json/{filename}", response_class=JSONResponse)
+async def get_json(filename: str):
+    # Sécuriser le nom de fichier
+    if ".." in filename or filename.startswith("/"):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    file_path = NC_PATH / "json" / filename
+
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+
     try:
-        payload = json.loads(data)
+        with open(file_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Invalid JSON file")
+
     return JSONResponse(content=payload)
 
 @app.get("/nc")
 async def list_non_conformities(max_rows: int = 500, id: str | None = None):
     # Construire le chemin local
-    script_dir = pathlib.Path(__file__).parent.parent
-    json_dir = script_dir / "data/a220-non-conformities/json"
+    json_dir = NC_PATH / "json"
 
     if not json_dir.is_dir():
         return []
