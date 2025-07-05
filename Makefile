@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev run ui-install ui-build docker-build docker-push build deploy deps env config clean help dataprep-nc-csv-to-json check-db create-tech-docs-db create-nc-db create-db
+.PHONY: dev run ui-install ui-build docker-build docker-push build deploy deps env config clean help check-db create-tech-docs-db create-nc-db create-db
 
 # ----------------------------
 # Helpers
@@ -19,7 +19,10 @@ export S3_REGION       ?= fr-par
 export S3_ENDPOINT_URL ?= https://s3.fr-par.scw.cloud
 export VITE_API_URL    ?=
 
-export DC_OPTS ?= --build --force-recreate
+# Options par défaut pour Docker Compose. Peut être surchargé.
+# Ex: make dev DC_OPTS=""
+DC_OPTS ?= --build --force-recreate
+
 # ----------------------------
 # Main targets
 # ----------------------------
@@ -34,7 +37,7 @@ dev-stop:
 
 run:
 	@echo "▶ Running API and UI in production mode with Docker..."
-	docker compose -f docker-compose.yml up --build -d
+	docker compose -f docker-compose.yml up ${DC_OPTS} -d
 
 env:
 	@if [ ! -f .env ]; then \
@@ -155,17 +158,13 @@ dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 # Data
 # ==============================================================================
 
-dataprep-non-conformities-csv-to-json:
-	@echo "Extracting non-conformity JSON files from source CSV..."
-	@docker-compose run --rm dataprep python extract_jsons.py ${DC_OPTS}
-
 create-tech-docs-db:
 	@echo "Creating tech docs ChromaDB from source CSV..."
-	@docker-compose run --rm dataprep python create_tech_docs_db.py ${DC_OPTS}
+	@docker-compose -f docker-compose.dataprep.yml run --rm dataprep python create_tech_docs_db.py
 
 create-nc-db:
 	@echo "Creating non-conformities ChromaDB from source CSV..."
-	@docker-compose run --rm dataprep python create_nc_db.py ${DC_OPTS}
+	@docker-compose -f docker-compose.dataprep.yml run --rm dataprep python create_nc_db.py
 
 create-db: create-tech-docs-db create-nc-db
 	@echo "All databases created."
@@ -198,37 +197,11 @@ help:
 	@echo "  create-db          Create all databases"
 
 # ==============================================================================
-# Development
-# ==============================================================================
-
-dev:
-	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
-
-# ==============================================================================
-# Production
-# ==============================================================================
-
-build:
-	docker-compose build
-
-up:
-	docker-compose up -d
-
-down:
-	docker-compose down
-
-logs:
-	docker-compose logs -f
-
-shell:
-	docker-compose exec api bash
-
-# ==============================================================================
 # Utils
 # ==============================================================================
 
 check-db:
 	@echo "Rebuilding dataprep service to ensure dependencies are up to date..."
-	@docker-compose build --no-cache dataprep
+	@docker-compose -f docker-compose.dataprep.yml build --no-cache dataprep
 	@echo "Running ChromaDB health check..."
-	@docker-compose run --rm dataprep python check_chroma_health.py
+	@docker-compose -f docker-compose.dataprep.yml run --rm dataprep python check_chroma_health.py
