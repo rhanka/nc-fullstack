@@ -11,8 +11,8 @@ import logging
 import time
 import asyncio
 import pathlib
+import re
 
-from src.s3_utils import fetch_s3_object, list_json_keys, S3_BUCKET_DOCS, S3_BUCKET_NC
 from src.core import run_prompt, stream_prompt, PROMPTS, PROVIDERS
 from src.ai_stream import AGENTS, AGENTS_MSG, exec_agent, stream_agent, sse_encode
 from src.search import search_documents, search_non_conformities, format_search_results
