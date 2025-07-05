@@ -45,12 +45,12 @@ def get_collection_name(client, db_name: str):
 # Assume collection names are known or can be discovered.
 # For now, let's use a placeholder name. You may need to adjust this.
 COLLECTION_TECH_DOCS = "langchain"
-COLLECTION_NC = "langchain"
+COLLECTION_NC = "non_conformities"
 
 logger.info("Using tech docs collection: %s", COLLECTION_TECH_DOCS)
 logger.info("Using non-conformities collection: %s", COLLECTION_NC)
 
-def search_documents(query: str, n_results: int = 10) -> Dict[str, Any]:
+def search_documents(query: str, n_results: int = 10) -> List[Dict[str, Any]]:
     """
     Searches for documents in the technical documentation ChromaDB.
     Gracefully handles a corrupted database by returning empty results.
@@ -76,9 +76,9 @@ def search_documents(query: str, n_results: int = 10) -> Dict[str, Any]:
         logger.error(f"Failed to query tech docs collection '{COLLECTION_TECH_DOCS}'. This is likely due to a corrupted database. Returning empty results. Error: {e}")
         return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
 
-def search_non_conformities(query: str, n_results: int = 5) -> Dict[str, Any]:
+def search_non_conformities(query: str, n_results: int = 10) -> List[Dict[str, Any]]:
     """
-    Searches for non-conformities
+    Search for similar non-conformities in the vector database.
     """
     if not COLLECTION_NC:
         logger.warning("No non-conformities collection available. Returning empty search results.")
