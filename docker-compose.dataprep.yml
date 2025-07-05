@@ -13,8 +13,7 @@ services:
     working_dir: /app
     environment:
       # Pass API keys from .env file
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - COHERE_API_KEY=${COHERE_API_KEY}
+      - OPENAI_API_KEY
       # Pass data directory names from .env file
-      - TECH_DOCS_DIR=${TECH_DOCS_DIR}
-      - NC_DIR=${NC_DIR} 
+      - TECH_DOCS_DIR
+      - NC_DIR

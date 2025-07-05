@@ -14,9 +14,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # --- Configuration ---
-SCRIPT_DIR = pathlib.Path(__file__).parent.parent.parent
+DATA_DIR = pathlib.Path("/data")
 TECH_DOCS_DIR_NAME = os.getenv("TECH_DOCS_DIR", "a220-tech-docs")
-TECH_DOCS_PATH = SCRIPT_DIR / "data" / TECH_DOCS_DIR_NAME
+TECH_DOCS_PATH = DATA_DIR / TECH_DOCS_DIR_NAME
 
 DB_PATH = TECH_DOCS_PATH / "vectordb"
 SOURCE_FILE = TECH_DOCS_PATH / "managed_dataset/a220_tech_docs_content_prepared.csv.gz"
