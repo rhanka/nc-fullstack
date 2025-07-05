@@ -35,6 +35,19 @@ NC_DIR_NAME = os.getenv("NC_DIR", "a220-non-conformities")
 TECH_DOCS_PATH = SCRIPT_DIR / "data" / TECH_DOCS_DIR_NAME
 NC_PATH = SCRIPT_DIR / "data" / NC_DIR_NAME
 
+# Charger les codes ATA
+ATA_CODES_PATH = SCRIPT_DIR / "src" / "ata_codes.json"
+ATA_CODES = {}
+if ATA_CODES_PATH.is_file():
+    with open(ATA_CODES_PATH, "r", encoding="utf-8") as f:
+        try:
+            ata_data = json.load(f)
+            ATA_CODES = {item["ATA_code"]: item["ATA_category"] for item in ata_data}
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error("Failed to load or parse ATA codes: %s", e)
+else:
+    logger.warning("ATA codes file not found at %s", ATA_CODES_PATH)
+
 # ===============================================================
 # Initialisation
 # ===============================================================
@@ -63,6 +76,21 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
+
+def enrich_with_ata(analysis_history: dict, filename: str) -> dict:
+    """Enrichit les données de NC avec le code et la catégorie ATA à partir du nom de fichier."""
+    nc_data = {
+        "doc": filename.replace(".json", ""),
+        "nc_event_id": filename.replace(".json", ""),
+        "analysis_history": analysis_history
+    }
+    match = re.match(r"ATA-(\d{2})", filename)
+    if match:
+        ata_code_short = match.group(1)
+        ata_code_full = f"ATA-{ata_code_short}"
+        nc_data["ATA_code"] = ata_code_full
+        nc_data["ATA_category"] = ATA_CODES.get(ata_code_full, "Unknown")
+    return nc_data
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -109,11 +137,14 @@ async def get_json(filename: str):
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            payload = json.load(f)
+            data = json.load(f)
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Invalid JSON file")
 
-    return JSONResponse(content=payload)
+    # Enrichir avec les données ATA
+    data = enrich_with_ata(data, filename)
+
+    return JSONResponse(content=data)
 
 @app.get("/nc")
 async def list_non_conformities(max_rows: int = 500, id: str | None = None):
@@ -133,11 +164,11 @@ async def list_non_conformities(max_rows: int = 500, id: str | None = None):
     for file_path in file_paths:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
-                data = {
-                    "doc": file_path.name.replace(".json", ""),
-                    "nc_event_id": file_path.name.replace(".json", ""),
-                    "analysis_history": json.load(f)
-                }
+                data = json.load(f)
+
+                # Enrichir avec les données ATA
+                data = enrich_with_ata(data, file_path.name)
+
                 if isinstance(data, dict):
                     records.append(data)
                 else:
