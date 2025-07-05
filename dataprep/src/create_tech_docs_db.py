@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 SCRIPT_DIR = pathlib.Path(__file__).parent.parent.parent
-DB_PATH = SCRIPT_DIR / "/data/a220-tech-docs/vectordb"
-SOURCE_FILE = SCRIPT_DIR / "/data/a220-tech-docs/managed_dataset/a220_tech_docs_content_prepared.csv.gz"
+DB_PATH = SCRIPT_DIR / "data/a220-tech-docs/vectordb"
+SOURCE_FILE = SCRIPT_DIR / "data/a220-tech-docs/managed_dataset/a220_tech_docs_content_prepared.csv.gz"
+PAGES_PATH = SCRIPT_DIR / "data/a220-tech-docs/pages"
 COLLECTION_NAME = "langchain"
 BATCH_SIZE = 500  # Réduire la taille du lot
 
@@ -73,6 +74,12 @@ def create_tech_docs_db():
 
                 doc, doc_root, json_data, chunk, length, chunk_id, ata, parts, doc_type = row
                 
+                # Vérifier que le fichier PDF correspondant existe avant de l'indexer
+                pdf_path = PAGES_PATH / doc
+                if not pdf_path.is_file():
+                    logger.warning("Skipping chunk because PDF file does not exist: %s", pdf_path)
+                    continue
+
                 documents.append(chunk)
                 metadatas.append({
                     "doc": doc,
