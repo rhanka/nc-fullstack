@@ -10,13 +10,11 @@ services:
     environment:
       - JWT_SECRET
       - JWT_EXPIRE
-      - S3_API_ACCESS_KEY
-      - S3_API_SECRET_KEY
-      - S3_ENDPOINT_URL
-      - S3_BUCKET_DOCS
-      - S3_BUCKET_NC
       - OPENAI_API_KEY
-    #volumes:
+      - COHERE_API_KEY
+      - TECH_DOCS_DIR
+      - NC_DIR
+      - RERANKING_ENABLED
     networks:
       - app-network
 
@@ -45,17 +43,6 @@ services:
       - ui
     networks:
       - app-network
-
-  dataprep:
-    build:
-      context: ./dataprep
-      dockerfile: Dockerfile
-    volumes:
-      - ./dataprep/src:/app
-      - ./api/data:/data
-    working_dir: /app
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
 
 networks:
   app-network:
