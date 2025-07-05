@@ -79,7 +79,16 @@ async def get_doc(filename: str):
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    return FileResponse(file_path, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename={filename}"})
+    # Encoder le nom de fichier en UTF-8 pour l'en-tête Content-Disposition
+    import urllib.parse
+    encoded_filename = urllib.parse.quote(filename, safe='')
+    content_disposition = f"inline; filename*=UTF-8''{encoded_filename}"
+
+    return FileResponse(
+        file_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": content_disposition}
+    )
 
 @app.get("/json/{file_path:path}", response_class=JSONResponse)
 async def get_json(file_path: str):
