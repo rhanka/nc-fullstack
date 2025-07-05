@@ -202,18 +202,18 @@
     "300": canevasAgentTemplate,
     "400": canevasAgentTemplate,
     final: {
-      result: () => {},
+      result: updateTask,
     },
   };
 
   const eventProcess = (data) => {
     if (data.v) {
       return agentHead[data.metadata].stream(data);
-    } else if (data !== "v1") {
+    } else if (data !== "v1" && Object.keys(data).length > 0) {
       try {
         return agentHead[data.metadata][data.type](data) || { v: "" };
-      } catch {
-        console.log("Error in eventProcess", data);
+      } catch(e) {
+        console.log("Error in eventProcess", data, e);
         return { v: "" };
       }
     }
