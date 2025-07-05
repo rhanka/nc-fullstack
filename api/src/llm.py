@@ -10,7 +10,7 @@ class BaseLLM:
         yield await self.chat(messages, temperature)
 
 class OpenAILLM(BaseLLM):
-    def __init__(self, model="gpt-4.1-nano"):
+    def __init__(self, model="gpt-4.1"):
         from openai import AsyncOpenAI
         self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model = model
