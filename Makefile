@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev run ui-install ui-build docker-build docker-push build deploy deps env config clean help dataprep-nc-csv-to-json check-db create-tech-docs-db
+.PHONY: dev run ui-install ui-build docker-build docker-push build deploy deps env config clean help dataprep-nc-csv-to-json check-db create-tech-docs-db create-nc-db create-db
 
 # ----------------------------
 # Helpers
@@ -157,11 +157,18 @@ dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 
 dataprep-non-conformities-csv-to-json:
 	@echo "Extracting non-conformity JSON files from source CSV..."
-	@docker-compose run --rm dataprep python extract_jsons.py
+	@docker-compose run --rm dataprep python extract_jsons.py ${DC_OPTS}
 
 create-tech-docs-db:
 	@echo "Creating tech docs ChromaDB from source CSV..."
-	@docker-compose run --rm dataprep python create_tech_docs_db.py
+	@docker-compose run --rm dataprep python create_tech_docs_db.py ${DC_OPTS}
+
+create-nc-db:
+	@echo "Creating non-conformities ChromaDB from source CSV..."
+	@docker-compose run --rm dataprep python create_nc_db.py ${DC_OPTS}
+
+create-db: create-tech-docs-db create-nc-db
+	@echo "All databases created."
 
 .PHONY: deps env config clean
 clean:
@@ -186,6 +193,9 @@ help:
 	@echo "  dataprep-nc-csv-to-json  Extract JSON data from the source CSV"
 	@echo "  clean         Remove build artifacts"
 	@echo "  check-db      Check the health of ChromaDB databases"
+	@echo "  create-tech-docs-db  Create the tech docs ChromaDB"
+	@echo "  create-nc-db       Create the non-conformities ChromaDB"
+	@echo "  create-db          Create all databases"
 
 # ==============================================================================
 # Development
