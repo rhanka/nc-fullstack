@@ -37,9 +37,13 @@ dev-stop:
 	@echo "▶ Stopping API and UI in dev mode with Docker..."
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 
-run:
+up:
 	@echo "▶ Running API and UI in production mode with Docker..."
 	docker compose -f docker-compose.yml up ${DC_OPTS} -d
+
+down:
+	@echo "▶ Stopping API and UI in dev mode with Docker..."
+	docker compose -f docker-compose.yml down
 
 env:
 	@if [ ! -f .env ]; then \
@@ -63,24 +67,97 @@ ui-build: ui-install
 # Containerisation
 # ----------------------------
 
-docker-build:
-	@echo "▶ Building Docker image $(REGISTRY):$(TAG)"
-	docker build -t $(REGISTRY):$(TAG) .
+api-build:
+	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(TAG)"
+	docker compose build api
 
-docker-push:
+docker-login:
+	@echo "▶ Logging in to registry"
+	@echo "$(SCW_SECRET_KEY)" | docker login $(REGISTRY) -u nologin --password-stdin
+
+api-docker-image-push: docker-login
 	@echo "▶ Pushing image to registry"
-	docker push $(REGISTRY):$(TAG)
+	docker push $(REGISTRY)/$(API_IMAGE_NAME):$(TAG)
 
-build: ui-build docker-build
+build: ui-build api-build
 
 # ----------------------------
-# Deployment (example Scaleway CLI)
+# Deployment Steps
 # ----------------------------
 
-deploy: build docker-push
-	@echo "▶ Deploying container to Scaleway Container Registry/Namespace"
-	@echo "   (Adapt this command to your infra)"
-	# Example: scw container container deploy name=$(IMAGE_NAME) image=$(REGISTRY):$(TAG)
+check-jq:
+	@if ! command -v jq >/dev/null 2>&1; then \
+		echo "ℹ️ jq not found. Attempting to install with apt-get..."; \
+		sudo apt-get update -y && sudo apt-get install -y jq; \
+	fi
+
+check-scw:
+	@if ! command -v scw >/dev/null 2>&1; then \
+		echo "ℹ️ scw (Scaleway CLI) not found. Attempting to install..."; \
+		curl -sL https://raw.githubusercontent.com/scaleway/scaleway-cli/master/scripts/get.sh | sh && \
+		echo "✅ Scaleway CLI installed. You might need to start a new shell for it to be in your PATH."; \
+	fi
+
+deploy-container: check-jq check-scw
+	@echo "▶️ Deploying new container $(REGISTRY)/$(API_IMAGE_NAME):$(TAG) to Scaleway..."
+	@scw container container deploy --image="$(REGISTRY)/$(API_IMAGE_NAME):$(TAG)" --region=$(SCW_REGION) -o json > .deploy_output.json
+	@echo "✅ New container deployment initiated."
+
+wait-for-container: check-jq check-scw
+	@echo "⌛ Waiting for container to become ready..."
+	@if [ ! -f .deploy_output.json ]; then echo "❌ .deploy_output.json not found. Run 'make deploy-container' first."; exit 1; fi
+	@NEW_CONTAINER_ID=$$(\
+		jq -r '.[0].id' .deploy_output.json); \
+	scw container container wait --container-id=$$NEW_CONTAINER_ID --region=$(SCW_REGION); \
+	echo "⌛ Giving 30s for data sync and app startup..."; \
+	sleep 30; \
+	echo "🔎 Checking health of new container..."; \
+	NEW_CONTAINER_HOSTNAME=$$(\
+		jq -r '.[0].domain_name' .deploy_output.json); \
+	HEALTH_STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "https://$$NEW_CONTAINER_HOSTNAME/ping"); \
+	if [ "$$HEALTH_STATUS" -ne 200 ]; then \
+		echo "❌ New container is not healthy (HTTP status: $$HEALTH_STATUS). Aborting deployment."; \
+		exit 1; \
+	fi; \
+	echo "✅ New container is healthy."
+
+update-dns: check-jq
+	@echo "▶️ Updating DNS record $(API_DNS_RECORD) on Cloudflare..."
+	@if [ ! -f .deploy_output.json ]; then echo "❌ .deploy_output.json not found. Run 'make deploy-container' first."; exit 1; fi
+	@NEW_CONTAINER_HOSTNAME=$$(\
+		jq -r '.[0].domain_name' .deploy_output.json); \
+	DNS_RECORD_ID=$$(\
+		curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$(CLOUDFLARE_ZONE_ID)/dns_records?type=CNAME&name=$(API_DNS_RECORD)" \
+	  	-H "Authorization: Bearer $(CLOUDFLARE_API_TOKEN)" -H "Content-Type: application/json" | jq -r '.result[0].id'); \
+	if [ -z "$$DNS_RECORD_ID" ] || [ "$$DNS_RECORD_ID" == "null" ]; then \
+	    echo "❌ DNS record not found on Cloudflare. Please create a CNAME record for $(API_DNS_RECORD)."; \
+	    exit 1; \
+	fi; \
+	curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$(CLOUDFLARE_ZONE_ID)/dns_records/$$DNS_RECORD_ID" \
+	  -H "Authorization: Bearer $(CLOUDFLARE_API_TOKEN)" \
+	  -H "Content-Type: application/json" \
+	  --data '{"type":"CNAME","name":"'$(API_DNS_RECORD)'","content":"'$$NEW_CONTAINER_HOSTNAME'","ttl":1,"proxied":false}'; \
+	echo "✅ DNS updated successfully."
+
+cleanup-old-containers: check-jq check-scw
+	@echo "▶️ Cleaning up old containers..."
+	@if [ ! -f .deploy_output.json ]; then echo "❌ .deploy_output.json not found. Run 'make deploy-container' first."; exit 1; fi
+	@NEW_CONTAINER_ID=$$(\
+		jq -r '.[0].id' .deploy_output.json); \
+	OLD_CONTAINERS=$$(\
+		scw container container list --region=$(SCW_REGION) --name=$(API_IMAGE_NAME) -o json | jq -r --arg id "$$NEW_CONTAINER_ID" '.[] | select(.id != $$id) | .id'); \
+	for OLD_ID in $$OLD_CONTAINERS; do \
+	  echo "🗑️ Deleting old container $$OLD_ID..."; \
+	  scw container container delete --container-id=$$OLD_ID --region=$(SCW_REGION); \
+	done; \
+	rm -f .deploy_output.json; \
+	echo "✅ Cleanup complete."
+
+# ----------------------------
+# Main Deployment Target
+# ----------------------------
+deploy: build api-docker-image-push deploy-container wait-for-container update-dns cleanup-old-containers
+	@echo "🚀 Deployment successful! API is live at https://$(API_DNS_RECORD)"
 
 # ----------------------------
 # Data upload to Scaleway
