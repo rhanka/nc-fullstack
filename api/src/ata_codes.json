@@ -1,0 +1,402 @@
+[
+  {
+    "ATA_code": "ATA-00",
+    "ATA_category": "GENERAL"
+  },
+  {
+    "ATA_code": "ATA-01",
+    "ATA_category": "MAINTENANCE POLICY"
+  },
+  {
+    "ATA_code": "ATA-02",
+    "ATA_category": "OPERATIONS"
+  },
+  {
+    "ATA_code": "ATA-03",
+    "ATA_category": "SUPPORT"
+  },
+  {
+    "ATA_code": "ATA-04",
+    "ATA_category": "AIRWORTHINESS LIMITATIONS"
+  },
+  {
+    "ATA_code": "ATA-05",
+    "ATA_category": "TIME LIMITS/MAINTENANCE CHECKS"
+  },
+  {
+    "ATA_code": "ATA-06",
+    "ATA_category": "DIMENSIONS AND AREAS"
+  },
+  {
+    "ATA_code": "ATA-07",
+    "ATA_category": "LIFTING AND SHORING"
+  },
+  {
+    "ATA_code": "ATA-08",
+    "ATA_category": "LEVELING AND WEIGHING"
+  },
+  {
+    "ATA_code": "ATA-09",
+    "ATA_category": "TOWING AND TAXIING"
+  },
+  {
+    "ATA_code": "ATA-10",
+    "ATA_category": "PARKING, MOORING, STORAGE AND RETURN TO SERVICE"
+  },
+  {
+    "ATA_code": "ATA-11",
+    "ATA_category": "PLACARDS AND MARKINGS"
+  },
+  {
+    "ATA_code": "ATA-12",
+    "ATA_category": "SERVICING"
+  },
+  {
+    "ATA_code": "ATA-13",
+    "ATA_category": "HARDWARE AND GENERAL TOOLS"
+  },
+  {
+    "ATA_code": "ATA-14",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-15",
+    "ATA_category": "AIRCREW INFORMATION"
+  },
+  {
+    "ATA_code": "ATA-16",
+    "ATA_category": "CHANGE OF ROLE"
+  },
+  {
+    "ATA_code": "ATA-17",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-18",
+    "ATA_category": "VIBRATION AND NOISE ANALYSIS (HELICOPTER ONLY)"
+  },
+  {
+    "ATA_code": "ATA-19",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-20",
+    "ATA_category": "STANDARD PRACTICES - AIRFRAME"
+  },
+  {
+    "ATA_code": "ATA-21",
+    "ATA_category": "AIR CONDITIONING AND PRESSURIZATION"
+  },
+  {
+    "ATA_code": "ATA-22",
+    "ATA_category": "AUTO FLIGHT"
+  },
+  {
+    "ATA_code": "ATA-23",
+    "ATA_category": "COMMUNICATIONS"
+  },
+  {
+    "ATA_code": "ATA-24",
+    "ATA_category": "ELECTRICAL POWER"
+  },
+  {
+    "ATA_code": "ATA-25",
+    "ATA_category": "EQUIPMENT / FURNISHINGS"
+  },
+  {
+    "ATA_code": "ATA-26",
+    "ATA_category": "FIRE PROTECTION"
+  },
+  {
+    "ATA_code": "ATA-27",
+    "ATA_category": "FLIGHT CONTROLS"
+  },
+  {
+    "ATA_code": "ATA-28",
+    "ATA_category": "FUEL"
+  },
+  {
+    "ATA_code": "ATA-29",
+    "ATA_category": "HYDRAULIC POWER"
+  },
+  {
+    "ATA_code": "ATA-30",
+    "ATA_category": "ICE AND RAIN PROTECTION"
+  },
+  {
+    "ATA_code": "ATA-31",
+    "ATA_category": "INDICATING / RECORDING SYSTEM"
+  },
+  {
+    "ATA_code": "ATA-32",
+    "ATA_category": "LANDING GEAR"
+  },
+  {
+    "ATA_code": "ATA-33",
+    "ATA_category": "LIGHTS"
+  },
+  {
+    "ATA_code": "ATA-34",
+    "ATA_category": "NAVIGATION"
+  },
+  {
+    "ATA_code": "ATA-35",
+    "ATA_category": "OXYGEN"
+  },
+  {
+    "ATA_code": "ATA-36",
+    "ATA_category": "PNEUMATIC"
+  },
+  {
+    "ATA_code": "ATA-37",
+    "ATA_category": "VACUUM"
+  },
+  {
+    "ATA_code": "ATA-38",
+    "ATA_category": "WATER / WASTE"
+  },
+  {
+    "ATA_code": "ATA-39",
+    "ATA_category": "ELECTRICAL - ELECTRONIC PANELS AND MULTIPURPOSE COMPONENTS"
+  },
+  {
+    "ATA_code": "ATA-40",
+    "ATA_category": "MULTISYSTEM"
+  },
+  {
+    "ATA_code": "ATA-41",
+    "ATA_category": "WATER BALLAST"
+  },
+  {
+    "ATA_code": "ATA-42",
+    "ATA_category": "INTEGRATED MODULAR AVIONICS"
+  },
+  {
+    "ATA_code": "ATA-43",
+    "ATA_category": "EMERGENCY SOLAR PANEL SYSTEM"
+  },
+  {
+    "ATA_code": "ATA-44",
+    "ATA_category": "CABIN SYSTEMS"
+  },
+  {
+    "ATA_code": "ATA-45",
+    "ATA_category": "ONBOARD MAINTENANCE SYSTEMS"
+  },
+  {
+    "ATA_code": "ATA-46",
+    "ATA_category": "INFORMATION SYSTEMS"
+  },
+  {
+    "ATA_code": "ATA-47",
+    "ATA_category": "INERT GAS SYSTEM"
+  },
+  {
+    "ATA_code": "ATA-48",
+    "ATA_category": "IN FLIGHT FUEL DISPENSING"
+  },
+  {
+    "ATA_code": "ATA-49",
+    "ATA_category": "AIRBORNE AUXILIARY POWER UNIT"
+  },
+  {
+    "ATA_code": "ATA-50",
+    "ATA_category": "CARGO AND ACCESSORY COMPARTMENTS"
+  },
+  {
+    "ATA_code": "ATA-51",
+    "ATA_category": "STANDARD PRACTICES AND STRUCTURES - GENERAL"
+  },
+  {
+    "ATA_code": "ATA-52",
+    "ATA_category": "DOORS"
+  },
+  {
+    "ATA_code": "ATA-53",
+    "ATA_category": "FUSELAGE"
+  },
+  {
+    "ATA_code": "ATA-54",
+    "ATA_category": "NACELLES / PYLONS"
+  },
+  {
+    "ATA_code": "ATA-55",
+    "ATA_category": "STABILIZERS"
+  },
+  {
+    "ATA_code": "ATA-56",
+    "ATA_category": "WINDOWS"
+  },
+  {
+    "ATA_code": "ATA-57",
+    "ATA_category": "WINGS"
+  },
+  {
+    "ATA_code": "ATA-58",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-59",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-60",
+    "ATA_category": "STANDARD PRACTICES - PROP./ROTOR"
+  },
+  {
+    "ATA_code": "ATA-61",
+    "ATA_category": "PROPELLER / PROPULSORS"
+  },
+  {
+    "ATA_code": "ATA-62",
+    "ATA_category": "MAIN ROTOR(S)"
+  },
+  {
+    "ATA_code": "ATA-63",
+    "ATA_category": "MAIN ROTOR DRIVE(S)"
+  },
+  {
+    "ATA_code": "ATA-64",
+    "ATA_category": "TAIL ROTOR"
+  },
+  {
+    "ATA_code": "ATA-65",
+    "ATA_category": "TAIL ROTOR DRIVE"
+  },
+  {
+    "ATA_code": "ATA-66",
+    "ATA_category": "FOLDING BLADES / PYLON"
+  },
+  {
+    "ATA_code": "ATA-67",
+    "ATA_category": "ROTORS AND FLIGHT CONTROLS"
+  },
+  {
+    "ATA_code": "ATA-68",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-69",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-70",
+    "ATA_category": "STANDARD PRACTICES - ENGINE"
+  },
+  {
+    "ATA_code": "ATA-71",
+    "ATA_category": "POWER PLANT"
+  },
+  {
+    "ATA_code": "ATA-72",
+    "ATA_category": "ENGINE"
+  },
+  {
+    "ATA_code": "ATA-73",
+    "ATA_category": "ENGINE FUEL AND CONTROL"
+  },
+  {
+    "ATA_code": "ATA-74",
+    "ATA_category": "IGNITION"
+  },
+  {
+    "ATA_code": "ATA-75",
+    "ATA_category": "BLEED AIR"
+  },
+  {
+    "ATA_code": "ATA-76",
+    "ATA_category": "ENGINE CONTROLS"
+  },
+  {
+    "ATA_code": "ATA-77",
+    "ATA_category": "ENGINE INDICATING"
+  },
+  {
+    "ATA_code": "ATA-78",
+    "ATA_category": "EXHAUST"
+  },
+  {
+    "ATA_code": "ATA-79",
+    "ATA_category": "OIL"
+  },
+  {
+    "ATA_code": "ATA-80",
+    "ATA_category": "STARTING"
+  },
+  {
+    "ATA_code": "ATA-81",
+    "ATA_category": "TURBINES (RECIPROCATING ENGINES)"
+  },
+  {
+    "ATA_code": "ATA-82",
+    "ATA_category": "WATER INJECTION"
+  },
+  {
+    "ATA_code": "ATA-83",
+    "ATA_category": "ACCESSORY GEAR BOX"
+  },
+  {
+    "ATA_code": "ATA-84",
+    "ATA_category": "PROPULSION AUGMENTATION"
+  },
+  {
+    "ATA_code": "ATA-85",
+    "ATA_category": "FUEL CELL SYSTEMS"
+  },
+  {
+    "ATA_code": "ATA-86",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-87",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-88",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-89",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-90",
+    "ATA_category": "RESERVED/UNASSIGNED"
+  },
+  {
+    "ATA_code": "ATA-91",
+    "ATA_category": "CHARTS"
+  },
+  {
+    "ATA_code": "ATA-92",
+    "ATA_category": "ELECTRICAL POWER MULTIPLEXING"
+  },
+  {
+    "ATA_code": "ATA-93",
+    "ATA_category": "SURVEILLANCE"
+  },
+  {
+    "ATA_code": "ATA-94",
+    "ATA_category": "WEAPON SYSTEM"
+  },
+  {
+    "ATA_code": "ATA-95",
+    "ATA_category": "CREW ESCAPE AND SAFETY"
+  },
+  {
+    "ATA_code": "ATA-96",
+    "ATA_category": "MISSILES, DRONES AND TELEMETRY"
+  },
+  {
+    "ATA_code": "ATA-97",
+    "ATA_category": "WIRING REPORTING"
+  },
+  {
+    "ATA_code": "ATA-98",
+    "ATA_category": "METEOROLOGICAL AND ATMOSPHERIC RESEARCH"
+  },
+  {
+    "ATA_code": "ATA-99",
+    "ATA_category": "ELECTRONIC WARFARE SYSTEM"
+  }
+] 
