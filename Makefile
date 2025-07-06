@@ -10,14 +10,16 @@
 # Env variables
 # ----------------------------
 export UI_DIR          ?= ui
-export IMAGE_NAME      ?= nc-chatbot
+export API_IMAGE_NAME  ?= nc-chatbot-api
 export TAG             ?= $(shell git rev-parse --short HEAD)
-export REGISTRY        ?= rg.fr-par.scw.cloud/$(IMAGE_NAME)
+export REGISTRY        ?= rg.fr-par.scw.cloud
 export S3_BUCKET_DOCS  ?= a220-tech-docs
 export S3_BUCKET_NC    ?= a220-non-conformities
 export S3_REGION       ?= fr-par
 export S3_ENDPOINT_URL ?= https://s3.fr-par.scw.cloud
 export VITE_API_URL    ?=
+export TECH_DOCS_DIR   ?= a220-tech-docs
+export NC_DIR          ?= a220-non-conformities
 
 # Options par défaut pour Docker Compose. Peut être surchargé.
 # Ex: make dev DC_OPTS=""
