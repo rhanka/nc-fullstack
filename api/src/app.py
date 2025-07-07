@@ -124,7 +124,7 @@ async def get_doc(filename: str):
         headers={"Content-Disposition": content_disposition}
     )
 
-@app.get("/json/{filename}", response_class=JSONResponse)
+@app.get("/nc/json/{filename}", response_class=JSONResponse)
 async def get_json(filename: str):
     # Sécuriser le nom de fichier
     if ".." in filename or filename.startswith("/"):
@@ -182,6 +182,45 @@ async def list_non_conformities(max_rows: int = 500, id: str | None = None):
         records = [r for r in records if str(r.get("nc_event_id")) == id]
 
     return records[:max_rows] if not id else records
+
+@app.post("/nc")
+async def get_ncs_details(request: Request):
+    """
+    Retrieves the full details of non-conformities from their IDs.
+    Accepts a JSON body with a single key "nc_event_ids" which is a list of strings.
+    """
+    try:
+        body = await request.json()
+        nc_ids = body.get("nc_event_ids")
+
+        if not isinstance(nc_ids, list):
+            raise HTTPException(status_code=400, detail='Invalid payload: "nc_event_ids" should be a list.')
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body.")
+
+    results = []
+    json_dir = NC_PATH / "json"
+
+    for nc_id in nc_ids:
+        # Basic security check to prevent path traversal
+        if not isinstance(nc_id, str) or ".." in nc_id or "/" in nc_id:
+            logger.warning("Skipping invalid or unsafe nc_id: %s", nc_id)
+            continue
+
+        file_path = json_dir / f"{nc_id}.json"
+        if file_path.is_file():
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    enriched_data = enrich_with_ata(data, file_path.name)
+                    results.append(enriched_data)
+            except json.JSONDecodeError:
+                logger.warning("Failed to decode JSON from local file: %s", file_path.name)
+            except Exception as e:
+                logger.error("Failed to read local file %s: %s", file_path.name, e)
+
+    return results
 
 # ===============================================================
 # AI Endpoint (Streaming / Non-Streaming)
