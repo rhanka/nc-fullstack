@@ -188,7 +188,7 @@ dataprep-download-tech-docs: check-s5cmd
 dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 	@echo "✔️  All data download completed."
 
-dataprep-download-minimal:
+dataprep-download-minimal: check-s5cmd
 	@echo "▶ Downloading minimal data from Scaleway..."
 	@sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb || mkdir -p api/data/${TECH_DOCS_DIR}/vectordb &&\
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
