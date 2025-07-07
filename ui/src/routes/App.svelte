@@ -2,6 +2,7 @@
 
 <script>
   import { run } from "svelte/legacy";
+  import { onMount } from "svelte";
 
   import Header from "./Header.svelte";
   import NonConformityList from "./NonConformityList.svelte";
@@ -27,6 +28,30 @@
     resetCreatedItem,
 	  showChatbot
   } from "./store.js";
+
+  let isApiReady = false;
+
+  onMount(async () => {
+    const pingUrl = `${import.meta.env.VITE_API_URL}/ping`;
+
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(pingUrl);
+        if (response.ok && (await response.json()).status === 'ok') {
+          isApiReady = true;
+          console.log('API is ready.');
+        } else {
+          console.log('API not ready yet, retrying in 10 seconds...');
+          setTimeout(checkStatus, 10000);
+        }
+      } catch (error) {
+        console.error('Failed to connect to API, retrying in 10 seconds...', error);
+        setTimeout(checkStatus, 10000);
+      }
+    };
+
+    checkStatus();
+  });
 
   let maxRows = 5000;
   let apiUrl = `${import.meta.env.VITE_API_URL}/nc?max_rows=${maxRows}`;
@@ -184,6 +209,7 @@
   };
 </script>
 
+{#if isApiReady}
 <Header bind:expand></Header>
 <Rail bind:expand>
 	{#each tabs as tab}
@@ -237,6 +263,12 @@
 >
 	<Chatbot bind:expand stream={true}></Chatbot>
 </div>
+{:else}
+  <div class="loading-container">
+    <Icon icon="mdi:loading" class="spin-icon" width="48" height="48" />
+    <p>Server waking up...</p>
+  </div>
+{/if}
 
 <style>
   main {
@@ -311,4 +343,31 @@
       z-index: 100;
     }
   }
+
+  .loading-container {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		background-color: rgba(255, 255, 255, 0.8);
+		z-index: 1000;
+	}
+
+	.spin-icon {
+		animation: spin 2s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
 </style>
