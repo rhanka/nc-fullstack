@@ -4,7 +4,12 @@ on:
   push:
     branches:
       - master
-
+    paths:
+      - 'ui/**'
+      - 'dataprep/**'
+      - 'docker-compose.yml'
+      - 'Makefile'
+      - '.github/workflows/deploy-ui.yml'
 jobs:
   build:
     runs-on: ubuntu-latest

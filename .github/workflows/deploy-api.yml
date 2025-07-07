@@ -9,7 +9,7 @@ on:
       - 'dataprep/**'
       - 'docker-compose.yml'
       - 'Makefile'
-      - 'scripts/deploy.sh'
+      - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
 
 jobs:
@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check if API image is up to date
+        id: image-check
         run: make api-image-check
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
@@ -33,7 +34,7 @@ jobs:
         run: make api-build
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
-        if: ${{ failure() }}
+        if: steps.image-check.outcome == 'failure'
 
       - name: Publish API docker image
         run: make api-image-publish
@@ -41,7 +42,7 @@ jobs:
           REGISTRY: ${{ secrets.REGISTRY }}
           DOCKER_USERNAME: nologin
           DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
-        if: ${{ failure() }}
+        if: steps.image-check.outcome == 'failure'
 
   deploy:
     name: Deploy API
