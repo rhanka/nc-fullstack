@@ -1,51 +1,80 @@
-# Non conformities canevas edition based on Agentic Rag using Dataiku & Svelte.js
+# NC Fullstack - Non-Conformity Analysis Assistant
 
-This demo is deployed on [Github pages](https://nc.genai-cgi.com/)
+This project is a full-stack application designed to assist in the analysis and resolution of non-conformities. It leverages a SvelteKit frontend, a Python FastAPI backend, and a RAG (Retrieval-Augmented Generation) pipeline with modern LLMs.
 
-## Global Architecture
+The UI is deployed on [GitHub Pages](https://antoinefa.github.io/nc-fullstack/) and the API is deployed on [Scaleway Serverless Containers](https://nc-api.genai-cgi.com).
 
-Global components used :
+## Architecture
 
-- [Svelte for UI](https://svelte.dev) - [this repo](https://nc.genai-cgi.com)
-    - Non-Confromity Canevas Creation (interactive creation with AI)
-    - Contextual information retrieved with RAG (Non-Conformity history, Tech Docs)
-    - [Deep-Chat](https://deepchat.dev) for backend-less Chatbot
+The architecture is designed to be scalable and modular, separating the frontend, backend, and data preparation processes.
 
+```mermaid
+graph TD
+    subgraph "UI (SvelteKit on GitHub Pages)"
+        direction LR
+        Editor["Non-Conformity Editor"]
+        Chat["Conversational Analysis<br>(Deep-Chat)"]
+        Docs["Document Viewer<br>(NC History & Tech Docs)"]
+    end
 
-- [Dataiku](https://dataiku.com) for [AI Agent and dataprep ](https://github.com/rhanka/nc-dataiku)
-    - Flask Backend with Agents specialized by task
-    - Vector Databases (Chroma DB) for Non Conformity history and Tech docs
-    - Tech Doc storage, parsing, chunking and embedding
-    - Synthetic data creation for Non-Confomity history (5000 tickets with at least five steps)
-    - LLM Mesh for OpenAI embeddings and GPT4o/4o-mini, can be replaced by any-LLM with few clicks
+    Chat -- "Sends user query" --> Backend
 
-The Agent AI works as follows:
+    subgraph "Backend (Python FastAPI on Scaleway)"
+        direction TB
+        Backend[API Endpoint] --> RAG["RAG Orchestrator"]
+        RAG -- "1. Search relevant chunks" --> VectorSearch["Vector Search<br>(on ChromaDB)"]
+        VectorSearch -- "NC Data" --> NCDb[(NC VectorDB)]
+        VectorSearch -- "Tech Docs" --> DocsDb[(TechDocs VectorDB)]
 
-- User provide limited input either on a Non-Conformity task field or directly to the deep-chat input.
-- AI Agent looks up to vector databases and provide a json including task fields to update the Non-conformity Edition block (Report or Task 100), reference tech docs and non-conformity tickets (to update left side helpers), and a comment to display within deep-chat
-- User can iterate to make the Non-Conformity task fiels more relevant or to translate it to a more comfortable language.
+        RAG -- "2. Call LLM with context" --> LLM["LLM Provider<br>(Gemini / Mistral)"]
 
-![Architecture diagram](architecture.drawio.png)
+        LLM -- "Streams response" --> Backend
+    end
 
-## Developing
-```bash
-# install dependencies (legacy option required to use svelte-pdf)
-npm install --legacy-peer-deps
+    Backend -- "Streams response back to" --> Chat
 
-# dev mode
-npm run dev
+    subgraph "Data Preparation (Offline)"
+        direction LR
+        Sources[Source files] --> Dataprep["`make create-db`"]
+        Dataprep --> NCDb
+        Dataprep --> DocsDb
+        NCDb -- "Stored in S3" --> S3[(Scaleway S3)]
+        DocsDb -- "Stored in S3" --> S3
+    end
 ```
 
-## Building
+### Key Components
 
-To create a production version of your app:
+-   **Frontend**: A [SvelteKit](https://kit.svelte.dev/) application provides a rich user interface for editing non-conformities, chatting with an AI assistant, and viewing relevant documents. It is deployed statically on GitHub Pages.
+-   **Backend**: A [FastAPI](https://fastapi.tiangolo.com/) Python application serves the API. It orchestrates the RAG pipeline, calling on vector databases and LLMs to generate intelligent responses. It's deployed as a serverless container on Scaleway.
+-   **Data Preparation**: An offline process, managed via the `Makefile`, to prepare the data. It converts source files (like CSVs) into ChromaDB vector stores and uploads them to a Scaleway S3 bucket. This data is then baked into the API's Docker image at build time.
+-   **LLM Providers**: The system is designed to be model-agnostic, currently supporting providers like Gemini and Mistral.
 
-```bash
-npm run build
-```
+## Development
 
-You can preview the production build with `npm run preview`.
+This project uses `make` to streamline development tasks.
 
-## Deploy
+1.  **Setup environment**:
+    Create a `.env` file from the template and generate a JWT secret.
+    ```bash
+    make env
+    ```
 
-This repo is using Github Actions to deploy static pages to Github Pages (cf .github/workflows/deploy.yml)
+2.  **Start development servers**:
+    This will start the UI and API services with hot-reloading.
+    ```bash
+    make dev
+    ```
+
+3.  **Prepare data**:
+    If you need to regenerate the vector databases from source files:
+    ```bash
+    make create-db
+    ```
+
+## Deployment
+
+Deployment is automated via GitHub Actions.
+
+-   **API**: When changes are pushed to the `master` branch in the `api/` or `dataprep/` directories, the API Docker image is built and pushed to the Scaleway registry. A new container is then deployed on Scaleway Serverless.
+-   **UI**: When changes are pushed to the `ui/` directory, the SvelteKit application is built and deployed to GitHub Pages.
