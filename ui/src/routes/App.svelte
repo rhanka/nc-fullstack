@@ -15,7 +15,6 @@
   import RailItem from "./RailItem.svelte";
   import Drawer from "./Drawer.svelte";
   import Icon from "@iconify/svelte";
-  import { nonConformities } from "./non_conformities.js";
   import {
     askForHelp,
     referencesList,
@@ -31,7 +30,6 @@
 
   let maxRows = 5000;
   let apiUrl = `${import.meta.env.VITE_API_URL}/nc?max_rows=${maxRows}`;
-  let nonConformitiesList = sortNC(nonConformities);
   let nonConformitiesFilter = [];
   let nc_num = 0;
   let doc_num = 0;
@@ -40,38 +38,8 @@
   let tabs = [];
   let expand = false;
 
-  function sortNC(list) {
-    return list.sort(
-      (a, b) =>
-        new Date(b["nc_event_date"]) - new Date(a["nc_event_date"]),
-    );
-  }
-
-
   $: if ($selectDoc !== null) {
     selectDocUrl = `${import.meta.env.VITE_API_URL}/doc/${encodeURIComponent($selectDoc.doc.replace(/\.md/, ".pdf"))}`;
-  }
-
-  async function getData() {
-    try {
-      let response = await fetch(apiUrl, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-      });
-      if (response.ok) {
-        nonConformitiesList = sortNC(await response.json());
-        console.log(
-          `fetched ${nonConformitiesList.length} non conformities`,
-        ); // Affiche les données JSON
-      } else {
-        console.error("HTTP error", response.status);
-      }
-    } catch (error) {
-      console.log(error);
-    }
   }
 
   $: tabs = [
@@ -140,7 +108,6 @@
         },
         selected: $selectItem,
         arguments: {
-          nonConformities: nonConformitiesList,
           nonConformitiesFilter: nonConformitiesFilter
         }
       },
@@ -152,8 +119,6 @@
       }
     }
   ];
-
-  getData();
 
   $: if ($askForHelp) {
     $showChatbot = true;

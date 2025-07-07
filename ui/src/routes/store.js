@@ -1,5 +1,4 @@
 import { writable } from 'svelte/store';
-import { nonConformities } from './non_conformities';
 
 function createLocalStorageStore(key, initialValue, clean = false) {
   const storedValue = clean ? null : localStorage.getItem(key);
