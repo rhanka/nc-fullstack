@@ -153,7 +153,7 @@ dataprep-upload-nc-data: check-s5cmd
 	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY} &&\
 	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY} &&\
 	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
-		sync 'api/data/${S3_BUCKET_NC}/*' s3://${S3_BUCKET_NC}/
+		cp --acl "public-read" 'api/data/${S3_BUCKET_NC}/*' s3://${S3_BUCKET_NC}/
 
 dataprep-upload-tech-docs: check-s5cmd
 	@if [ -z "${S3_DATAPREP_ACCESS_KEY}" ] || [ -z "${S3_DATAPREP_SECRET_KEY}" ]; then \
@@ -164,7 +164,7 @@ dataprep-upload-tech-docs: check-s5cmd
 	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY} &&\
 	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY} &&\
 	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
-		sync 'api/data/${S3_BUCKET_DOCS}/*' s3://${S3_BUCKET_DOCS}/
+		cp --acl "public-read" 'api/data/${S3_BUCKET_DOCS}/*' s3://${S3_BUCKET_DOCS}/
 
 dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
 	@echo "✔️  All data upload completed."
