@@ -1,0 +1,59 @@
+name: Deploy API to Scaleway
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'api/**'
+      - 'dataprep/**'
+      - 'docker-compose.yml'
+      - 'Makefile'
+      - 'scripts/deploy.sh'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Deploy API
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download data and Build API
+        run: make api-build
+        env:
+          REGISTRY: ${{ vars.REGISTRY }}
+
+      - name: Publish API docker image
+        run: make api-image-publish
+        env:
+          REGISTRY: ${{ vars.REGISTRY }}
+          DOCKER_USERNAME: nologin
+          DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+
+  deploy:
+    name: Deploy API
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use CLI
+        uses: scaleway/action-scw@v0
+        with:
+          save-config: true
+          export-config: true
+          version: v2.24.0
+          access-key: ${{ secrets.SCW_ACCESS_KEY }}
+          secret-key: ${{ secrets.SCW_SECRET_KEY }}
+          default-project-id: ${{ secrets.SCW_PROJECT_ID }}
+          default-organization-id: ${{ secrets.SCW_ORGANIZATION_ID }}
+  
+      - name: Deploy API
+        run: make deploy-api
+        env:
+          REGISTRY: ${{ vars.REGISTRY }}
