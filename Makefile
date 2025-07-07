@@ -81,7 +81,7 @@ docker-login:
 
 api-image-check: docker-login
 	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
-	docker pull $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) | grep -q "Image is up to date" && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) is up to date" || echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) is not up to date" && exit 1
+	docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
 
 api-image-publish: docker-login
 	@echo "▶ Pushing image to registry"
