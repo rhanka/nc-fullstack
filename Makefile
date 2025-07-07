@@ -175,13 +175,13 @@ dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
 
 dataprep-download-nc-data: check-s5cmd
 	@echo "▶ Downloading non-conformities data from Scaleway..."
-	@sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb &&\
+	@sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb || true &&\
 	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_NC}/* 'api/data/${NC_DIR}/'
 
 dataprep-download-tech-docs: check-s5cmd
 	@echo "▶ Downloading technical documentation from Scaleway..."
-	@sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb &&\
+	@sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb || true &&\
 	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_DOCS}/* 'api/data/${TECH_DOCS_DIR}/'
 
