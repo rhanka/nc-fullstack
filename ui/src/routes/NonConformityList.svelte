@@ -1,7 +1,6 @@
 <script>
   import { createEventDispatcher } from "svelte";
   import {
-    referencesList,
     filteredNonConformities,
     activeTabValue,
     selectItem,
@@ -9,7 +8,7 @@
   import { ripple } from "svelte-ripple-action";
   import Icon from '@iconify/svelte';
 
-  export let nonConformities = [];
+  let nonConformities = [];
   export let num = 0;
   export let nonConformitiesFilter = [];
 
@@ -20,6 +19,29 @@
     acc[item.doc] = index;
     return acc;
   }, {});
+
+  $: if (nonConformitiesFilter && nonConformitiesFilter.length > 0) {
+    const fetchNCs = async () => {
+      const ncIds = nonConformitiesFilter.map(item => item.doc);
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/nc`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ nc_event_ids: ncIds })
+        });
+        if (response.ok) {
+          nonConformities = await response.json(); // Met à jour la variable locale
+        } else {
+          console.error("Failed to fetch non-conformities:", response.statusText);
+        }
+      } catch (error) {
+        console.error("Error fetching non-conformities:", error);
+      }
+    };
+    fetchNCs();
+  }
 
   $: $filteredNonConformities = nonConformities
     .filter((item) =>
