@@ -14,8 +14,8 @@ TECH_DOCS_DISTANCE_FACTOR = 1.2
 NC_DISTANCE_FACTOR = 1.2
 
 # Limites finales du nombre de résultats
-MAX_TECH_DOCS_RESULTS = 15
-MAX_NC_RESULTS = 15
+MAX_TECH_DOCS_RESULTS = 10
+MAX_NC_RESULTS = 10
 
 # Build paths relative to this script's location
 SCRIPT_DIR = pathlib.Path(__file__).parent.parent
@@ -74,7 +74,7 @@ if RERANKING_ENABLED:
 else:
     logger.info("Reranking is disabled.")
 
-def search_documents(query: str, n_results: int = 30) -> List[Dict[str, Any]]:
+def search_documents(query: str, n_results: int = 15) -> List[Dict[str, Any]]:
     """
     Searches for documents, then optionally reranks them using Cohere for relevance.
     """
@@ -132,7 +132,7 @@ def search_documents(query: str, n_results: int = 30) -> List[Dict[str, Any]]:
         logger.error(f"Failed to query or rerank tech docs. Error: {e}", exc_info=True)
         return []
 
-def search_non_conformities(query: str, n_results: int = 30) -> List[Dict[str, Any]]:
+def search_non_conformities(query: str, n_results: int = 15) -> List[Dict[str, Any]]:
     """
     Searches for non-conformities, then optionally reranks them using Cohere for relevance.
     """
