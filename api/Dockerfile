@@ -1,32 +1,27 @@
-FROM python:3.12-slim
-
+# Stage 1: Base avec dépendances communes
+FROM python:3.12-slim as base
 WORKDIR /app
 
-# Installation des dépendances système et de s5cmd pour S3
-RUN apt-get update && apt-get install -y \
-    build-essential curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -L "https://github.com/peak/s5cmd/releases/download/v2.3.0/s5cmd_2.3.0_Linux-64bit.tar.gz" | tar xz -C /usr/local/bin/
+RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
 
-# Copie des dépendances Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copie du script d'entrée
-COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
+COPY src/ /app/src/
 
-# Copie du code source
-COPY src/ src/
+# Stage 2: Cible de développement (utilisée par docker-compose.dev.yml)
+FROM base as dev
+CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src"]
 
-# Le volume /data sera monté par le système d'orchestration (ex: CaaS)
-# ou par docker-compose pour le développement local.
-# Ici, nous nous assurons que les répertoires cibles existent.
-RUN mkdir -p /data/a220-tech-docs /data/a220-non-conformities
+# Stage 3: Cible de production avec données "bakées"
+FROM base as prod
+WORKDIR /app
 
-# Port exposé
+# Copier les données directement dans l'image
+COPY data/a220-non-conformities/json/ /app/data/a220-non-conformities/json/
+COPY data/a220-non-conformities/vectordb/chroma.sqlite3 /app/data/a220-non-conformities/vectordb/
+COPY data/a220-tech-docs/pages/ /app/data/a220-tech-docs/pages/
+COPY data/a220-tech-docs/vectordb/chroma.sqlite3 /app/data/a220-tech-docs/vectordb/
+
 EXPOSE 8000
-
-# Le script d'entrée s'occupera de la synchronisation des données avant de lancer uvicorn
-ENTRYPOINT ["./entrypoint.sh"]
 CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000"]
