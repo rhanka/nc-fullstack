@@ -61,13 +61,14 @@ ui-install:
 	cd $(UI_DIR) && npm install --legacy-peer-deps
 
 ui-build: ui-install
-	cd $(UI_DIR) && npm run build
+	@echo "▶ Building UI..."
+	cd $(UI_DIR) && VITE_API_URL=$(VITE_API_URL) npm run build
 
 # ----------------------------
 # Containerisation
 # ----------------------------
 
-api-build:
+api-build: dataprep-download-all
 	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(TAG)"
 	docker compose build api
 
@@ -214,10 +215,11 @@ dataprep-download-nc-data: check-s5cmd
 		exit 1; \
 	fi
 	@echo "▶ Downloading non-conformities data from Scaleway..."
-	export AWS_ACCESS_KEY_ID=${S3_API_ACCESS_KEY} &&\
+	@export AWS_ACCESS_KEY_ID=${S3_API_ACCESS_KEY} &&\
 	export AWS_SECRET_ACCESS_KEY=${S3_API_SECRET_KEY} &&\
+	sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb &&\
 	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_NC}/* 'api/data/${S3_BUCKET_NC}/'
+		sync s3://${S3_BUCKET_NC}/* 'api/data/${NC_DIR}/'
 
 dataprep-download-tech-docs: check-s5cmd
 	@if [ -z "${S3_API_ACCESS_KEY}" ] || [ -z "${S3_API_SECRET_KEY}" ]; then \
@@ -225,10 +227,11 @@ dataprep-download-tech-docs: check-s5cmd
 		exit 1; \
 	fi
 	@echo "▶ Downloading technical documentation from Scaleway..."
-	export AWS_ACCESS_KEY_ID=${S3_API_ACCESS_KEY} &&\
+	@export AWS_ACCESS_KEY_ID=${S3_API_ACCESS_KEY} &&\
 	export AWS_SECRET_ACCESS_KEY=${S3_API_SECRET_KEY} &&\
+	sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb &&\
 	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_DOCS}/* 'api/data/${S3_BUCKET_DOCS}/'
+		sync s3://${S3_BUCKET_DOCS}/* 'api/data/${TECH_DOCS_DIR}/'
 
 dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 	@echo "✔️  All data download completed."
@@ -239,11 +242,13 @@ dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 
 create-tech-docs-db:
 	@echo "Creating tech docs ChromaDB from source CSV..."
-	@docker-compose -f docker-compose.dataprep.yml run --rm dataprep python create_tech_docs_db.py
+	@docker-compose -f docker-compose.dataprep.yml run --rm dataprep python create_tech_docs_db.py && \
+	sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb
 
 create-nc-db:
 	@echo "Creating non-conformities ChromaDB from source CSV..."
-	@docker-compose -f docker-compose.dataprep.yml run --rm dataprep python create_nc_db.py
+	@docker-compose -f docker-compose.dataprep.yml run --rm dataprep python create_nc_db.py && \
+	sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb
 
 create-db: create-tech-docs-db create-nc-db
 	@echo "All databases created."

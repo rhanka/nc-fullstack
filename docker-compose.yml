@@ -5,17 +5,13 @@ services:
     build: 
       context: ./api
       dockerfile: Dockerfile
+      target: prod
     image: ${REGISTRY}/${API_IMAGE_NAME}:${TAG:-latest}
     ports:
       - "8000:8000"
     environment:
       - JWT_SECRET
       - JWT_EXPIRE
-      - S3_API_ACCESS_KEY
-      - S3_API_SECRET_KEY
-      - S3_ENDPOINT_URL
-      - S3_BUCKET_DOCS
-      - S3_BUCKET_NC
       - OPENAI_API_KEY
       - COHERE_API_KEY
       - TECH_DOCS_DIR
