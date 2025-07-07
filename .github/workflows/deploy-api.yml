@@ -24,12 +24,12 @@ jobs:
       - name: Download data and Build API
         run: make api-build
         env:
-          REGISTRY: ${{ vars.REGISTRY }}
+          REGISTRY: ${{ secrets.REGISTRY }}
 
       - name: Publish API docker image
         run: make api-image-publish
         env:
-          REGISTRY: ${{ vars.REGISTRY }}
+          REGISTRY: ${{ secrets.REGISTRY }}
           DOCKER_USERNAME: nologin
           DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
 
