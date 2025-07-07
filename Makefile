@@ -79,6 +79,10 @@ docker-login:
 	@echo "▶ Logging in to registry"
 	@echo "$(DOCKER_PASSWORD)" | docker login $(REGISTRY) -u $(DOCKER_USERNAME) --password-stdin
 
+api-image-check: docker-login
+	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
+	docker pull $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) | grep -q "Image is up to date" && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) is up to date" || echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) is not up to date" && exit 1
+
 api-image-publish: docker-login
 	@echo "▶ Pushing image to registry"
 	docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)

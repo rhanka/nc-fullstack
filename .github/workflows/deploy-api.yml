@@ -21,10 +21,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check if API image is up to date
+        run: make api-image-check
+        env:
+          REGISTRY: ${{ secrets.REGISTRY }}
+          DOCKER_USERNAME: nologin
+          DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+        continue-on-error: true
+
       - name: Download data and Build API
         run: make api-build
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
+        if: ${{ failure() }}
 
       - name: Publish API docker image
         run: make api-image-publish
@@ -32,6 +41,7 @@ jobs:
           REGISTRY: ${{ secrets.REGISTRY }}
           DOCKER_USERNAME: nologin
           DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+        if: ${{ failure() }}
 
   deploy:
     name: Deploy API
