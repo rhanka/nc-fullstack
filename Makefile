@@ -79,7 +79,7 @@ api-build: dataprep-download-all
 
 docker-login:
 	@echo "▶ Logging in to registry"
-	@echo "$(SCW_SECRET_KEY)" | docker login $(REGISTRY) -u nologin --password-stdin
+	@echo "$(DOCKER_PASSWORD)" | docker login $(REGISTRY) -u $(DOCKER_USERNAME) --password-stdin
 
 api-docker-image-push: docker-login
 	@echo "▶ Pushing image to registry"
