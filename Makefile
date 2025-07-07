@@ -71,7 +71,7 @@ ui-build: ui-install
 # Containerisation
 # ----------------------------
 
-api-build: dataprep-download-all
+api-build: dataprep-download-minimal
 	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
 	docker compose build api
 
@@ -187,6 +187,22 @@ dataprep-download-tech-docs: check-s5cmd
 
 dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 	@echo "✔️  All data download completed."
+
+dataprep-download-minimal:
+	@echo "▶ Downloading minimal data from Scaleway..."
+	@sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb || mkdir -p api/data/${TECH_DOCS_DIR}/vectordb &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		cp s3://${S3_BUCKET_DOCS}/vectordb/chroma.sqlite3 'api/data/${TECH_DOCS_DIR}/vectordb/chroma.sqlite3'
+	@mkdir -p 'api/data/${TECH_DOCS_DIR}/pages/' &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_DOCS}/pages/* 'api/data/${TECH_DOCS_DIR}/pages/'
+	@sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb || mkdir -p api/data/${NC_DIR}/vectordb &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		cp s3://${S3_BUCKET_NC}/vectordb/chroma.sqlite3 'api/data/${NC_DIR}/vectordb/chroma.sqlite3'
+	@mkdir -p 'api/data/${NC_DIR}/json/' && \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_NC}/json/* 'api/data/${NC_DIR}/json/'
+	@echo "✔️  Minimal data download completed."
 
 # ==============================================================================
 # Data
