@@ -113,7 +113,7 @@ check-scw:
 deploy-api-container: check-scw
 	@echo "▶️ Updating new container $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) to Scaleway..."
 	API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
-	scw container container update container-id=$${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" region=fr-par > .deploy_output.log
+	scw container container update container-id=$${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" region=fr-par http-option=redirected > .deploy_output.log
 	@echo "✅ New container deployment initiated."
 
 wait-for-container: check-scw
