@@ -24,6 +24,7 @@ jobs:
       run: make ui-build
       env:
         BASE_PATH: '/${{ github.event.repository.name }}'
+        VITE_API_URL: https://nc-api.genai-cgi.com
 
     - name: Upload static files as artifact
       id: deployment
