@@ -11,7 +11,9 @@
 # ----------------------------
 export UI_DIR          ?= ui
 export API_IMAGE_NAME  ?= nc-chatbot-api
-export TAG             ?= $(shell git rev-parse --short HEAD)
+export API_VERSION     ?= $(shell echo "api/src api/requirements.txt api/Dockerfile" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export UI_VERSION     ?= $(shell echo "ui/src ui/static ui/package.json ui/Dockerfile ui/vite.config.ts ui/svelte.config.js ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+
 export REGISTRY        ?= rg.fr-par.scw.cloud
 export S3_BUCKET_DOCS  ?= a220-tech-docs
 export S3_BUCKET_NC    ?= a220-non-conformities
@@ -28,6 +30,9 @@ DC_OPTS ?= --build --force-recreate
 # ----------------------------
 # Main targets
 # ----------------------------
+
+version:
+	@echo ui:$(UI_VERSION)-api:$(API_VERSION)
 
 dev:
 	@echo "▶ Starting API and UI in dev mode with Docker..."
@@ -69,7 +74,7 @@ ui-build: ui-install
 # ----------------------------
 
 api-build: dataprep-download-all
-	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(TAG)"
+	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
 	docker compose build api
 
 docker-login:
@@ -78,7 +83,7 @@ docker-login:
 
 api-docker-image-push: docker-login
 	@echo "▶ Pushing image to registry"
-	docker push $(REGISTRY)/$(API_IMAGE_NAME):$(TAG)
+	docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
 
 build: ui-build api-build
 
@@ -100,8 +105,8 @@ check-scw:
 	fi
 
 deploy-container: check-jq check-scw
-	@echo "▶️ Deploying new container $(REGISTRY)/$(API_IMAGE_NAME):$(TAG) to Scaleway..."
-	@scw container container deploy --image="$(REGISTRY)/$(API_IMAGE_NAME):$(TAG)" --region=$(SCW_REGION) -o json > .deploy_output.json
+	@echo "▶️ Deploying new container $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) to Scaleway..."
+	@scw container cgiontainer deploy --image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" --region=$(SCW_REGION) -o json > .deploy_output.json
 	@echo "✅ New container deployment initiated."
 
 wait-for-container: check-jq check-scw
