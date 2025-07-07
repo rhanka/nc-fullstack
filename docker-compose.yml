@@ -6,7 +6,7 @@ services:
       context: ./api
       dockerfile: Dockerfile
       target: prod
-    image: ${REGISTRY}/${API_IMAGE_NAME}:${TAG:-latest}
+    image: ${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION:-latest}
     ports:
       - "8000:8000"
     environment:
