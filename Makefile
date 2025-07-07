@@ -210,26 +210,14 @@ dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
 # ----------------------------
 
 dataprep-download-nc-data: check-s5cmd
-	@if [ -z "${S3_API_ACCESS_KEY}" ] || [ -z "${S3_API_SECRET_KEY}" ]; then \
-		echo "❌ Error: S3_API_ACCESS_KEY and S3_API_SECRET_KEY must be set in env"; \
-		exit 1; \
-	fi
 	@echo "▶ Downloading non-conformities data from Scaleway..."
-	@export AWS_ACCESS_KEY_ID=${S3_API_ACCESS_KEY} &&\
-	export AWS_SECRET_ACCESS_KEY=${S3_API_SECRET_KEY} &&\
-	sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb &&\
+	@sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb &&\
 	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_NC}/* 'api/data/${NC_DIR}/'
 
 dataprep-download-tech-docs: check-s5cmd
-	@if [ -z "${S3_API_ACCESS_KEY}" ] || [ -z "${S3_API_SECRET_KEY}" ]; then \
-		echo "❌ Error: S3_API_ACCESS_KEY and S3_API_SECRET_KEY must be set in env"; \
-		exit 1; \
-	fi
 	@echo "▶ Downloading technical documentation from Scaleway..."
-	@export AWS_ACCESS_KEY_ID=${S3_API_ACCESS_KEY} &&\
-	export AWS_SECRET_ACCESS_KEY=${S3_API_SECRET_KEY} &&\
-	sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb &&\
+	@sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb &&\
 	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_DOCS}/* 'api/data/${TECH_DOCS_DIR}/'
 
