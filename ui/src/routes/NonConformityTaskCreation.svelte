@@ -82,7 +82,7 @@
 </script>
 
 <div
-  class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root"
+  class="NC-task-root"
   style="margin-bottom: 1rem;"
 >
   {#if task}
@@ -90,10 +90,10 @@
       type="button"
       on:click={handleClick}
       on:keypress={(e) => e.key === "Enter" && handleClick()}
-      class="MuiCardActions-root"
+      class="NC-task-button"
       style="cursor: pointer; display: flex; padding: 0px; width: 100%; text-align: left; border: none; background: none;"
     >
-      <h3 class="MuiTypography-root MuiTypography-h3 taskTitle">
+      <h3 class="taskTitle">
         {taskLabel[task]}
         {#if aiHelp && expand}
           <a
@@ -486,23 +486,4 @@
     flex: 1 1 auto;
   }
 
-  .MuiPaper-root {
-    background-color: rgb(255, 255, 255);
-    color: rgb(51, 51, 51);
-    box-shadow: rgb(232, 232, 232) 0px 4px inset;
-    transition: box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
-    border-radius: 0px;
-    border-width: 1px;
-    border-style: solid;
-    border-color: rgb(232, 232, 232);
-    border-image: initial;
-    padding: 2rem;
-  }
-  .MuiCardActions-root {
-    display: flex;
-    -webkit-box-align: center;
-    align-items: center;
-    padding: 0px;
-  }
 </style>

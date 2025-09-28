@@ -14,7 +14,6 @@
 </script>
 
 <button
-  class="MuiButtonBase-root MuiListItemButton-root MuiListItemButton-gutters MuiListItemButton-root MuiListItemButton-gutters"
   class:selected={selected}
   class:desactivated={!active}
   use:ripple={{ color: "rgba(82, 54, 171, 0.2)", duration: 0.6 }}
@@ -22,12 +21,12 @@
   on:click|preventDefault={onClick}
   role="button"
 >
-  <div class="MuiListItemText-root MuiListItemText-root-custom">
+  <div class="button-wrapper">
 	  {#if icon}
 	    <Icon {icon} height={30}/>
 	  {/if}
     <span
-      class="MuiTypography-root MuiTypography-body1 MuiListItemText-primary label"
+      class="label"
     >
       {label}
       {#if num !== null && num !== undefined && num !== 0}
@@ -51,7 +50,7 @@
     height: 100%;
  }
 
-  .MuiListItemText-root-custom {
+  .button-wrapper {
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -60,6 +59,7 @@
     padding-bottom:0.5rem;
 
   }
+
 
 /* --- Base Styles --- */
 .selected {
@@ -73,7 +73,7 @@
   content: '';
   position: absolute;
   /* Default gradient direction: top-to-bottom */
-  background: linear-gradient(rgb(227, 25, 55), rgb(82, 54, 171));
+  background: linear-gradient(rgb(19, 61, 94), rgb(113, 139, 158));
 }
 
 /* --- Desktop Styles (Line on Left) --- */
@@ -97,7 +97,7 @@
     width: auto;
 
     /* --- Override background for HORIZONTAL gradient --- */
-    background: linear-gradient(to right, rgb(227, 25, 55), rgb(82, 54, 171));
+    background: linear-gradient(to right, rgb(19, 61, 94), rgb(113, 139, 158));
     /* You could also use 'to left' or '90deg' depending on desired direction */
   }
 }
@@ -106,23 +106,6 @@
 i {
   font-size: 2rem;
   margin-bottom: 0.5rem;
-}
-
-button {
-  border: none;
-  background: none;
-  border-left: 0.25rem solid rgb(0,0,0,0); /* Transparent initial border */
-  width: 100%;
-  height: 100%;
-}
-
-.MuiListItemText-root-custom {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding-top:1rem;
-  padding-bottom:0.5rem;
 }
 
 .desactivated {
