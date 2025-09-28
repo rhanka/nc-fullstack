@@ -58,7 +58,7 @@ app = FastAPI(title="NC Chatbot API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://nc.genai-cgi.com", "http://localhost", "http://localhost:80", "http://localhost:5173"],
+    allow_origins=["https://nc.sent-tech.ca", "http://localhost", "http://localhost:80", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
