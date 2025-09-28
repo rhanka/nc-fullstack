@@ -61,12 +61,14 @@
   $: num = $filteredNonConformities.length;
 
   $: console.log("nc", nonConformitiesFilter);
+
+  $: console.log("selected", $selectItem, $activeTabValue);
 </script>
 
 <div class="scrollable">
   <ul style="list-style-type: none; padding: 0;">
     {#each $filteredNonConformities as item, index}
-      <li class:selected={$selectItem === item && $activeTabValue === 3}>
+      <li class:selected={$selectItem && $selectItem.doc === item.doc && $activeTabValue === 3}>
         <button
           type="button"
           use:ripple={{
@@ -99,7 +101,7 @@
   .selected {
     border-left: 0.25rem solid;
     background: rgb(230, 227, 243);
-    border-image: linear-gradient(rgb(227, 25, 55), rgb(82, 54, 171)) 0 100% /
+    border-image: linear-gradient(rgb(19, 61, 94), rgb(113, 139, 158)) 0 100% /
       1 / 0 stretch;
   }
   li {

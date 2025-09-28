@@ -158,4 +158,5 @@
   .editable-input::placeholder {
     color: #ced4da;
   }
+
 </style>

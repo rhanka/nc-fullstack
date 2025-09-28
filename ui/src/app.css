@@ -2,14 +2,6 @@
 @import '../static/icon.css';
 @import "svelte-ripple-action/ripple.css";
 
-@use "@material/drawer";
-@use "@material/list";
-
-@include drawer.core-styles;
-@include drawer.dismissible-core-styles;
-@include drawer.modal-core-styles;
-@include list.deprecated-core-styles;
-
 
 body {
 	margin: 0px;
@@ -32,6 +24,28 @@ button {
 	font-family: Source Sans Pro, sans-serif;
 }
 
-.MuiCollapse-root::after {
-	transition: all .35s;
-}
+.NC-task-root {
+    background-color: rgb(255, 255, 255);
+    color: rgb(51, 51, 51);
+    box-shadow: rgb(232, 232, 232) 0px 4px inset;
+    transition: box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    border-radius: 0px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: rgb(232, 232, 232);
+    border-image: initial;
+    padding: 2rem;
+  }
+
+  .NC-task-button {
+    display: flex;
+    -webkit-box-align: center;
+    align-items: center;
+    padding: 0px;
+  }
+
+  ul > li > p {
+    margin-bottom: 0!important;
+    margin-top: 0!important;
+  }

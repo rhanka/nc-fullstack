@@ -60,7 +60,7 @@
   .selected {
     border-left: 0.25rem solid;
     background: rgb(230, 227, 243);
-    border-image: linear-gradient(rgb(227, 25, 55), rgb(82, 54, 171)) 0 100% /
+    border-image: linear-gradient(rgb(19, 61, 94), rgb(113, 139, 158)) 0 100% /
       1 / 0 stretch;
   }
   li {
