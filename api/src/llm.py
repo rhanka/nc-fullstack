@@ -10,7 +10,7 @@ class BaseLLM:
         yield await self.chat(messages, temperature)
 
 class OpenAILLM(BaseLLM):
-    def __init__(self, model="gpt-4.1"):
+    def __init__(self, model="gpt-5-nano"):
         from openai import AsyncOpenAI
         self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model = model
@@ -19,8 +19,10 @@ class OpenAILLM(BaseLLM):
         params = {
             "model": self.model,
             "messages": messages,
-            "temperature": temperature,
         }
+        # Ne pas envoyer "temperature" aux modèles GPT-5 (incluant nano/mini/full)
+        if not (isinstance(self.model, str) and self.model.startswith("gpt-5")):
+            params["temperature"] = temperature
         if json_mode:
             params["response_format"] = {"type": "json_object"}
 
@@ -31,9 +33,11 @@ class OpenAILLM(BaseLLM):
         params = {
             "model": self.model,
             "messages": messages,
-            "temperature": temperature,
             "stream": True,
         }
+        # Ne pas envoyer "temperature" aux modèles GPT-5 (incluant nano/mini/full)
+        if not (isinstance(self.model, str) and self.model.startswith("gpt-5")):
+            params["temperature"] = temperature
         if json_mode:
             params["response_format"] = {"type": "json_object"}
 

@@ -7,6 +7,8 @@ class PromptTemplate:
     def __init__(self, file_path: str):
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        # Modèle/provider recommandé par le prompt JSON
+        self.llm_id: str = data.get("llmId", "")
         p = data["prompt"]
         self.system_template: str = p["textPromptSystemTemplate"]
         self.user_template: str = p["textPromptTemplate"]
