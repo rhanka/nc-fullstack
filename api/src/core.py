@@ -5,6 +5,15 @@ from src.llm import PROVIDERS
 
 PROMPTS = build_prompt_registry()
 
+def _parse_llm_id(llm_id: str) -> tuple[str | None, str | None]:
+    """Retourne (provider, model) à partir d'un llmId de type 'openai:xxx:gpt-5-mini'."""
+    if not llm_id or ":" not in llm_id:
+        return (None, None)
+    parts = llm_id.split(":")
+    provider = parts[0].strip() if parts else None
+    model = parts[-1].strip() if parts else None
+    return (provider or None, model or None)
+
 async def run_prompt(name: str, provider: str, **variables):
     if name not in PROMPTS:
         raise ValueError(f"Prompt {name} not found")
@@ -13,7 +22,8 @@ async def run_prompt(name: str, provider: str, **variables):
     llm_class = PROVIDERS.get(provider)
     if not llm_class:
         raise ValueError(f"Provider {provider} not supported")
-    llm = llm_class()
+    json_provider, json_model = _parse_llm_id(getattr(prompt, "llm_id", ""))
+    llm = llm_class(model=json_model) if (json_provider == provider and json_model) else llm_class()
     messages = []
     if rendered["system"]:
         messages.append({"role": "system", "content": rendered["system"]})
@@ -28,7 +38,8 @@ async def stream_prompt(name: str, provider: str, **variables) -> AsyncGenerator
     llm_class = PROVIDERS.get(provider)
     if not llm_class:
         raise ValueError(f"Provider {provider} not supported")
-    llm = llm_class()
+    json_provider, json_model = _parse_llm_id(getattr(prompt, "llm_id", ""))
+    llm = llm_class(model=json_model) if (json_provider == provider and json_model) else llm_class()
     messages = []
     if rendered["system"]:
         messages.append({"role": "system", "content": rendered["system"]})

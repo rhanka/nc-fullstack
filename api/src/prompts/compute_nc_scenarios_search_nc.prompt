@@ -1,34 +1,13 @@
 {
-  "associatedPromptStudioPromptId": "jffsj2u4a9",
-  "associatedPromptStudioId": "fETSQqM",
-  "rawQueryOutputMode": "RAW",
+  "llmId": "retrievalaugmented:WnKb6p17:gpt-4-1-nano-a220-nc",
   "completionSettings": {
-    "stopSequences": [],
     "temperature": 0
   },
-  "rawResponseOutputMode": "RAW_WITHOUT_TRACES",
-  "llmId": "retrievalaugmented:WnKb6p17:gpt-4-1-nano-a220-nc",
   "prompt": {
-    "guardrailsPipelineSettings": {
-      "guardrails": []
-    },
-    "promptTemplateInputs": [],
-    "resultValidation": {
-      "requiredJSONObjectKeys": [],
-      "expectedFormat": "NONE",
-      "forbiddenTerms": []
-    },
-    "promptTemplateQueriesSource": "DATASET",
-    "structuredPromptExamples": [],
     "textPromptTemplate": "{{input}}",
     "textPromptTemplateInputs": [
-      {
-        "datasetColumnName": "llm_output",
-        "name": "input",
-        "type": "TEXT"
-      }
+      { "name": "input" }
     ],
-    "textPromptSystemTemplate": "Recherche dans la base de non-conformités\nIl s\u0027agit de retrouver les non-conformités similaires.\nRepondre en anglais, en markdown, synthéthique:\n- Une phrase concise sans complexité pour décrire la pertinence des documents retrouvés vis-à-vis de la requête\n- La liste au maximum des 3 dernières non conformités les plus pertinentes, une par ligne, mentionnant l\u0027id (\u0027doc\u0027) et une synthèse en quelques mots de \u0027content\u0027",
-    "promptMode": "PROMPT_TEMPLATE_TEXT"
+    "textPromptSystemTemplate": "Recherche dans la base de non-conformités\nIl s'agit de retrouver les non-conformités similaires.\nRepondre en anglais, en markdown, synthéthique:\n- Une phrase concise sans complexité pour décrire la pertinence des documents retrouvés vis-à-vis de la requête\n- La liste au maximum des 3 dernières non conformités les plus pertinentes, une par ligne, mentionnant l'id ('doc') et une synthèse en quelques mots de 'content'"
   }
 }
