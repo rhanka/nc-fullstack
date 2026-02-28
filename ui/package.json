@@ -18,7 +18,7 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "deep-chat": "2.1.1",
     "marked": "^15.0.5",
-    "svelte": "5.16.1",
+    "svelte": "5.53.6",
     "svelte-check": "^4.1.1",
     "svelte-file-dropzone": "^2.0.9",
     "typescript": "^5.7.2",
@@ -29,7 +29,7 @@
     "@tiptap/core": "^2.11.3",
     "@tiptap/starter-kit": "^2.11.3",
     "pdfjs-dist": "^4.10.38",
-    "svelte-pdf": "^1.0.23",
+    "svelte-pdf": "^1.0.28",
     "svelte-ripple-action": "^2.0.0",
     "tiptap-markdown": "^0.8.10"
   }
