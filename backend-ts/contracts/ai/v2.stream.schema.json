@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI V2 Stream Events",
+  "type": "array",
+  "minItems": 1,
+  "$defs": {
+    "RoleCode": {
+      "type": "string",
+      "enum": ["000", "100", "200", "300", "400", "500"]
+    },
+    "ExecutionProfile": {
+      "type": "string",
+      "enum": [
+        "search_rewrite",
+        "draft_simple",
+        "draft_standard_000",
+        "analysis_standard_100",
+        "analysis_deep"
+      ]
+    },
+    "ModelSelection": {
+      "type": "string",
+      "enum": ["gpt-5.4-nano", "gpt-5.4"]
+    },
+    "ComplexitySelection": {
+      "type": "string",
+      "enum": ["auto", "simple", "standard", "deep"]
+    },
+    "ResolvedComplexity": {
+      "type": "string",
+      "enum": ["simple", "standard", "deep"]
+    },
+    "TechDocSource": {
+      "type": "object",
+      "required": ["doc", "content"],
+      "additionalProperties": true,
+      "properties": {
+        "doc": { "type": "string" },
+        "chunk": { "type": ["string", "null"] },
+        "content": { "type": "string" }
+      }
+    },
+    "NcSource": {
+      "type": "object",
+      "required": ["doc", "content"],
+      "additionalProperties": true,
+      "properties": {
+        "doc": { "type": "string" },
+        "ATA_code": { "type": ["string", "null"] },
+        "ATA_category": { "type": ["string", "null"] },
+        "content": { "type": "string" }
+      }
+    },
+    "SourceBundle": {
+      "type": "object",
+      "required": ["tech_docs", "non_conformities"],
+      "additionalProperties": false,
+      "properties": {
+        "tech_docs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TechDocSource" }
+        },
+        "non_conformities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NcSource" }
+        }
+      }
+    },
+    "TextPart": {
+      "type": "object",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "text" },
+        "text": { "type": "string" }
+      }
+    },
+    "ReasoningSummaryPart": {
+      "type": "object",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "reasoning_summary" },
+        "text": { "type": "string" }
+      }
+    },
+    "SourcesPart": {
+      "type": "object",
+      "required": ["type", "sources"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "sources" },
+        "sources": { "$ref": "#/$defs/SourceBundle" }
+      }
+    },
+    "NcUpdatePart": {
+      "type": "object",
+      "required": ["type", "label", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "nc_update" },
+        "label": { "type": ["string", "null"] },
+        "description": { "type": ["object", "string", "null"] }
+      }
+    },
+    "MessagePart": {
+      "oneOf": [
+        { "$ref": "#/$defs/TextPart" },
+        { "$ref": "#/$defs/ReasoningSummaryPart" },
+        { "$ref": "#/$defs/SourcesPart" },
+        { "$ref": "#/$defs/NcUpdatePart" }
+      ]
+    },
+    "ResponseStartedEvent": {
+      "type": "object",
+      "required": ["event", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "type": "string", "const": "response.started" },
+        "data": {
+          "type": "object",
+          "required": ["requestId", "task", "runtime"],
+          "additionalProperties": false,
+          "properties": {
+            "requestId": { "type": "string" },
+            "task": {
+              "type": "object",
+              "required": ["role"],
+              "additionalProperties": false,
+              "properties": {
+                "role": { "$ref": "#/$defs/RoleCode" }
+              }
+            },
+            "runtime": {
+              "type": "object",
+              "required": [
+                "profile",
+                "model",
+                "requestedModelSelection",
+                "modelSelectionSource",
+                "requestedComplexitySelection",
+                "resolvedComplexity",
+                "complexityAnalyzerModel"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "profile": { "$ref": "#/$defs/ExecutionProfile" },
+                "model": { "type": "string" },
+                "requestedModelSelection": { "$ref": "#/$defs/ModelSelection" },
+                "modelSelectionSource": {
+                  "type": "string",
+                  "enum": ["default", "manual"]
+                },
+                "requestedComplexitySelection": { "$ref": "#/$defs/ComplexitySelection" },
+                "resolvedComplexity": { "$ref": "#/$defs/ResolvedComplexity" },
+                "complexityAnalyzerModel": {
+                  "type": ["string", "null"],
+                  "enum": [null, "gpt-5.4-nano"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "RetrievalQueryCompletedEvent": {
+      "type": "object",
+      "required": ["event", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "type": "string", "const": "retrieval.query.completed" },
+        "data": {
+          "type": "object",
+          "required": ["query"],
+          "additionalProperties": false,
+          "properties": {
+            "query": { "type": "string" }
+          }
+        }
+      }
+    },
+    "RetrievalSourcesCompletedEvent": {
+      "type": "object",
+      "required": ["event", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "type": "string", "const": "retrieval.sources.completed" },
+        "data": {
+          "type": "object",
+          "required": ["sources"],
+          "additionalProperties": false,
+          "properties": {
+            "sources": { "$ref": "#/$defs/SourceBundle" }
+          }
+        }
+      }
+    },
+    "MessagePartDeltaEvent": {
+      "type": "object",
+      "required": ["event", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "type": "string", "const": "message.part.delta" },
+        "data": {
+          "type": "object",
+          "required": ["partId", "partType", "delta"],
+          "additionalProperties": false,
+          "properties": {
+            "partId": { "type": "string" },
+            "partType": { "type": "string", "const": "text" },
+            "delta": { "type": "string" }
+          }
+        }
+      }
+    },
+    "MessagePartCompletedEvent": {
+      "type": "object",
+      "required": ["event", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "type": "string", "const": "message.part.completed" },
+        "data": {
+          "type": "object",
+          "required": ["partId", "part"],
+          "additionalProperties": false,
+          "properties": {
+            "partId": { "type": "string" },
+            "part": { "$ref": "#/$defs/MessagePart" }
+          }
+        }
+      }
+    },
+    "ResponseCompletedEvent": {
+      "type": "object",
+      "required": ["event", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "type": "string", "const": "response.completed" },
+        "data": {
+          "type": "object",
+          "required": ["requestId", "assistantText"],
+          "additionalProperties": false,
+          "properties": {
+            "requestId": { "type": "string" },
+            "assistantText": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "items": {
+    "oneOf": [
+      { "$ref": "#/$defs/ResponseStartedEvent" },
+      { "$ref": "#/$defs/RetrievalQueryCompletedEvent" },
+      { "$ref": "#/$defs/RetrievalSourcesCompletedEvent" },
+      { "$ref": "#/$defs/MessagePartDeltaEvent" },
+      { "$ref": "#/$defs/MessagePartCompletedEvent" },
+      { "$ref": "#/$defs/ResponseCompletedEvent" }
+    ]
+  }
+}

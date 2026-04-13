@@ -3,7 +3,7 @@
     createdItem,
     resetCreatedItem,
     taskLabel
-  } from "./store.js";
+  } from "./store";
   import { ripple } from "svelte-ripple-action";
   import Icon from '@iconify/svelte';
 

@@ -1,10 +1,11 @@
 <script>
   import { createEventDispatcher } from "svelte";
+  import { getApiBaseUrl } from "$lib/api-base";
   import {
     filteredNonConformities,
     activeTabValue,
     selectItem,
-  } from "./store.js";
+  } from "./store";
   import { ripple } from "svelte-ripple-action";
   import Icon from '@iconify/svelte';
 
@@ -13,6 +14,7 @@
   export let nonConformitiesFilter = [];
 
   const dispatch = createEventDispatcher();
+  const apiBaseUrl = getApiBaseUrl();
   let searchQuery = "";
 
   const orderMap = nonConformitiesFilter.reduce((acc, item, index) => {
@@ -24,7 +26,7 @@
     const fetchNCs = async () => {
       const ncIds = nonConformitiesFilter.map(item => item.doc);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/nc`, {
+        const response = await fetch(`${apiBaseUrl}/nc`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

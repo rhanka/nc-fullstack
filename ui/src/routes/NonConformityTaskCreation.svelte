@@ -1,7 +1,8 @@
 <script>
   import Input from "./Input.svelte";
   import Dropzone from "svelte-file-dropzone";
-  import { taskLabel, createdItem, isUpdating, askForHelp } from "./store.js";
+  import { isUpdating, askForHelp } from "$lib/chat/stores";
+  import { taskLabel, createdItem } from "./store";
   import Icon from "@iconify/svelte";
 
   export let aiHelp = false;
@@ -108,7 +109,7 @@
             class="helper"
             style="margin-left:1rem;padding-bottom:.2rem;cursor: help; text-decoration:none;"
           >
-            AI Assitant
+            AI Assistant
           </a>
         {/if}
       </h3>

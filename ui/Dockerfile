@@ -1,11 +1,11 @@
-FROM node:18-slim
+FROM node:22-bookworm-slim
 
 WORKDIR /app
 
 # Installation des dépendances
 COPY package.json ./
 COPY package-lock.json ./
-RUN npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
 # Copie du code source minimal
 COPY vite.config.ts ./

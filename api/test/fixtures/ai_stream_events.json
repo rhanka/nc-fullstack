@@ -1,0 +1,149 @@
+[
+  {
+    "event": "delta_encoding",
+    "data": "v1"
+  },
+  {
+    "event": null,
+    "data": {
+      "type": "action",
+      "text": "Build appropriate request",
+      "metadata": "query"
+    }
+  },
+  {
+    "event": null,
+    "data": {
+      "type": "result",
+      "text": "ATA 56 windshield rivet flushness below tolerance",
+      "metadata": "query"
+    }
+  },
+  {
+    "event": null,
+    "data": {
+      "type": "action",
+      "text": "Search for relevant technical documents",
+      "metadata": "doc_search"
+    }
+  },
+  {
+    "event": null,
+    "data": {
+      "type": "result",
+      "text": {
+        "sources": [
+          {
+            "doc": "A220-300ARP-Issue098-00-16May2024_page_0031.md",
+            "chunk": "page_0031",
+            "content": "The tools, fixtures, and test equipment that are necessary for a given maintenance task are listed in a table."
+          }
+        ]
+      },
+      "metadata": "doc_search"
+    }
+  },
+  {
+    "event": null,
+    "data": {
+      "type": "action",
+      "text": "Search for similar non-conformities",
+      "metadata": "nc_search"
+    }
+  },
+  {
+    "event": null,
+    "data": {
+      "type": "result",
+      "text": {
+        "sources": [
+          {
+            "doc": "ATA-56-demo-case",
+            "ATA_code": "ATA-56",
+            "ATA_category": "WINDOWS",
+            "content": "Similar windshield area flushness discrepancy detected during quality inspection."
+          }
+        ]
+      },
+      "metadata": "nc_search"
+    }
+  },
+  {
+    "event": null,
+    "data": {
+      "type": "action",
+      "text": "Generate final answer",
+      "metadata": "000"
+    }
+  },
+  {
+    "event": "delta",
+    "data": {
+      "v": "{\"label\":\"Windshield skin rivet flushness out of tolerance\",",
+      "metadata": "000"
+    }
+  },
+  {
+    "event": "delta",
+    "data": {
+      "v": "\"description\":{\"designation\":{\"aircraft_id\":\"0070\",\"aircraft_zone\":\"Right windshield lower skin\",\"ATA_code\":\"ATA-56\",\"part_id\":\"[to be completed]\",\"nc_event_date\":\"[to be completed]\"},\"observation\":\"Measured rivet flushness between -0.20 mm and -0.25 mm below the right windshield.\",\"root_cause\":\"[to be completed]\",\"dimensions\":\"- Flushness: -0.20 mm to -0.25 mm\",\"references\":\"- A220-300ARP-Issue098-00-16May2024_page_0031.md: equivalent tools and fixture usage constraints\"},",
+      "metadata": "000"
+    }
+  },
+  {
+    "event": "delta",
+    "data": {
+      "v": "\"comment\":\"Draft updated with technical references.\"}",
+      "metadata": "000"
+    }
+  },
+  {
+    "event": null,
+    "data": {
+      "type": "result",
+      "text": {
+        "text": "Draft updated with technical references.",
+        "label": "Windshield skin rivet flushness out of tolerance",
+        "description": {
+          "designation": {
+            "aircraft_id": "0070",
+            "aircraft_zone": "Right windshield lower skin",
+            "ATA_code": "ATA-56",
+            "part_id": "[to be completed]",
+            "nc_event_date": "[to be completed]"
+          },
+          "observation": "Measured rivet flushness between -0.20 mm and -0.25 mm below the right windshield.",
+          "root_cause": "[to be completed]",
+          "dimensions": "- Flushness: -0.20 mm to -0.25 mm",
+          "references": "- A220-300ARP-Issue098-00-16May2024_page_0031.md: equivalent tools and fixture usage constraints"
+        },
+        "sources": {
+          "tech_docs": {
+            "sources": [
+              {
+                "doc": "A220-300ARP-Issue098-00-16May2024_page_0031.md",
+                "chunk": "page_0031",
+                "content": "The tools, fixtures, and test equipment that are necessary for a given maintenance task are listed in a table."
+              }
+            ]
+          },
+          "non_conformities": {
+            "sources": [
+              {
+                "doc": "ATA-56-demo-case",
+                "ATA_code": "ATA-56",
+                "ATA_category": "WINDOWS",
+                "content": "Similar windshield area flushness discrepancy detected during quality inspection."
+              }
+            ]
+          }
+        },
+        "user_query": "Rewrite the non-conformity report using the most relevant references.",
+        "input_description": "Right windshield area rivet flushness out of tolerance.",
+        "role": "ai",
+        "user_role": "000"
+      },
+      "metadata": "final"
+    }
+  }
+]

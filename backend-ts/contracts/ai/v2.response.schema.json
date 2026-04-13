@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI V2 Response",
+  "type": "object",
+  "required": ["version", "requestId", "task", "output", "retrieval", "runtime"],
+  "additionalProperties": false,
+  "$defs": {
+    "RoleCode": {
+      "type": "string",
+      "enum": ["000", "100", "200", "300", "400", "500"]
+    },
+    "ExecutionProfile": {
+      "type": "string",
+      "enum": [
+        "search_rewrite",
+        "draft_simple",
+        "draft_standard_000",
+        "analysis_standard_100",
+        "analysis_deep"
+      ]
+    },
+    "ModelSelection": {
+      "type": "string",
+      "enum": ["gpt-5.4-nano", "gpt-5.4"]
+    },
+    "ComplexitySelection": {
+      "type": "string",
+      "enum": ["auto", "simple", "standard", "deep"]
+    },
+    "ResolvedComplexity": {
+      "type": "string",
+      "enum": ["simple", "standard", "deep"]
+    },
+    "TechDocSource": {
+      "type": "object",
+      "required": ["doc", "content"],
+      "additionalProperties": true,
+      "properties": {
+        "doc": { "type": "string" },
+        "chunk": { "type": ["string", "null"] },
+        "content": { "type": "string" }
+      }
+    },
+    "NcSource": {
+      "type": "object",
+      "required": ["doc", "content"],
+      "additionalProperties": true,
+      "properties": {
+        "doc": { "type": "string" },
+        "ATA_code": { "type": ["string", "null"] },
+        "ATA_category": { "type": ["string", "null"] },
+        "content": { "type": "string" }
+      }
+    },
+    "SourceBundle": {
+      "type": "object",
+      "required": ["tech_docs", "non_conformities"],
+      "additionalProperties": false,
+      "properties": {
+        "tech_docs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TechDocSource" }
+        },
+        "non_conformities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NcSource" }
+        }
+      }
+    },
+    "TextPart": {
+      "type": "object",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "text" },
+        "text": { "type": "string" }
+      }
+    },
+    "ReasoningSummaryPart": {
+      "type": "object",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "reasoning_summary" },
+        "text": { "type": "string" }
+      }
+    },
+    "SourcesPart": {
+      "type": "object",
+      "required": ["type", "sources"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "sources" },
+        "sources": { "$ref": "#/$defs/SourceBundle" }
+      }
+    },
+    "NcUpdatePart": {
+      "type": "object",
+      "required": ["type", "label", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "nc_update" },
+        "label": { "type": ["string", "null"] },
+        "description": { "type": ["object", "string", "null"] }
+      }
+    },
+    "MessagePart": {
+      "oneOf": [
+        { "$ref": "#/$defs/TextPart" },
+        { "$ref": "#/$defs/ReasoningSummaryPart" },
+        { "$ref": "#/$defs/SourcesPart" },
+        { "$ref": "#/$defs/NcUpdatePart" }
+      ]
+    }
+  },
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "v2"
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task": {
+      "type": "object",
+      "required": ["role"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "$ref": "#/$defs/RoleCode" }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["message"],
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "object",
+          "required": ["role", "text", "parts"],
+          "additionalProperties": false,
+          "properties": {
+            "role": { "type": "string", "const": "assistant" },
+            "text": { "type": "string" },
+            "parts": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/MessagePart" }
+            }
+          }
+        }
+      }
+    },
+    "retrieval": {
+      "type": "object",
+      "required": ["performed", "query", "sources"],
+      "additionalProperties": false,
+      "properties": {
+        "performed": { "type": "boolean" },
+        "query": { "type": ["string", "null"] },
+        "sources": { "$ref": "#/$defs/SourceBundle" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": [
+        "providerId",
+        "profile",
+        "model",
+        "reasoningEffort",
+        "requestedModelSelection",
+        "modelSelectionSource",
+        "requestedComplexitySelection",
+        "resolvedComplexity",
+        "complexityAnalyzerModel",
+        "routingReasons"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "providerId": {
+          "type": "string",
+          "enum": ["openai", "anthropic", "google", "mistral"]
+        },
+        "profile": { "$ref": "#/$defs/ExecutionProfile" },
+        "model": { "type": "string" },
+        "reasoningEffort": {
+          "type": ["string", "null"],
+          "enum": [null, "none", "low", "medium", "high", "xhigh"]
+        },
+        "requestedModelSelection": { "$ref": "#/$defs/ModelSelection" },
+        "modelSelectionSource": {
+          "type": "string",
+          "enum": ["default", "manual"]
+        },
+        "requestedComplexitySelection": { "$ref": "#/$defs/ComplexitySelection" },
+        "resolvedComplexity": { "$ref": "#/$defs/ResolvedComplexity" },
+        "complexityAnalyzerModel": {
+          "type": ["string", "null"],
+          "enum": [null, "gpt-5.4-nano"]
+        },
+        "routingReasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

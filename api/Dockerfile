@@ -19,9 +19,9 @@ WORKDIR /app
 
 # Copier les données directement dans l'image
 COPY data/a220-non-conformities/json/ /app/data/a220-non-conformities/json/
-COPY data/a220-non-conformities/vectordb/chroma.sqlite3 /app/data/a220-non-conformities/vectordb/
+COPY data/a220-non-conformities/vectordb/ /app/data/a220-non-conformities/vectordb/
 COPY data/a220-tech-docs/pages/ /app/data/a220-tech-docs/pages/
-COPY data/a220-tech-docs/vectordb/chroma.sqlite3 /app/data/a220-tech-docs/vectordb/
+COPY data/a220-tech-docs/vectordb/ /app/data/a220-tech-docs/vectordb/
 
 EXPOSE 8000
 CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000"]
