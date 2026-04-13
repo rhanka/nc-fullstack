@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down up-ts ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help check-db create-tech-docs-db create-nc-db create-db api-build api-build-ts api-image-publish api-image-publish-ts api-test-ts api-smoke-ts api-contracts-ts api-review-routing-ts check-ts deploy-api deploy-api-ts deploy-api-python-container rollback-api-python
+.PHONY: dev dev-stop up down up-ts ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help check-db create-tech-docs-db create-nc-db create-db api-build api-build-ts api-install-ts api-image-publish api-image-publish-ts api-test-ts api-smoke-ts api-contracts-ts api-review-routing-ts check-ts deploy-api deploy-api-ts deploy-api-python-container rollback-api-python
 
 # ----------------------------
 # Helpers
@@ -91,19 +91,23 @@ api-build: dataprep-download-minimal
 api-build-ts: dataprep-download-minimal
 	@$(MAKE) api-build
 
-api-test-ts:
+api-install-ts:
+	@echo "▶ Installing TS backend dependencies..."
+	cd backend-ts && npm ci
+
+api-test-ts: api-install-ts
 	@echo "▶ Running TS backend tests..."
 	cd backend-ts && npm run test
 
-api-smoke-ts:
+api-smoke-ts: api-install-ts
 	@echo "▶ Running TS backend smoke test..."
 	cd backend-ts && npm run smoke
 
-api-contracts-ts:
+api-contracts-ts: api-install-ts
 	@echo "▶ Checking TS backend contracts..."
 	cd backend-ts && npm run contracts:check
 
-api-review-routing-ts:
+api-review-routing-ts: api-install-ts
 	@echo "▶ Reviewing TS backend routing decisions..."
 	cd backend-ts && npm run review:routing
 
