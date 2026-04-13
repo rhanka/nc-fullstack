@@ -1,481 +1,2507 @@
-<script>
-  import { marked } from "marked"; // Import the marked library
-  import { DeepChat } from "deep-chat";
-  import { filteredNonConformities, showChatbot } from "./store.js";
+<script lang="ts">
+  import { marked } from "marked";
+  import type { UIMessage } from "@ai-sdk/svelte";
+  import { parsePartialJson } from "@ai-sdk/ui-utils";
   import Icon from "@iconify/svelte";
-  import { onMount } from 'svelte';
-
-  let aiUrl = `${import.meta.env.VITE_API_URL}/ai`;
-  export let expand = false;
-  export let stream = false;
-  export let height = "70vh";
-  export let width = "25rem";
-  let inputWidth = "23.5rem";
-  let windowInnerWidth = undefined;
-  let dynamicWidth = width;
-  let dynamicHeight = height;
-
-  let currentMsg = {};
-  let nativeStream = true;
-
+  import { afterUpdate, onMount, tick } from "svelte";
+  import { getApiBaseUrl } from "$lib/api-base";
   import {
-    createdItem,
-    updateCreatedItem,
+    normalizeLegacyFinalPayload,
+    type LegacyFinalPayload,
+    type LegacySources,
+  } from "$lib/chat/legacy-payload";
+  import { chatLayoutMode } from "$lib/chat/layout";
+  import {
     isUpdating,
     referencesList,
     chatElementRef,
-    defaultAction,
-  } from "./store.js";
+    showChatbot,
+  } from "$lib/chat/stores";
+  import type {
+    ChatController,
+    ChatComplexitySelection,
+    ChatModelSelection,
+    ChatSubmitArgs,
+    ReferenceSourceItem,
+    ReferenceSources,
+  } from "$lib/chat/contracts";
 
-  $: console.log(
-    `Chatbot stream mode: ${stream}; use nativeStream: ${stream && nativeStream}`,
-  );
+  import {
+    TASK_IDS,
+    activeTabValue,
+    createdItem,
+    selectDoc,
+    taskLabel,
+    updateCreatedItem,
+  } from "./store";
 
-  onMount(() => {
-      windowInnerWidth = window.innerWidth;
+  type RuntimeStep = {
+    key: string;
+    kind: "tool" | "status" | "reasoning";
+    status: "running" | "completed" | "error";
+    title: string;
+    detail?: string;
+  };
+
+  type AssistantRuntime = {
+    requestId: string | null;
+    status: "submitted" | "streaming" | "ready" | "error";
+    stateTitle: string;
+    stateDetail: string;
+    requestedModel: ChatModelSelection;
+    requestedComplexity: ChatComplexitySelection;
+    resolvedModel: ChatModelSelection | null;
+    resolvedComplexity: ChatComplexitySelection | null;
+    resolvedReasoningEffort: "none" | "minimal" | "low" | "high" | "xhigh" | null;
+    reasoningSummary: string;
+    steps: RuntimeStep[];
+  };
+
+  type ReasoningSummaryPart = {
+    type: "reasoning_summary";
+    summary: string;
+  };
+
+  type SourcesPart = {
+    type: "sources";
+    sources: LegacySources;
+  };
+
+  type NcUpdatePart = {
+    type: "nc_update";
+    role?: string | null;
+    label?: string | null;
+    description?: unknown;
+  };
+
+  type TextPart = {
+    type: "text";
+    text: string;
+  };
+
+  type StructuredMessagePart = TextPart | ReasoningSummaryPart | SourcesPart | NcUpdatePart;
+
+  type ChatMessage = UIMessage;
+
+  type IntroQuickAction = {
+    label: string;
+    prompt: string;
+  };
+
+  type StructuredAssistantPayload = LegacyFinalPayload & {
+    reasoningSummary?: string;
+  };
+
+  type PartialStructuredPayload = {
+    label?: unknown;
+    description?: unknown;
+    comment?: unknown;
+  };
+
+  type LegacyStreamPayload = {
+    type?: string;
+    metadata?: string;
+    text?: unknown;
+    v?: unknown;
+  };
+
+  type RuntimeStatusPayload = {
+    state?: string;
+    requestedModelSelection?: ChatModelSelection;
+    requestedComplexitySelection?: ChatComplexitySelection;
+    resolvedModel?: ChatModelSelection;
+    resolvedComplexity?: ChatComplexitySelection;
+    reasoningEffort?: AssistantRuntime["resolvedReasoningEffort"];
+  };
+
+  type ToolRuntimePayload = {
+    tool_call_id?: string;
+    name?: string;
+    args?: string;
+    result?: {
+      status?: "completed" | "error" | string;
+      summary?: string;
+      error?: string;
+    };
+  };
+
+  const aiUrl = `${getApiBaseUrl()}/ai`;
+  const runtimeStageOrder = ["query", "doc_search", "nc_search", "000", "100", "200", "300", "400", "500", "final"];
+  const modelOptions: Array<{ value: ChatModelSelection; label: string }> = [
+    { value: "gpt-5.4-nano", label: "GPT-5.4 Nano" },
+    { value: "gpt-5.4", label: "GPT-5.4" },
+  ];
+  const complexityOptions: Array<{ value: ChatComplexitySelection; label: string }> = [
+    { value: "auto", label: "Auto" },
+    { value: "simple", label: "Light" },
+    { value: "standard", label: "Standard" },
+    { value: "deep", label: "Deep" },
+  ];
+
+  export let expand = false;
+  export let height = "70vh";
+  export let width = "25rem";
+
+  let windowInnerWidth: number | undefined = undefined;
+  let dynamicWidth = width;
+  let dynamicHeight = height;
+  let messageViewport: HTMLElement | null = null;
+  let activeRequestId: string | null = null;
+  let activeAssistantMessageId: string | null = null;
+  let composerInput = "";
+  let composerTextarea: HTMLTextAreaElement | null = null;
+  let composerIsMultiline = false;
+  let chatMessages: ChatMessage[] = [];
+  let chatStatus: "submitted" | "streaming" | "ready" | "error" = "ready";
+  let chatError: Error | undefined = undefined;
+  let assistantRuntimeByMessageId: Record<string, AssistantRuntime> = {};
+  let streamAbortController: AbortController | null = null;
+  let lastOptimisticUpdateSignature = "";
+  let modelSelection: ChatModelSelection = "gpt-5.4-nano";
+  let complexitySelection: ChatComplexitySelection = "auto";
+
+  $: dynamicWidth =
+    windowInnerWidth !== undefined && windowInnerWidth <= 768
+      ? "100dvw"
+      : width;
+  $: dynamicHeight =
+    windowInnerWidth !== undefined && windowInnerWidth <= 768
+      ? `calc(100dvh - ${expand ? 21.5 : 11.5}rem)`
+      : height;
+
+  afterUpdate(() => {
+    if (messageViewport) {
+      messageViewport.scrollTop = messageViewport.scrollHeight;
+    }
   });
 
-  $: dynamicWidth = (windowInnerWidth !== undefined && windowInnerWidth <= 768) ? '100dvw' : width;
-  $: dynamicHeight = (windowInnerWidth !== undefined && windowInnerWidth <= 768) ? `calc(100dvh - ${expand ? 21.5 : 11.5}rem)` : height;
+  onMount(() => {
+    windowInnerWidth = window.innerWidth;
 
-  let dynamicInputWidth = inputWidth; // default value
-  $: dynamicInputWidth = (windowInnerWidth !== undefined && windowInnerWidth <= 768) ? 'calc(100vw - 1.5rem)' : inputWidth;
+    const controller: ChatController = {
+      clearMessages,
+      setDraftInput,
+      submitUserMessage,
+    };
 
-  $: if ($chatElementRef && dynamicWidth) {
-    $chatElementRef.style.width = dynamicWidth;
-    $chatElementRef.style.height = dynamicHeight;
+    chatElementRef.set(controller);
+    void tick().then(updateComposerHeight);
+
+    return () => {
+      streamAbortController?.abort();
+      if ($chatElementRef === controller) {
+        chatElementRef.set(null);
+      }
+    };
+  });
+
+  function cloneData<T>(value: T | null | undefined | ""): T | undefined {
+    if (value === undefined || value === null || value === "") {
+      return undefined;
+    }
+
+    return JSON.parse(JSON.stringify(value)) as T;
   }
 
-  const history = [];
+  function buildHistory(currentTask: string) {
+    return TASK_IDS
+      .filter((task) => task < currentTask)
+      .map((task) => $createdItem?.analysis_history?.[task] ?? []);
+  }
 
-  const actionInit = (data) => {
-    console.log("actionInit", data);
-    currentMsg[data.metatada] = "";
-    // $chatElementRef.updateMessage({ html: `<div class="tool">${data.text} ...</div>`}, 0);
-    return { text: `*${data.text}...*\n` };
-  };
+  function buildTaskContext() {
+    const currentTask = $createdItem?.currentTask ?? "000";
 
-  const actionStream = (data) => {
-    currentMsg[data.metadata] += data.v;
-  };
+    return {
+      currentTask,
+      description: $createdItem?.analysis_history?.[currentTask]?.[0],
+      history: buildHistory(currentTask),
+      sources: undefined,
+    };
+  }
 
-  const actionCanevasStream = (data) => {
-    if (!currentMsg[data.metadata]) {
-      currentMsg[data.metadata] = { v: "", jsonString: "" };
+  function beginChatRequest(messageId: string) {
+    activeRequestId = globalThis.crypto?.randomUUID?.() ?? `req-${Date.now()}`;
+    activeAssistantMessageId = messageId;
+    chatError = undefined;
+    lastOptimisticUpdateSignature = "";
+    assistantRuntimeByMessageId = {
+      ...assistantRuntimeByMessageId,
+      [messageId]: {
+        requestId: activeRequestId,
+        status: "submitted",
+        stateTitle: "Request sent",
+        stateDetail: "Preparing the assistant response.",
+        requestedModel: modelSelection,
+        requestedComplexity: complexitySelection,
+        resolvedModel: null,
+        resolvedComplexity: null,
+        resolvedReasoningEffort: null,
+        reasoningSummary: buildPendingReasoningSummary(modelSelection, complexitySelection),
+        steps: [],
+      },
+    };
+  }
+
+  function createChatMessage(role: "user" | "assistant", text = ""): ChatMessage {
+    const parts: StructuredMessagePart[] = role === "assistant" && text
+      ? [{ type: "text", text }]
+      : [];
+
+    return {
+      id: globalThis.crypto?.randomUUID?.() ?? `${role}-${Date.now()}-${Math.random()}`,
+      createdAt: new Date(),
+      role,
+      content: text,
+      parts,
+    } as ChatMessage;
+  }
+
+  function applyLegacyResponse(payload: StructuredAssistantPayload, taskRole: string) {
+    if (payload.sources) {
+      referencesList.set(payload.sources as ReferenceSources);
     }
-    currentMsg[data.metadata].jsonString += data.v;
-    const json = parsePartialJSON(currentMsg[data.metadata].jsonString);
-    if (json) {
-      $updateCreatedItem = {
-        role: $createdItem.currentTask,
-        label: json.label,
-        description: json.description,
-      };
-      if (json.comment) {
-        console.log(json.comment,currentMsg[data.metadata])
-        const output = {
-          text: json.comment.slice(currentMsg[data.metadata].v.length),
-          metadata: data.metadata,
-        };
-        currentMsg[data.metadata].v = json.comment;
-        return output;
-      }
-    }
-  };
 
-  const parsePartialJSON = (chunk) => {
-    // On concatène le nouveau bout et on tente une fermeture
-    if (chunk) {
-      let buffer = completeJSON(chunk).replace(/\\n/g, "\n");
-      buffer = buffer.replace(/"([^"]*)"/g, function(match) {
-        return match.replace(/\n/g, "\\n");
+    if (payload.label || payload.description) {
+      updateCreatedItem.set({
+        role: taskRole,
+        label: payload.label ?? undefined,
+        description: payload.description,
       });
-      const attempt = buffer;
-      // console.log(attempt);
-      try {
-        const parsed = JSON.parse(attempt);
-        // console.log("json parsed ok");
-        return parsed;
-      } catch {
-        return null;
+    }
+
+    isUpdating.set(false);
+  }
+
+  function buildAssistantParts(
+    payload: StructuredAssistantPayload,
+    taskRole?: string,
+  ): StructuredMessagePart[] {
+    const parts: StructuredMessagePart[] = [];
+
+    if (payload.reasoningSummary) {
+      parts.push({
+        type: "reasoning_summary",
+        summary: payload.reasoningSummary,
+      });
+    }
+
+    if (payload.sources) {
+      parts.push({
+        type: "sources",
+        sources: payload.sources,
+      });
+    }
+
+    if (payload.label || payload.description) {
+      parts.push({
+        type: "nc_update",
+        role: taskRole ?? null,
+        label: payload.label,
+        description: payload.description,
+      });
+    }
+
+    return parts;
+  }
+
+  function enrichAssistantMessage(
+    messageId: string,
+    payload: StructuredAssistantPayload,
+    taskRole?: string,
+  ) {
+    chatMessages = chatMessages.map((message) => {
+      if (message.id !== messageId) {
+        return message;
       }
-    } else {
+
+      const preservedParts = ((message.parts ?? []) as StructuredMessagePart[]).filter(
+        (part) => part.type === "text",
+      );
+
+      return {
+        ...message,
+        parts: [...preservedParts, ...buildAssistantParts(payload, taskRole)],
+      };
+    });
+  }
+
+  function appendChatMessage(message: ChatMessage) {
+    chatMessages = [...chatMessages, message];
+  }
+
+  function replaceAssistantText(messageId: string, text: string) {
+    chatMessages = chatMessages.map((message) => {
+      if (message.id !== messageId) {
+        return message;
+      }
+
+      const structuredParts = ((message.parts ?? []) as StructuredMessagePart[]).filter(
+        (part) => part.type !== "text",
+      );
+
+      return {
+        ...message,
+        content: text,
+        parts: text ? [{ type: "text", text }, ...structuredParts] : structuredParts,
+      };
+    });
+  }
+
+  function setAssistantReasoningSummary(messageId: string, summary: string | undefined) {
+    chatMessages = chatMessages.map((message) => {
+      if (message.id !== messageId) {
+        return message;
+      }
+
+      const preservedParts = ((message.parts ?? []) as StructuredMessagePart[]).filter(
+        (part) => part.type !== "reasoning_summary",
+      );
+
+      return {
+        ...message,
+        parts: summary
+          ? [...preservedParts, { type: "reasoning_summary", summary }]
+          : preservedParts,
+      };
+    });
+
+    updateAssistantRuntime(messageId, (runtime) => ({
+      ...runtime,
+      reasoningSummary: summary ?? runtime.reasoningSummary,
+    }));
+  }
+
+  function humanizeComplexitySelection(value: ChatComplexitySelection | null | undefined) {
+    if (!value) {
       return null;
     }
-  };
+    switch (value) {
+      case "auto":
+        return "Auto";
+      case "simple":
+        return "Light";
+      case "standard":
+        return "Standard";
+      case "deep":
+        return "Deep";
+      default:
+        return value;
+    }
+  }
 
-  // Fonction naïve qui ferme guillemets, crochets et accolades restants
-  const completeJSON = (str) => {
-    let openCurly = 0,
-      openSquare = 0;
-    let inString = false,
-      escaped = false;
+  function humanizeReasoningEffort(
+    value: AssistantRuntime["resolvedReasoningEffort"],
+  ) {
+    if (!value) {
+      return null;
+    }
+    switch (value) {
+      case "none":
+        return "No reasoning";
+      case "minimal":
+        return "Minimal effort";
+      case "low":
+        return "Low effort";
+      case "high":
+        return "High effort";
+      case "xhigh":
+        return "Max effort";
+      default:
+        return value;
+    }
+  }
 
-    for (let i = 0; i < str.length; i++) {
-      const c = str[i];
-      if (c === '"' && !escaped) inString = !inString;
-      escaped = !escaped && c === "\\";
-      if (!inString) {
-        if (c === "{") openCurly++;
-        else if (c === "}") openCurly--;
-        else if (c === "[") openSquare++;
-        else if (c === "]") openSquare--;
+  function buildPendingReasoningSummary(
+    requestedModel: ChatModelSelection,
+    requestedComplexity: ChatComplexitySelection,
+  ) {
+    const complexityLabel = humanizeComplexitySelection(requestedComplexity);
+    return complexityLabel
+      ? `${requestedModel} selected with ${complexityLabel.toLowerCase()} effort.`
+      : `${requestedModel} selected for this draft.`;
+  }
+
+  function updateAssistantRuntime(
+    messageId: string,
+    updater: (runtime: AssistantRuntime) => AssistantRuntime,
+  ) {
+    const runtime = assistantRuntimeByMessageId[messageId];
+    if (!runtime) {
+      return;
+    }
+
+    assistantRuntimeByMessageId = {
+      ...assistantRuntimeByMessageId,
+      [messageId]: updater(runtime),
+    };
+  }
+
+  function setAssistantRuntimeState(
+    messageId: string,
+    status: AssistantRuntime["status"],
+    stateTitle: string,
+    stateDetail = "",
+  ) {
+    updateAssistantRuntime(messageId, (runtime) => ({
+      ...runtime,
+      status,
+      stateTitle,
+      stateDetail,
+    }));
+  }
+
+  function upsertAssistantRuntimeStep(messageId: string, step: RuntimeStep) {
+    updateAssistantRuntime(messageId, (runtime) => {
+      const steps = runtime.steps.filter((entry) => entry.key !== step.key);
+      steps.push(step);
+      steps.sort((left, right) => {
+        const leftIndex = runtimeStageOrder.indexOf(left.key);
+        const rightIndex = runtimeStageOrder.indexOf(right.key);
+        return leftIndex - rightIndex;
+      });
+
+      return {
+        ...runtime,
+        steps,
+      };
+    });
+  }
+
+  function setAssistantRuntimeRouting(
+    messageId: string,
+    payload: RuntimeStatusPayload,
+  ) {
+    updateAssistantRuntime(messageId, (runtime) => {
+      const resolvedModel = payload.resolvedModel ?? runtime.resolvedModel;
+      const resolvedComplexity = payload.resolvedComplexity ?? runtime.resolvedComplexity;
+      const resolvedReasoningEffort =
+        payload.reasoningEffort ?? runtime.resolvedReasoningEffort;
+      const requestedModel = payload.requestedModelSelection ?? runtime.requestedModel;
+      const requestedComplexity =
+        payload.requestedComplexitySelection ?? runtime.requestedComplexity;
+
+      const reasoningFragments = [
+        resolvedModel ? `${resolvedModel} in use.` : `${requestedModel} requested.`,
+        resolvedComplexity ? `${humanizeComplexitySelection(resolvedComplexity)} selected.` : null,
+        resolvedReasoningEffort
+          ? `${humanizeReasoningEffort(resolvedReasoningEffort)} applied.`
+          : null,
+      ].filter(Boolean);
+
+      return {
+        ...runtime,
+        requestedModel,
+        requestedComplexity,
+        resolvedModel,
+        resolvedComplexity,
+        resolvedReasoningEffort,
+        reasoningSummary:
+          reasoningFragments.join(" ") || runtime.reasoningSummary,
+      };
+    });
+  }
+
+  function appendAssistantRuntimeReasoning(messageId: string, summary: string) {
+    if (!summary.trim()) {
+      return;
+    }
+
+    updateAssistantRuntime(messageId, (runtime) => ({
+      ...runtime,
+      reasoningSummary: summary.trim(),
+    }));
+    upsertAssistantRuntimeStep(messageId, {
+      key: "reasoning",
+      kind: "reasoning",
+      status: "completed",
+      title: "Reasoning summary",
+      detail: summary.trim(),
+    });
+  }
+
+  function getAssistantRuntime(messageId: string): AssistantRuntime | null {
+    return assistantRuntimeByMessageId[messageId] ?? null;
+  }
+
+  function getMessageText(message: UIMessage): string {
+    const textParts = ((message.parts ?? []) as unknown as StructuredMessagePart[]).filter(
+      (part): part is TextPart => part.type === "text",
+    );
+    return textParts.length
+      ? textParts.map((part) => part.text).join("")
+      : message.content;
+  }
+
+  function getRuntimeBadges(runtime: AssistantRuntime): string[] {
+    const badges = [runtime.resolvedModel ?? runtime.requestedModel];
+    const complexityLabel =
+      humanizeComplexitySelection(runtime.resolvedComplexity ?? runtime.requestedComplexity);
+    if (complexityLabel) {
+      badges.push(complexityLabel);
+    }
+    const effortLabel = humanizeReasoningEffort(runtime.resolvedReasoningEffort);
+    if (effortLabel) {
+      badges.push(effortLabel);
+    }
+    return badges;
+  }
+
+  function getRuntimeCompactMeta(runtime: AssistantRuntime) {
+    const toolCount = runtime.steps.filter((step) => step.kind === "tool").length;
+    const fragments: string[] = [];
+
+    if (runtime.reasoningSummary.trim()) {
+      fragments.push(runtime.status === "ready" ? "Reasoning available" : "Thinking");
+    }
+
+    if (toolCount > 0) {
+      fragments.push(`${toolCount} step${toolCount === 1 ? "" : "s"}`);
+    }
+
+    return fragments.join(" · ") || runtime.stateDetail;
+  }
+
+  function getRuntimePreview(runtime: AssistantRuntime) {
+    const source = runtime.reasoningSummary.trim() || runtime.stateDetail.trim();
+    if (!source) {
+      return "";
+    }
+    return source.length > 110 ? `${source.slice(0, 109)}…` : source;
+  }
+
+  function countSources(maybeSources: unknown) {
+    return isPlainObject(maybeSources) && Array.isArray(maybeSources.sources)
+      ? maybeSources.sources.length
+      : 0;
+  }
+
+  function summarizeLegacyResult(metadata: string, result: unknown) {
+    if (metadata === "query" && typeof result === "string") {
+      return result;
+    }
+
+    if (metadata === "doc_search" || metadata === "nc_search") {
+      const count = countSources(result);
+      return `${count} source${count > 1 ? "s" : ""}`;
+    }
+
+    return undefined;
+  }
+
+  function buildReasoningSummary(
+    payload: { sources?: LegacySources },
+    taskRole: string,
+  ) {
+    const techDocsCount = countSources(payload.sources?.tech_docs);
+    const nonConformitiesCount = countSources(payload.sources?.non_conformities);
+    const fragments: string[] = [];
+
+    if (techDocsCount || nonConformitiesCount) {
+      fragments.push(
+        `Built a targeted retrieval query, reviewed ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"} and ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"}.`,
+      );
+    }
+
+    if (taskRole) {
+      fragments.push(`Generated the task ${taskRole} draft from those references.`);
+    }
+
+    return fragments.length > 0 ? fragments.join(" ") : undefined;
+  }
+
+  function parseLegacySseBlock(block: string): { event: string | null; data: unknown } | null {
+    const lines = block.split("\n");
+    let event = null;
+    const dataLines: string[] = [];
+
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        event = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trimStart());
       }
     }
 
-    let fixed = str;
-    if (inString) fixed += '"';
-    while (openSquare > 0) {
-      fixed += "]";
-      openSquare--;
+    if (dataLines.length === 0) {
+      return null;
     }
-    while (openCurly > 0) {
-      fixed += "}";
-      openCurly--;
-    }
-    return fixed;
-  };
 
-  const updateReferencesList = (data) => {
-    currentMsg[data.metadata] = "";
-    console.log("updateReferencesList", data);
-    const key =
-      data.metadata == "nc_search" ? "non_conformities" : "tech_docs";
-    const otherKey =
-      data.metadata == "nc_search" ? "tech_docs" : "non_conformities";
-    if ($referencesList) {
-      $referencesList = {
-        [key]: data.text,
-        [otherKey]: $referencesList[otherKey],
-      };
-    } else {
-      $referencesList = { [key]: data.text, [otherKey]: { sources: [] } };
-    }
-  };
+    const rawData = dataLines.join("\n");
 
-  const updateTask = (data) => {
-    let json;
     try {
-      json = JSON.parse(data.text);
-    } catch {
-      json = data.text;
-    }
-    if (json) {
-      $isUpdating = false;
-      $updateCreatedItem = {
-        role: $createdItem.currentTask,
-        label: json.label,
-        description: json.description,
+      return {
+        event,
+        data: JSON.parse(rawData),
       };
-      // return { text: json.comment };
-      return { };
+    } catch {
+      return {
+        event,
+        data: rawData,
+      };
     }
-  };
+  }
 
-  const agentHeadTemplate = {
-    action: actionInit,
-    stream: actionStream,
-  };
+  function getPartialStructuredPayload(value: string): PartialStructuredPayload | null {
+    const parsed = parsePartialJson(value).value;
+    return isPlainObject(parsed) ? (parsed as PartialStructuredPayload) : null;
+  }
 
-  const canevasAgentTemplate = {
-    action: actionInit,
-    stream: actionCanevasStream,
-    result: updateTask,
-  };
+  function decodePartialJsonString(value: string): string {
+    return value
+      .replace(/\\\\/g, "\\")
+      .replace(/\\"/g, "\"")
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t");
+  }
 
-  const agentHead = {
-    query: {
-      ...agentHeadTemplate,
-      result: () => {},
-    },
-    nc_search: {
-      ...agentHeadTemplate,
-      result: updateReferencesList,
-    },
-    doc_search: {
-      ...agentHeadTemplate,
-      result: updateReferencesList,
-    },
-    "000": canevasAgentTemplate,
-    "100": canevasAgentTemplate,
-    "200": canevasAgentTemplate,
-    "300": canevasAgentTemplate,
-    "400": canevasAgentTemplate,
-    final: {
-      result: updateTask,
-    },
-  };
-
-  const eventProcess = (data) => {
-    if (data.v) {
-      return agentHead[data.metadata].stream(data);
-    } else if (data !== "v1" && Object.keys(data).length > 0) {
-      try {
-        return agentHead[data.metadata][data.type](data) || { v: "" };
-      } catch(e) {
-        console.log("Error in eventProcess", data, e);
-        return { v: "" };
-      }
+  function extractPartialJsonStringField(rawPayload: string, field: string): string | undefined {
+    const fieldToken = `"${field}"`;
+    const fieldIndex = rawPayload.indexOf(fieldToken);
+    if (fieldIndex === -1) {
+      return undefined;
     }
-  };
 
-  // $: console.log(hop);
-  // hop.forEach((m) => console.log(eventProcess(m)));
+    const colonIndex = rawPayload.indexOf(":", fieldIndex + fieldToken.length);
+    if (colonIndex === -1) {
+      return undefined;
+    }
 
-  const sleep = (ms) => {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  };
+    let valueIndex = colonIndex + 1;
+    while (/\s/.test(rawPayload[valueIndex] ?? "")) {
+      valueIndex += 1;
+    }
 
-  const responseInterceptor = async (response) => {
-    if (!stream) {
-      // Lire le Blob comme texte
-      const text = await response.text();
-      // Tenter de parser le texte en JSON
-      try {
-        const json = JSON.parse(text);
-        $referencesList = json.sources;
-        // console.log('response',json);
-        $isUpdating = false;
-        $updateCreatedItem = {
-          role: $createdItem.currentTask,
-          label: json.label,
-          description: json.description,
-        };
-        return { html: marked(json.text) }; // Retourner le JSON à DeepChat
-      } catch (e) {
-        console.error("Erreur lors du parsing du JSON:", e);
-        return { error: "Invalid JSON format" }; // Retourner une erreur si le JSON est invalide
+    if (rawPayload[valueIndex] !== "\"") {
+      return undefined;
+    }
+
+    valueIndex += 1;
+    let escaped = false;
+    let buffer = "";
+
+    for (; valueIndex < rawPayload.length; valueIndex += 1) {
+      const char = rawPayload[valueIndex];
+      if (escaped) {
+        buffer += `\\${char}`;
+        escaped = false;
+        continue;
       }
-    } else if (stream && nativeStream) {
-      // await sleep(100);
-      // response = hop.shift();
-      // console.log(response);
-      return eventProcess(response);
-    } else {
-      console.log("process response without custom Stream");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk
-          .split("\n")
-          .filter((line) => line.trim() !== "");
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
 
-        const messages = lines.map((line) => {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-            } catch {
-              return { v: "" };
-            }
+      if (char === "\"") {
+        return decodePartialJsonString(buffer);
+      }
+
+      buffer += char;
+    }
+
+    if (!buffer.trim()) {
+      return undefined;
+    }
+
+    return decodePartialJsonString(buffer);
+  }
+
+  function buildLiveStructuredPayload(rawPayload: string): PartialStructuredPayload | null {
+    const label = extractPartialJsonStringField(rawPayload, "label");
+    const observation = extractPartialJsonStringField(rawPayload, "observation");
+    const comment = extractPartialJsonStringField(rawPayload, "comment");
+
+    if (!label && !observation && !comment) {
+      return null;
+    }
+
+    return {
+      ...(label ? { label } : {}),
+      ...(comment ? { comment } : {}),
+      ...(observation
+        ? {
+            description: {
+              observation,
+            },
           }
+        : {}),
+    };
+  }
+
+  function buildPartialAssistantPreview(payload: PartialStructuredPayload): string | undefined {
+    if (typeof payload.comment === "string" && payload.comment.trim()) {
+      return payload.comment;
+    }
+    return undefined;
+  }
+
+  function buildStreamingReasoningSummary(
+    taskRole: string,
+    phase: "submitted" | "streaming" | "finalizing",
+    hints: {
+      techDocsCount?: number;
+      nonConformitiesCount?: number;
+      usingProvidedSources?: boolean;
+    } = {},
+  ): string {
+    if (phase === "submitted") {
+      return `The request has been sent for task ${taskRole}.`;
+    }
+
+    if (phase === "streaming") {
+      return hints.usingProvidedSources
+        ? `Using the current task context and available references to draft the task ${taskRole} response.`
+        : `Building the task ${taskRole} response from retrieval signals.`;
+    }
+
+    const techDocsCount = hints.techDocsCount ?? 0;
+    const nonConformitiesCount = hints.nonConformitiesCount ?? 0;
+    if (techDocsCount || nonConformitiesCount) {
+      return `Drafting the task ${taskRole} response after reviewing ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"} and ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"}.`;
+    }
+
+    return `Drafting the final task ${taskRole} response.`;
+  }
+
+  function applyOptimisticReportUpdate(taskRole: string, payload: PartialStructuredPayload) {
+    const nextLabel = typeof payload.label === "string" ? payload.label : undefined;
+    const nextDescription = payload.description;
+
+    if (!nextLabel && nextDescription === undefined) {
+      return;
+    }
+
+    const signature = JSON.stringify({
+      role: taskRole,
+      label: nextLabel ?? null,
+      description: nextDescription ?? null,
+    });
+
+    if (signature === lastOptimisticUpdateSignature) {
+      return;
+    }
+
+    lastOptimisticUpdateSignature = signature;
+    updateCreatedItem.set({
+      role: taskRole,
+      label: nextLabel,
+      description: cloneData(nextDescription) ?? nextDescription,
+    });
+  }
+
+  function normalizeStreamResultPayload(value: unknown): LegacyFinalPayload {
+    if (isPlainObject(value)) {
+      return value as LegacyFinalPayload;
+    }
+
+    if (typeof value === "string") {
+      return { text: value };
+    }
+
+    try {
+      return { text: JSON.stringify(value) };
+    } catch {
+      return { text: String(value) };
+    }
+  }
+
+  function getRuntimeStagePresentation(metadata: string) {
+    switch (metadata) {
+      case "query":
+        return {
+          title: "Preparing retrieval",
+          detail: "Building the retrieval query from the current task context.",
+        };
+      case "doc_search":
+        return {
+          title: "Searching technical documents",
+          detail: "Looking for the most relevant references.",
+        };
+      case "nc_search":
+        return {
+          title: "Searching similar non-conformities",
+          detail: "Collecting comparable cases.",
+        };
+      default:
+        return {
+          title: "Generating answer",
+          detail: "Drafting the assistant response.",
+        };
+    }
+  }
+
+  function getToolLabel(name: string, fallbackMetadata: string) {
+    switch (name) {
+      case "query_builder":
+        return "Build appropriate request";
+      case "search_tech_docs":
+      case "doc_search":
+        return "Search technical documents";
+      case "search_non_conformities":
+      case "nc_search":
+        return "Search similar non-conformities";
+      default:
+        return fallbackMetadata === "final" ? "Generate final answer" : "Working";
+    }
+  }
+
+  function getCurrentTaskRole() {
+    return $createdItem?.currentTask ?? "000";
+  }
+
+  function getIntroQuickActions(taskRole: string): IntroQuickAction[] {
+    if (taskRole === "100") {
+      return [
+        {
+          label: "Propose analysis summary",
+          prompt:
+            "Propose a concise task 100 analysis summary based on the current non-conformity context.",
+        },
+        {
+          label: "Translate to French",
+          prompt:
+            "Translate the current task content to French and preserve the technical terminology.",
+        },
+      ];
+    }
+
+    return [
+      {
+        label: "Propose task description",
+        prompt:
+          "Propose a concise and precise task description based on the current non-conformity context.",
+      },
+      {
+        label: "Translate to French",
+        prompt:
+          "Translate the current task content to French and preserve the technical terminology.",
+      },
+    ];
+  }
+
+  async function triggerIntroQuickAction(prompt: string) {
+    await submitUserMessage({ text: prompt });
+  }
+
+  async function consumeLegacySseResponse(
+    response: Response,
+    options: {
+      taskRole: string;
+      assistantMessageId: string;
+      usingProvidedSources: boolean;
+    },
+  ): Promise<StructuredAssistantPayload> {
+    if (!response.body) {
+      throw new Error("The assistant stream is unavailable.");
+    }
+
+    const { taskRole, assistantMessageId, usingProvidedSources } = options;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let rawAssistantPayload = "";
+    let finalPayload: StructuredAssistantPayload | null = null;
+    let preferStructuredContentDelta = false;
+
+    const initialReasoningSummary = buildStreamingReasoningSummary(taskRole, "submitted", {
+      usingProvidedSources,
+    });
+    setAssistantReasoningSummary(assistantMessageId, initialReasoningSummary);
+    setAssistantRuntimeState(
+      assistantMessageId,
+      "submitted",
+      "Request sent",
+      "Preparing the assistant response.",
+    );
+
+    const applyStreamingPreview = () => {
+      const partialPayload =
+        getPartialStructuredPayload(rawAssistantPayload) ??
+        buildLiveStructuredPayload(rawAssistantPayload);
+      if (!partialPayload) {
+        return;
+      }
+
+      applyOptimisticReportUpdate(taskRole, partialPayload);
+      const preview = buildPartialAssistantPreview(partialPayload);
+      if (preview) {
+        replaceAssistantText(assistantMessageId, preview);
+      }
+    };
+
+    const handleParsedEvent = (parsedEvent: { event: string | null; data: unknown }) => {
+      if (parsedEvent.event === "delta_encoding") {
+        return;
+      }
+
+      if (
+        parsedEvent.event === "delta" ||
+        parsedEvent.event === "content_delta"
+      ) {
+        if (parsedEvent.event === "content_delta") {
+          preferStructuredContentDelta = true;
+        }
+        if (parsedEvent.event === "delta" && preferStructuredContentDelta) {
+          return;
+        }
+
+        const delta =
+          parsedEvent.event === "content_delta"
+            ? isPlainObject(parsedEvent.data) && typeof parsedEvent.data.delta === "string"
+              ? parsedEvent.data.delta
+              : null
+            : isPlainObject(parsedEvent.data) && typeof parsedEvent.data.v === "string"
+              ? parsedEvent.data.v
+              : null;
+
+        if (delta) {
+          rawAssistantPayload += delta;
+          chatStatus = "streaming";
+          setAssistantRuntimeState(
+            assistantMessageId,
+            "streaming",
+            "Generating answer",
+            "The draft is streaming into the chat.",
+          );
+          setAssistantReasoningSummary(
+            assistantMessageId,
+            buildStreamingReasoningSummary(taskRole, "streaming", { usingProvidedSources }),
+          );
+          applyStreamingPreview();
+        }
+        return;
+      }
+
+      if (parsedEvent.event === "status" && isPlainObject(parsedEvent.data)) {
+        const payload = parsedEvent.data as RuntimeStatusPayload;
+        if (payload.state === "started") {
+          setAssistantRuntimeState(
+            assistantMessageId,
+            "submitted",
+            "Preparing assistant",
+            "Initializing the request and runtime.",
+          );
+          return;
+        }
+
+        if (payload.state === "reasoning_effort_selected") {
+          setAssistantRuntimeRouting(assistantMessageId, payload);
+          upsertAssistantRuntimeStep(assistantMessageId, {
+            key: "reasoning",
+            kind: "reasoning",
+            status: "running",
+            title: "Reasoning plan selected",
+            detail: [
+              payload.resolvedModel ?? payload.requestedModelSelection,
+              humanizeComplexitySelection(
+                payload.resolvedComplexity ?? payload.requestedComplexitySelection,
+              ),
+              humanizeReasoningEffort(payload.reasoningEffort ?? null),
+            ]
+              .filter(Boolean)
+              .join(" • "),
+          });
+        }
+        return;
+      }
+
+      if (parsedEvent.event === "reasoning_delta" && isPlainObject(parsedEvent.data)) {
+        const summary =
+          typeof parsedEvent.data.delta === "string" ? parsedEvent.data.delta : "";
+        if (summary) {
+          appendAssistantRuntimeReasoning(assistantMessageId, summary);
+          setAssistantReasoningSummary(assistantMessageId, summary);
+        }
+        return;
+      }
+
+      if (parsedEvent.event === "tool_call_start" && isPlainObject(parsedEvent.data)) {
+        const payload = parsedEvent.data as ToolRuntimePayload;
+        const key = payload.tool_call_id ?? payload.name ?? "tool";
+        upsertAssistantRuntimeStep(assistantMessageId, {
+          key,
+          kind: "tool",
+          status: "running",
+          title: getToolLabel(payload.name ?? key, key),
+          detail: payload.args,
+        });
+        return;
+      }
+
+      if (parsedEvent.event === "tool_call_result" && isPlainObject(parsedEvent.data)) {
+        const payload = parsedEvent.data as ToolRuntimePayload;
+        const key = payload.tool_call_id ?? payload.name ?? "tool";
+        upsertAssistantRuntimeStep(assistantMessageId, {
+          key,
+          kind: "tool",
+          status: payload.result?.error ? "error" : "completed",
+          title: getToolLabel(payload.name ?? key, key),
+          detail:
+            payload.result?.error ??
+            payload.result?.summary ??
+            undefined,
+        });
+        return;
+      }
+
+      if (parsedEvent.event === "done") {
+        setAssistantRuntimeState(
+          assistantMessageId,
+          "ready",
+          "Draft ready",
+          "The assistant response and report updates are available.",
+        );
+        return;
+      }
+
+      if (!isPlainObject(parsedEvent.data)) {
+        return;
+      }
+
+      const payload = parsedEvent.data as LegacyStreamPayload;
+      const metadata = typeof payload.metadata === "string" ? payload.metadata : "final";
+      const messageText = typeof payload.text === "string" ? payload.text : undefined;
+
+      if (payload.type === "error") {
+        throw new Error(messageText || "The assistant stream failed.");
+      }
+
+      if (payload.type === "action") {
+        chatStatus = "streaming";
+        const stagePresentation = getRuntimeStagePresentation(metadata);
+        upsertAssistantRuntimeStep(assistantMessageId, {
+          key: metadata,
+          kind: metadata === taskRole ? "status" : "tool",
+          status: "running",
+          title: messageText || stagePresentation.title,
+          detail: undefined,
+        });
+        setAssistantRuntimeState(
+          assistantMessageId,
+          "streaming",
+          stagePresentation.title,
+          stagePresentation.detail,
+        );
+
+        setAssistantReasoningSummary(
+          assistantMessageId,
+          buildStreamingReasoningSummary(taskRole, "streaming", { usingProvidedSources }),
+        );
+        return;
+      }
+
+      if (payload.type !== "result") {
+        return;
+      }
+
+      if (metadata === "final") {
+        const normalizedPayload = normalizeLegacyFinalPayload(
+          normalizeStreamResultPayload(payload.text),
+        );
+        finalPayload = {
+          ...normalizedPayload,
+          reasoningSummary:
+            buildReasoningSummary(normalizedPayload, taskRole) ??
+            buildStreamingReasoningSummary(taskRole, "finalizing", {
+              usingProvidedSources,
+              techDocsCount: countSources(normalizedPayload.sources?.tech_docs),
+              nonConformitiesCount: countSources(normalizedPayload.sources?.non_conformities),
+            }),
+        };
+        appendAssistantRuntimeReasoning(
+          assistantMessageId,
+          finalPayload.reasoningSummary ?? buildStreamingReasoningSummary(taskRole, "finalizing"),
+        );
+        return;
+      }
+
+      const completedTitle =
+        metadata === "query"
+          ? "Request prepared"
+          : metadata === "doc_search"
+            ? "Technical documents retrieved"
+            : metadata === "nc_search"
+              ? "Similar non-conformities retrieved"
+              : "Step completed";
+
+      upsertAssistantRuntimeStep(assistantMessageId, {
+        key: metadata,
+        kind: metadata === taskRole ? "status" : "tool",
+        status: "completed",
+        title: completedTitle,
+        detail: summarizeLegacyResult(metadata, payload.text),
+      });
+
+      if (metadata === "query" && messageText) {
+        setAssistantRuntimeState(assistantMessageId, "streaming", "Request prepared", messageText);
+      }
+
+      if (metadata === "doc_search") {
+        setAssistantRuntimeState(
+          assistantMessageId,
+          "streaming",
+          "Technical documents retrieved",
+          summarizeLegacyResult(metadata, payload.text) ?? "Relevant documents found.",
+        );
+      }
+
+      if (metadata === "nc_search") {
+        setAssistantRuntimeState(
+          assistantMessageId,
+          "streaming",
+          "Similar non-conformities retrieved",
+          summarizeLegacyResult(metadata, payload.text) ?? "Relevant prior cases found.",
+        );
+      }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let boundaryIndex = buffer.indexOf("\n\n");
+      while (boundaryIndex !== -1) {
+        const block = buffer.slice(0, boundaryIndex).trim();
+        buffer = buffer.slice(boundaryIndex + 2);
+        if (block) {
+          const parsedEvent = parseLegacySseBlock(block);
+          if (parsedEvent) {
+            handleParsedEvent(parsedEvent);
+          }
+        }
+        boundaryIndex = buffer.indexOf("\n\n");
+      }
+    }
+
+    buffer += decoder.decode();
+    const trailingBlock = buffer.trim();
+    if (trailingBlock) {
+      const parsedEvent = parseLegacySseBlock(trailingBlock);
+      if (parsedEvent) {
+        handleParsedEvent(parsedEvent);
+      }
+    }
+
+    if (!finalPayload) {
+      throw new Error("The assistant stream ended before the final payload was received.");
+    }
+
+    return finalPayload;
+  }
+
+  async function submitUserMessage({ text, role }: ChatSubmitArgs = {}) {
+    const content = text?.trim();
+
+    if (!content || chatStatus === "submitted" || chatStatus === "streaming") {
+      return;
+    }
+
+    if (role) {
+      $createdItem.currentTask = role as typeof $createdItem.currentTask;
+    }
+
+    const taskContext = buildTaskContext();
+    const taskRole = taskContext.currentTask ?? "000";
+    const assistantMessage = createChatMessage("assistant");
+    const userMessage = createChatMessage("user", content);
+
+    beginChatRequest(assistantMessage.id);
+    composerInput = "";
+    chatStatus = "submitted";
+    void updateComposerHeight();
+    appendChatMessage(userMessage);
+    appendChatMessage(assistantMessage);
+    setAssistantReasoningSummary(
+      assistantMessage.id,
+      buildStreamingReasoningSummary(taskRole, "submitted", {
+        usingProvidedSources: Boolean(taskContext.sources),
+      }),
+    );
+    isUpdating.set(taskRole);
+    upsertAssistantRuntimeStep(assistantMessage.id, {
+      key: taskRole,
+      kind: "status",
+      status: "running",
+      title: "Generate final answer",
+    });
+
+    const abortController = new AbortController();
+    streamAbortController = abortController;
+
+    try {
+      const response = await fetch(aiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({
+          provider: "openai",
+          modelSelection,
+          complexitySelection,
+          messages: [
+            {
+              role: taskRole,
+              text: content,
+              description: taskContext.description ?? "",
+              history: taskContext.history ?? [],
+              ...(taskContext.sources ? { sources: taskContext.sources } : {}),
+            },
+          ],
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error((await response.text()) || "The assistant request failed.");
+      }
+
+      const enrichedPayload = await consumeLegacySseResponse(response, {
+        taskRole,
+        assistantMessageId: assistantMessage.id,
+        usingProvidedSources: Boolean(taskContext.sources),
+      });
+
+      replaceAssistantText(assistantMessage.id, enrichedPayload.text ?? "");
+      enrichAssistantMessage(assistantMessage.id, enrichedPayload, taskRole);
+      applyLegacyResponse(enrichedPayload, taskRole);
+      setAssistantRuntimeState(
+        assistantMessage.id,
+        "ready",
+        "Draft ready",
+        "The assistant response and report updates are available.",
+      );
+      upsertAssistantRuntimeStep(assistantMessage.id, {
+        key: taskRole,
+        kind: "status",
+        status: "completed",
+        title: "Draft generated",
+      });
+      chatStatus = "ready";
+      chatError = undefined;
+      activeAssistantMessageId = null;
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        chatStatus = "ready";
+        chatError = undefined;
+        setAssistantRuntimeState(
+          assistantMessage.id,
+          "ready",
+          "Request stopped",
+          "Generation was interrupted.",
+        );
+      } else {
+        chatStatus = "error";
+        chatError = error instanceof Error ? error : new Error(String(error));
+        setAssistantRuntimeState(
+          assistantMessage.id,
+          "error",
+          "Request failed",
+          chatError.message,
+        );
+        upsertAssistantRuntimeStep(assistantMessage.id, {
+          key: "error",
+          kind: "status",
+          status: "error",
+          title: "Request failed",
+          detail: chatError.message,
         });
       }
+      activeAssistantMessageId = null;
+      isUpdating.set(false);
+    } finally {
+      if (streamAbortController === abortController) {
+        streamAbortController = null;
+      }
+      if (chatStatus !== "error") {
+        chatStatus = "ready";
+      }
     }
-  };
+  }
 
-  const requestInterceptor = (requestDetails) => {
-    requestDetails.body.messages[0].role = $createdItem.currentTask;
-    requestDetails.body.messages[0].history = [
-      "000",
-      "100",
-      "200",
-      "300",
-      "400",
-      "500",
-    ]
-      .filter((key) => key < $createdItem.currentTask)
-      .map((key) => $createdItem["analysis_history"][key]);
-    // user_message is implicitely set to inherited requestDetails.body.messages[0].text
-    // console.log('ici', $createdItem, $createdItem.currentTask);
-    requestDetails.body.messages[0].description =
-      $createdItem["analysis_history"][$createdItem.currentTask][0];
-    console.log('requestDetails', requestDetails);
-    if ($referencesList) {
-      requestDetails.body.messages[0].sources = $referencesList;
-      requestDetails.body.messages[0].sources[
-        "non_conformities"
-      ].sources = $filteredNonConformities.map((item) => {
-        return {
-          doc: item["nc_event_id"],
-          ATA_code: item["ATA_code"],
-          ATA_category: item["ATA_category"],
-          label: item["analysis_history"]["000"][0]["label"],
-          content: item["analysis_history"][$createdItem.currentTask],
-        };
-      });
+  async function handleComposerSubmit(event?: { preventDefault?: () => void }) {
+    event?.preventDefault?.();
+    const nextInput = composerInput.trim();
+
+    if (!nextInput) {
+      return;
     }
-    $isUpdating = $createdItem.currentTask;
-    return requestDetails;
-  };
+
+    await submitUserMessage({ text: nextInput });
+  }
+
+  function handleComposerKeydown(event: {
+    key?: string;
+    shiftKey?: boolean;
+    preventDefault?: () => void;
+  }) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      handleComposerSubmit(event);
+    }
+  }
+
+  function clearMessages() {
+    streamAbortController?.abort();
+    streamAbortController = null;
+    chatMessages = [];
+    assistantRuntimeByMessageId = {};
+    activeRequestId = null;
+    activeAssistantMessageId = null;
+    composerInput = "";
+    chatError = undefined;
+    chatStatus = "ready";
+    lastOptimisticUpdateSignature = "";
+    isUpdating.set(false);
+    composerIsMultiline = false;
+    if (composerTextarea) {
+      composerTextarea.style.height = "";
+    }
+  }
+
+  function stopCurrentRequest() {
+    streamAbortController?.abort();
+    streamAbortController = null;
+    chatStatus = "ready";
+    if (activeAssistantMessageId) {
+      setAssistantRuntimeState(
+        activeAssistantMessageId,
+        "ready",
+        "Request stopped",
+        "Generation was interrupted.",
+      );
+    }
+    activeAssistantMessageId = null;
+    isUpdating.set(false);
+  }
+
+  function renderMarkdown(text: string | undefined) {
+    return marked.parse(text ?? "") as string;
+  }
+
+  function getMessageHtml(message: UIMessage) {
+    return renderMarkdown(getMessageText(message));
+  }
+
+  function getStructuredParts(message: UIMessage) {
+    return ((message.parts ?? []) as unknown as StructuredMessagePart[]).filter(
+      (part): part is Exclude<StructuredMessagePart, TextPart> => part.type !== "text",
+    );
+  }
+
+  function getSourceGroups(part: SourcesPart) {
+    return [
+      {
+        key: "tech_docs" as const,
+        label: "Technical documents",
+        items: (part.sources?.tech_docs?.sources ?? []) as ReferenceSourceItem[],
+      },
+      {
+        key: "non_conformities" as const,
+        label: "Similar non-conformities",
+        items: (part.sources?.non_conformities?.sources ?? []) as ReferenceSourceItem[],
+      },
+    ].filter((group) => group.items.length > 0);
+  }
+
+  function getSourceCount(part: SourcesPart) {
+    return getSourceGroups(part).reduce((total, group) => total + group.items.length, 0);
+  }
+
+  function getSourceMeta(item: ReferenceSourceItem) {
+    if (typeof item.chunk_id === "string" && item.chunk_id.trim()) {
+      return item.chunk_id;
+    }
+    if (typeof item.chunk === "string" && item.chunk.trim() && item.chunk.length < 48) {
+      return item.chunk;
+    }
+    return undefined;
+  }
+
+  function openSource(groupKey: "tech_docs" | "non_conformities", item: ReferenceSourceItem) {
+    if (groupKey === "tech_docs" && typeof item.doc === "string" && item.doc.trim()) {
+      selectDoc.set({ doc: item.doc });
+      activeTabValue.set(2);
+      return;
+    }
+
+    if (groupKey === "non_conformities") {
+      activeTabValue.set(3);
+    }
+  }
+
+  function getTaskDisplayLabel(role: string | null | undefined) {
+    if (!role) {
+      return "Updated draft";
+    }
+
+    const normalizedRole = role as keyof typeof taskLabel;
+    return taskLabel[normalizedRole] ?? `Task ${role}`;
+  }
+
+  function getAmendedObjectLabel(role: string | null | undefined) {
+    return role === "000" ? "report" : "task";
+  }
+
+  function getAmendedObjectActionLabel(role: string | null | undefined) {
+    return role === "000" ? "Open amended report" : "Open amended task";
+  }
+
+  function openAmendedTask(role: string | null | undefined) {
+    if (role && TASK_IDS.includes(role as (typeof TASK_IDS)[number])) {
+      createdItem.update((current) => ({
+        ...current,
+        currentTask: role as (typeof TASK_IDS)[number],
+      }));
+    }
+
+    activeTabValue.set(1);
+    showChatbot.set(false);
+  }
+
+  function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function setDraftInput(text = "") {
+    composerInput = text;
+    void tick().then(updateComposerHeight);
+  }
+
+  function toggleLayoutMode() {
+    chatLayoutMode.set($chatLayoutMode === "docked" ? "floating" : "docked");
+  }
+
+  async function updateComposerHeight() {
+    await tick();
+    if (!composerTextarea) {
+      composerIsMultiline = false;
+      return;
+    }
+
+    composerTextarea.style.height = "0px";
+    const nextHeight = Math.min(Math.max(composerTextarea.scrollHeight, 44), 176);
+    composerTextarea.style.height = `${nextHeight}px`;
+    composerIsMultiline = nextHeight > 52;
+  }
+
+  function handleComposerInput() {
+    void updateComposerHeight();
+  }
 </script>
 
-<svelte:window bind:innerWidth={windowInnerWidth}/>
+<svelte:window bind:innerWidth={windowInnerWidth} />
 
-<main class="deep-chat-container">
-<div
-	style="display:flex;align-items:right;flex-direction: row-reverse;padding:0.1rem;height:1.25rem;background: rgb(248, 248, 248);border-bottom: 1px solid rgba(0,0,0,.1)"
+<main
+  class="chat-shell"
+  style={`width:${dynamicWidth};height:${dynamicHeight};`}
 >
-	<button
-		style="cursor:pointer;align:right;border:none;padding:0.1rem;background:none;"
-		on:click={() => {$showChatbot=false;}}
-	>
-		<Icon icon="mdi:chevron-down" height="1.25rem"/>
-	</button>
-	<button
-		style="cursor:pointer;align:right;border:none;padding:0.1rem;background:none;"
-		on:click={() => {$chatElementRef.clearMessages()}}
-	>
-		<Icon icon="mdi:trash-can-outline" height="1rem"/>
-	</button>
-</div>
-  <deep-chat
-    bind:this={$chatElementRef}
-    avatars={{
-      ai: "https://upload.wikimedia.org/wikipedia/commons/e/ef/ChatGPT-Logo.svg",
-    }}
-    connect={{
-      stream: stream && nativeStream,
-      url: aiUrl,
-      method: "POST",
-      headers:
-        nativeStream && stream
-          ? {}
-          : {
-              "Accept": stream
-                ? "text/event-stream"
-                : "application/json",
-            },
-    }}
-    textInput={{
-      styles: {
-		text: {
-          color: "black",
-          "font-family": "Source Sans Pro, sans-serif",
-        },
-        container: {
-          width: dynamicInputWidth,
-        },
-        focus: { border: "1px solid #ccc" },
-      },
-      placeholder: { text: "Ask your question" },
-    }}
-    intropanel={{
-      styles: {
-        container: {
-          backgroundColor: "rgba(247,247,248)",
-          borderTop: "1px solid rgba(0,0,0,.1)",
-          borderBottom: "1px solid rgba(0,0,0,.1)",
-        },
-        header: {
-          color: "black",
-        },
-        body: {
-          color: "black",
-        },
-        text: {
-          "font-family": "Source Sans Pro, sans-serif",
-        },
-      },
-      header: "Welcome to the Non-Conformity Chatbot",
-      body: "I'm here to help you with your non-conformity tasks. Please provide me with the necessary information to help you.",
-    }}
-    messageStyles={{
-      default: {
-        shared: {
-          bubble: {
-            maxWidth: "100%",
-            backgroundColor: "unset",
-            marginTop: "10px",
-            marginBottom: "10px",
-            "font-family": "Source Sans Pro, sans-serif",
-          },
-        },
-        user: {
-          bubble: {
-            color: "black",
-          },
-        },
-        ai: {
-          outerContainer: {
-            backgroundColor: "rgba(247,247,248)",
-            borderTop: "1px solid rgba(0,0,0,.1)",
-            borderBottom: "1px solid rgba(0,0,0,.1)",
-          },
-        },
-      },
-    }}
-    {responseInterceptor}
-    {requestInterceptor}
-    {history}
-    chatStyle={{
-      border: "0px",
-      width: dynamicWidth,
-      height: dynamicHeight,
-    }}
-    htmlClassUtilities={{
-      "custom-button": {
-        events: {
-          click: (event) => {
-            const text = event.target.children[0].innerText;
-            $chatElementRef.submitUserMessage({ text: text });
-          },
-        },
-        styles: {
-          default: {
-            backgroundColor: "#fff",
-            display: "inline-block",
-            transition: "all 0.2s ease",
-            padding: "3px 15px",
-            fontSize: "15px",
-            borderRadius: "20px",
-            color: "#151515",
-            border: "1px solid #bbb",
-            padding: "5px 10px 5px 10px",
-            cursor: "pointer",
-            textAlign: "center",
-            fontFamily: "Source Sans Pro, sans-serif",
-          },
-          hover: {
-            "background-color": "#5236ab",
-            color: "#fff",
-            "text-decoration": "none",
-            "border-color": "#5236ab",
-          },
-          click: { backgroundColor: "#e4e4e4" },
-        },
-      },
-      "custom-button-text": {
-        styles: { default: { pointerEvents: "none" } },
-      },
-      tool: { styles: { color: "#ccc" } },
-    }}
-  >
-    <div style="display: none">
-      <div class="custom-button">
-        <div class="custom-button-text">{$defaultAction}</div>
+  <header class="chat-shell__header">
+    <button
+      class="chat-shell__icon-button"
+      on:click={() => {
+        $showChatbot = false;
+      }}
+      aria-label="Close chat"
+    >
+      <Icon icon="mdi:chevron-down" height="1.25rem" />
+    </button>
+    <div class="chat-shell__title">
+      <strong>Non-Conformity Chatbot</strong>
+    </div>
+    <div class="chat-shell__header-actions">
+      {#if windowInnerWidth === undefined || windowInnerWidth > 768}
+        <button
+          class="chat-shell__icon-button"
+          on:click={toggleLayoutMode}
+          aria-label={$chatLayoutMode === "docked" ? "Switch to floating chat" : "Dock chat panel"}
+        >
+          <Icon
+            icon={$chatLayoutMode === "docked" ? "mdi:window-restore" : "mdi:dock-right"}
+            height="1rem"
+          />
+        </button>
+      {/if}
+      <button
+        class="chat-shell__icon-button"
+        on:click={clearMessages}
+        aria-label="Clear chat"
+      >
+        <Icon icon="mdi:trash-can-outline" height="1rem" />
+      </button>
+    </div>
+  </header>
+
+  <section class="chat-shell__messages" bind:this={messageViewport}>
+    {#if chatMessages.length === 0}
+      <div class="chat-intro">
+        <h3>Ask the assistant</h3>
+        <p>
+          Ask about the current non-conformity to get a draft, supporting
+          sources, and suggested updates.
+        </p>
+        <div class="chat-intro__actions">
+          {#each getIntroQuickActions(getCurrentTaskRole()) as action}
+            <button
+              type="button"
+              class="chat-intro__action"
+              on:click={() => triggerIntroQuickAction(action.prompt)}
+            >
+              {action.label}
+            </button>
+          {/each}
+        </div>
       </div>
-      <div class="custom-button" style="margin-top: 15px">
-        <div class="custom-button-text">Translate to french</div>
+    {/if}
+
+    {#each chatMessages as message (message.id)}
+      {@const messageText = getMessageText(message)}
+      <article class={`chat-message chat-message--${message.role}`}>
+        {#if message.role === "assistant"}
+          {@const runtime = getAssistantRuntime(message.id)}
+          {#if runtime}
+            <details
+              class={`chat-runtime-card chat-runtime-card--${runtime.status}`}
+              open={runtime.status === "error"}
+            >
+              <summary class="chat-runtime-card__summary">
+                <div class="chat-runtime-card__summary-row">
+                  <div class={`chat-runtime-card__state chat-runtime-card__state--${runtime.status}`}>
+                    {#if runtime.status === "submitted" || runtime.status === "streaming"}
+                      <span class="chat-runtime-card__spinner"></span>
+                    {:else if runtime.status === "error"}
+                      <Icon icon="mdi:alert-circle-outline" height="0.95rem" />
+                    {:else}
+                      <Icon icon="mdi:check-circle-outline" height="0.95rem" />
+                    {/if}
+                    <strong>{runtime.stateTitle}</strong>
+                  </div>
+
+                  <div class="chat-runtime-card__badges">
+                    {#each getRuntimeBadges(runtime) as badge}
+                      <span class="chat-runtime-card__badge">{badge}</span>
+                    {/each}
+                  </div>
+                </div>
+
+                {#if getRuntimeCompactMeta(runtime)}
+                  <span class="chat-runtime-card__meta">{getRuntimeCompactMeta(runtime)}</span>
+                {/if}
+
+                {#if getRuntimePreview(runtime)}
+                  <span class="chat-runtime-card__summary-text">{getRuntimePreview(runtime)}</span>
+                {/if}
+              </summary>
+
+              <div class="chat-runtime-card__body">
+                {#if runtime.reasoningSummary}
+                  <div class="chat-runtime-card__reasoning">
+                    <h4>Thinking</h4>
+                    <p>{runtime.reasoningSummary}</p>
+                  </div>
+                {/if}
+
+                {#if runtime.steps.length > 0}
+                  <div class="chat-runtime-card__steps">
+                    {#each runtime.steps as step (step.key)}
+                      {#if step.detail}
+                        <details
+                          class={`chat-runtime-step chat-runtime-step--${step.status}`}
+                        >
+                          <summary class="chat-runtime-step__summary">
+                            <div class="chat-runtime-step__title-row">
+                              <span class={`chat-runtime-step__kind chat-runtime-step__kind--${step.kind}`}>
+                                {#if step.kind === "tool"}
+                                  <Icon icon="mdi:tools" height="0.8rem" />
+                                {:else if step.kind === "reasoning"}
+                                  <Icon icon="mdi:head-snowflake-outline" height="0.8rem" />
+                                {:else}
+                                  <Icon icon="mdi:progress-clock" height="0.8rem" />
+                                {/if}
+                              </span>
+                              <strong>{step.title}</strong>
+                              <span class={`chat-runtime-step__status chat-runtime-step__status--${step.status}`}>
+                                {step.status}
+                              </span>
+                            </div>
+                          </summary>
+                          <p>{step.detail}</p>
+                        </details>
+                      {:else}
+                        <div class={`chat-runtime-step chat-runtime-step--${step.status}`}>
+                          <div class="chat-runtime-step__title-row">
+                            <span class={`chat-runtime-step__kind chat-runtime-step__kind--${step.kind}`}>
+                              {#if step.kind === "tool"}
+                                <Icon icon="mdi:tools" height="0.8rem" />
+                              {:else if step.kind === "reasoning"}
+                                <Icon icon="mdi:head-snowflake-outline" height="0.8rem" />
+                              {:else}
+                                <Icon icon="mdi:progress-clock" height="0.8rem" />
+                              {/if}
+                            </span>
+                            <strong>{step.title}</strong>
+                            <span class={`chat-runtime-step__status chat-runtime-step__status--${step.status}`}>
+                              {step.status}
+                            </span>
+                          </div>
+                        </div>
+                      {/if}
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            </details>
+          {/if}
+        {/if}
+
+        {#if message.role === "user" || messageText.trim().length > 0}
+          <div class="chat-message__bubble">
+            {@html getMessageHtml(message)}
+          </div>
+        {/if}
+
+        {#if message.role === "assistant"}
+          {#each getStructuredParts(message) as part, index (`${message.id}-${index}-${part.type}`)}
+            {#if part.type === "sources"}
+              <div class="chat-part">
+                <details class="chat-sources">
+                  <summary class="chat-sources__summary">
+                    <strong>Sources</strong>
+                    <span class="chat-sources__count">{getSourceCount(part)}</span>
+                  </summary>
+
+                  <div class="chat-sources__body">
+                    {#each getSourceGroups(part) as sourceGroup}
+                      <details class="chat-sources__group">
+                        <summary class="chat-sources__group-summary">
+                          <span>{sourceGroup.label}</span>
+                          <span class="chat-sources__count">{sourceGroup.items.length}</span>
+                        </summary>
+
+                        <div class="chat-sources__chips">
+                          {#each sourceGroup.items as item}
+                            <button
+                              type="button"
+                              class="chat-source-chip"
+                              title={typeof item.content === "string" ? item.content : item.doc ?? ""}
+                              on:click={() => openSource(sourceGroup.key, item)}
+                            >
+                              <span class="chat-source-chip__doc">{item.doc}</span>
+                              {#if getSourceMeta(item)}
+                                <span class="chat-source-chip__meta">{getSourceMeta(item)}</span>
+                              {/if}
+                            </button>
+                          {/each}
+                        </div>
+                      </details>
+                    {/each}
+                  </div>
+                </details>
+              </div>
+            {:else if part.type === "nc_update"}
+              <div class="chat-part">
+                <details class="chat-update-link">
+                  <summary class="chat-update-link__summary">
+                    <strong>Updated {getAmendedObjectLabel(part.role)}</strong>
+                    <span class="chat-update-link__task">{getTaskDisplayLabel(part.role)}</span>
+                  </summary>
+                  <div class="chat-update-link__body">
+                    {#if part.label}
+                      <p class="chat-update-link__label">{part.label}</p>
+                    {/if}
+                    <button
+                      type="button"
+                      class="chat-update-link__button"
+                      on:click={() => openAmendedTask(part.role)}
+                    >
+                      {getAmendedObjectActionLabel(part.role)}
+                    </button>
+                  </div>
+                </details>
+              </div>
+            {/if}
+          {/each}
+        {/if}
+      </article>
+    {/each}
+  </section>
+
+  {#if chatError}
+    <div class="chat-shell__error">
+      {chatError.message}
+    </div>
+  {/if}
+
+  <form class="chat-composer" on:submit={handleComposerSubmit}>
+    <div class={`chat-composer__surface ${composerIsMultiline ? "chat-composer__surface--multiline" : ""}`}>
+      <textarea
+        bind:value={composerInput}
+        bind:this={composerTextarea}
+        class="chat-composer__input"
+        placeholder="Ask your question"
+        rows="1"
+        on:keydown={handleComposerKeydown}
+        on:input={handleComposerInput}
+        disabled={chatStatus === "submitted" || chatStatus === "streaming"}
+      ></textarea>
+
+      <div class="chat-composer__footer">
+        <div class="chat-composer__selectors">
+          <label class="chat-composer__select-wrap">
+            <span class="chat-composer__sr-only">Model</span>
+            <select bind:value={modelSelection} class="chat-composer__select" aria-label="Model">
+              {#each modelOptions as option}
+                <option value={option.value}>{option.label}</option>
+              {/each}
+            </select>
+          </label>
+
+          <label class="chat-composer__select-wrap chat-composer__select-wrap--compact">
+            <span class="chat-composer__sr-only">Reasoning effort</span>
+            <select
+              bind:value={complexitySelection}
+              class="chat-composer__select"
+              aria-label="Reasoning effort"
+            >
+              {#each complexityOptions as option}
+                <option value={option.value}>{option.label}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
+
+        <div class="chat-composer__actions">
+          {#if chatStatus === "submitted" || chatStatus === "streaming"}
+            <button
+              type="button"
+              class="chat-composer__primary chat-composer__primary--stop"
+              on:click={stopCurrentRequest}
+              aria-label="Stop generation"
+            >
+              <Icon icon="mdi:stop" height="0.95rem" />
+            </button>
+          {:else}
+            <button
+              type="submit"
+              class="chat-composer__primary"
+              aria-label="Send message"
+            >
+              <Icon icon="mdi:send" height="0.95rem" />
+            </button>
+          {/if}
+        </div>
       </div>
     </div>
-  </deep-chat>
+  </form>
 </main>
 
 <style>
-  .deep-chat-container {
-    text-align: center;
-    justify-content: center;
-    display: grid;
-    margin:0px;
-    border: 1px grey;
-    filter: drop-shadow(rgba(104, 114, 116, 0.267) 0px 2px 5px);
+  .chat-shell {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border-radius: 1.1rem;
+    overflow: hidden;
+    box-shadow:
+      0 18px 48px rgba(15, 23, 42, 0.16),
+      0 2px 10px rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(15, 23, 42, 0.08);
   }
-    @media (max-width: 768px) {
-      .deep-chat-container {
-      }
+
+  .chat-shell__header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.6rem;
+    background: rgba(248, 250, 252, 0.94);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(14px);
+  }
+
+  .chat-shell__title {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  .chat-shell__title span {
+    font-size: 0.72rem;
+    color: #667085;
+  }
+
+  .chat-shell__header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+  }
+
+  .chat-shell__icon-button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #344054;
+  }
+
+  .chat-shell__messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.9rem 0.8rem;
+    background:
+      radial-gradient(circle at top right, rgba(59, 130, 246, 0.1), transparent 24%),
+      linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  }
+
+  .chat-intro {
+    padding: 0.9rem 1rem;
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    text-align: left;
+  }
+
+  .chat-intro h3 {
+    margin: 0 0 0.35rem;
+    font-size: 0.95rem;
+  }
+
+  .chat-intro p {
+    margin: 0;
+    color: #475467;
+    line-height: 1.5;
+    font-size: 0.88rem;
+  }
+
+  .chat-intro__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: 0.8rem;
+  }
+
+  .chat-intro__action {
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: #fff;
+    color: #1f2937;
+    border-radius: 999px;
+    padding: 0.45rem 0.8rem;
+    font: inherit;
+    font-size: 0.84rem;
+    cursor: pointer;
+  }
+
+  .chat-composer__primary {
+    border: none;
+    border-radius: 999px;
+    padding: 0.6rem 1rem;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+  }
+
+  .chat-composer__primary {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #fff;
+    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.18);
+  }
+
+  .chat-message {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.75rem;
+  }
+
+  .chat-message--assistant {
+    justify-content: flex-start;
+  }
+
+  .chat-message--user {
+    justify-content: flex-end;
+  }
+
+  .chat-message__bubble {
+    align-self: flex-start;
+    max-width: min(100%, 24rem);
+    padding: 0.85rem 1rem;
+    border-radius: 1.1rem;
+    background: rgba(255, 255, 255, 0.98);
+    color: #101828;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    text-align: left;
+    line-height: 1.5;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  }
+
+  .chat-message--user .chat-message__bubble {
+    align-self: flex-end;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #fff;
+    border-color: rgba(37, 99, 235, 0.4);
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+  }
+
+  .chat-message__bubble :global(p) {
+    margin: 0;
+  }
+
+  .chat-message__bubble :global(p + p) {
+    margin-top: 0.75rem;
+  }
+
+  .chat-message__bubble :global(ul),
+  .chat-message__bubble :global(ol) {
+    padding-left: 1.2rem;
+    margin: 0.5rem 0 0;
+  }
+
+  .chat-runtime-card {
+    align-self: flex-start;
+    width: min(100%, 24rem);
+    margin-bottom: 0.45rem;
+    border-radius: 0.95rem;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    overflow: hidden;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.03);
+  }
+
+  .chat-runtime-card[open] {
+    background: rgba(248, 250, 252, 0.96);
+  }
+
+  .chat-runtime-card--submitted,
+  .chat-runtime-card--streaming {
+    border-color: rgba(31, 111, 235, 0.18);
+  }
+
+  .chat-runtime-card--error {
+    border-color: #fecdca;
+    background: #fef3f2;
+  }
+
+  .chat-runtime-card__summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    padding: 0.58rem 0.72rem 0.56rem;
+  }
+
+  .chat-runtime-card__summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .chat-runtime-card__summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .chat-runtime-card__state {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: #111827;
+    min-width: 0;
+  }
+
+  .chat-runtime-card__state strong {
+    font-size: 0.84rem;
+  }
+
+  .chat-runtime-card__state--error {
+    color: #b42318;
+  }
+
+  .chat-runtime-card__spinner {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 999px;
+    border: 2px solid rgba(31, 111, 235, 0.2);
+    border-top-color: #1f6feb;
+    animation: chat-spin 0.9s linear infinite;
+    flex: 0 0 auto;
+  }
+
+  .chat-runtime-card__badges {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .chat-runtime-card__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.05);
+    color: #475467;
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  .chat-runtime-card__meta,
+  .chat-runtime-card__summary-text {
+    font-size: 0.74rem;
+    color: #667085;
+    line-height: 1.4;
+  }
+
+  .chat-runtime-card__body {
+    display: grid;
+    gap: 0.45rem;
+    padding: 0 0.72rem 0.72rem;
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
+  }
+
+  .chat-runtime-card__reasoning {
+    padding-top: 0.75rem;
+  }
+
+  .chat-runtime-card__reasoning h4 {
+    margin: 0 0 0.35rem;
+    font-size: 0.76rem;
+    color: #111827;
+  }
+
+  .chat-runtime-card__reasoning p {
+    margin: 0;
+    color: #4b5563;
+    font-size: 0.76rem;
+    line-height: 1.45;
+  }
+
+  .chat-runtime-card__steps {
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .chat-runtime-step {
+    padding: 0.45rem 0.58rem;
+    border-radius: 0.85rem;
+    background: #fff;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+  }
+
+  .chat-runtime-step--completed {
+    border-color: rgba(31, 111, 235, 0.18);
+  }
+
+  .chat-runtime-step--error {
+    border-color: #fecdca;
+    background: #fff6f5;
+  }
+
+  .chat-runtime-step__title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  .chat-runtime-step__summary {
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .chat-runtime-step__summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .chat-runtime-step__title-row strong {
+    font-size: 0.74rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .chat-runtime-step__kind {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.06);
+    color: #475467;
+    flex: 0 0 auto;
+  }
+
+  .chat-runtime-step__kind--tool {
+    background: rgba(31, 111, 235, 0.08);
+    color: #1f6feb;
+  }
+
+  .chat-runtime-step__kind--reasoning {
+    background: rgba(8, 145, 178, 0.08);
+    color: #0f766e;
+  }
+
+  .chat-runtime-step__status {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #667085;
+  }
+
+  .chat-runtime-step__status--completed {
+    color: #1d4ed8;
+  }
+
+  .chat-runtime-step__status--error {
+    color: #b42318;
+  }
+
+  .chat-runtime-step p {
+    margin: 0.35rem 0 0;
+    font-size: 0.72rem;
+    color: #667085;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .chat-part {
+    margin-top: 0.5rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.9rem;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  }
+
+  .chat-part h4 {
+    margin: 0 0 0.35rem;
+    font-size: 0.82rem;
+  }
+
+  .chat-part--reasoning summary {
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+  }
+
+  .chat-part--reasoning summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .chat-part--reasoning p {
+    margin: 0.6rem 0 0;
+    color: #475467;
+  }
+
+  .chat-part__label {
+    margin: 0 0 0.65rem;
+    font-weight: 600;
+  }
+
+  .chat-shell__error {
+    margin: 0 0.75rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.75rem;
+    background: #fef3f2;
+    color: #b42318;
+    border: 1px solid #fecdca;
+  }
+
+  .chat-sources {
+    display: block;
+  }
+
+  .chat-sources__summary,
+  .chat-sources__group-summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .chat-sources__summary::-webkit-details-marker,
+  .chat-sources__group-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .chat-sources__summary strong,
+  .chat-sources__group-summary span:first-child {
+    font-size: 0.78rem;
+  }
+
+  .chat-sources__count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.3rem;
+    height: 1.3rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.06);
+    color: #475467;
+    font-size: 0.68rem;
+  }
+
+  .chat-sources__body {
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 0.55rem;
+  }
+
+  .chat-sources__group {
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 0.8rem;
+    background: rgba(248, 250, 252, 0.85);
+    padding: 0.45rem 0.55rem;
+  }
+
+  .chat-sources__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+  }
+
+  .chat-source-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.38rem;
+    min-width: 0;
+    max-width: 100%;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    background: #fff;
+    color: #1f2937;
+    border-radius: 999px;
+    padding: 0.34rem 0.58rem;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+
+  .chat-source-chip__doc {
+    display: inline-block;
+    max-width: 13rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.72rem;
+  }
+
+  .chat-source-chip__meta {
+    font-size: 0.65rem;
+    color: #667085;
+  }
+
+  .chat-update-link {
+    display: block;
+  }
+
+  .chat-update-link__summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+  }
+
+  .chat-update-link__summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .chat-update-link__summary strong {
+    font-size: 0.78rem;
+  }
+
+  .chat-update-link__task {
+    font-size: 0.7rem;
+    color: #667085;
+  }
+
+  .chat-update-link__body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 0.55rem;
+  }
+
+  .chat-update-link__label {
+    margin: 0;
+    font-size: 0.74rem;
+    color: #475467;
+  }
+
+  .chat-update-link__button {
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    background: #fff;
+    color: #1d4ed8;
+    border-radius: 999px;
+    padding: 0.38rem 0.72rem;
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .chat-composer {
+    padding: 0.7rem;
+    background: rgba(255, 255, 255, 0.97);
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+  }
+
+  .chat-composer__surface {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+  }
+
+  .chat-composer__surface--multiline {
+    border-color: rgba(37, 99, 235, 0.28);
+  }
+
+  .chat-composer__input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 2.75rem;
+    max-height: 11rem;
+    resize: none;
+    border: none;
+    padding: 0.8rem 0.9rem 0.42rem;
+    font: inherit;
+    font-size: 0.94rem;
+    line-height: 1.45;
+    color: #101828;
+    background: transparent;
+  }
+
+  .chat-composer__input:focus {
+    outline: none;
+  }
+
+  .chat-composer__footer {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    padding: 0.45rem 0.6rem 0.55rem;
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
+  }
+
+  .chat-composer__selectors {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .chat-composer__select-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 999px;
+    background: #f8fafc;
+    padding: 0 0.35rem 0 0.55rem;
+    height: 2rem;
+  }
+
+  .chat-composer__select-wrap--compact {
+    padding-left: 0.5rem;
+  }
+
+  .chat-composer__select {
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: #101828;
+    font: inherit;
+    font-size: 0.78rem;
+    padding: 0 1rem 0 0;
+    cursor: pointer;
+  }
+
+  .chat-composer__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .chat-composer__actions {
+    display: flex;
+    align-items: center;
+  }
+
+  .chat-composer__primary {
+    width: 2.1rem;
+    height: 2.1rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .chat-composer__primary--stop {
+    background: #eef2f7;
+    color: #344054;
+    box-shadow: none;
+  }
+
+  @keyframes chat-spin {
+    to {
+      transform: rotate(360deg);
     }
+  }
+
+  @media (max-width: 768px) {
+    .chat-shell {
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+      border-bottom: none;
+    }
+
+    .chat-message__bubble {
+      max-width: calc(100vw - 3rem);
+    }
+
+    .chat-runtime-card {
+      width: calc(100vw - 3rem);
+    }
+
+    .chat-composer {
+      padding: 0.6rem;
+    }
+
+    .chat-source-chip__doc {
+      max-width: 10.5rem;
+    }
+  }
 </style>

@@ -1,0 +1,440 @@
+{
+  "generatedAt": "2026-04-13T00:47:41.219Z",
+  "benchmarkType": "offline-engine-parity-v1",
+  "vectorIndexBuilt": false,
+  "cases": [
+    {
+      "caseId": "NC-2024-003",
+      "label": "Pare-brise droit / rivets / desaffleurement",
+      "query": "pare-brise droit rivets desaffleurement flushness windshield frame structural repair",
+      "techDocs": {
+        "export_exact": {
+          "representativeDoc": "A220-300ARP-Issue098-00-16May2024_page_0003.pdf",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "A220-300ARP-Issue098-00-16May2024_page_0003.pdf",
+            "MODULE 4 AIRFRAME_page_0863.md",
+            "A220-ACP-Issue004-00-20Jun2024_page_0003.pdf",
+            "Aide au traitement des Non Conformités - MAP_page_0034__with_img_desc.md",
+            "A220-300ARP-Issue098-00-16May2024_page_0149-img-0.md"
+          ],
+          "queryVariants": [
+            "pare-brise droit rivets desaffleurement flushness windshield frame structural repair",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "right wing right main tank"
+          ]
+        },
+        "lancedb": {
+          "representativeDoc": "A220-300ARP-Issue098-00-16May2024_page_0003.pdf",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "A220-300ARP-Issue098-00-16May2024_page_0003.pdf",
+            "MODULE 4 AIRFRAME_page_0863.pdf",
+            "A220-ACP-Issue004-00-20Jun2024_page_0003.pdf",
+            "Aide au traitement des Non Conformités - MAP_page_0034.pdf",
+            "A220-300ARP-Issue098-00-16May2024_page_0149.pdf"
+          ],
+          "queryVariants": [
+            "pare-brise droit rivets desaffleurement flushness windshield frame structural repair",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "right wing right main tank"
+          ]
+        }
+      },
+      "nonConformities": {
+        "export_exact": {
+          "representativeDoc": "ATA-56-f8c9af662981072a-a656",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "ATA-30-cf4f5f50f00f6f2-f7ac.md",
+            "ATA-56-f8c9af662981072a-a656",
+            "ATA-25-0b0e0509e367c3-7980.md",
+            "ATA-56-f8c9af562162381a-5cea",
+            "ATA-56-46223e849acbeef6-9d81.md"
+          ],
+          "queryVariants": [
+            "pare-brise droit rivets desaffleurement flushness windshield frame structural repair",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "right wing right main tank"
+          ]
+        },
+        "lancedb": {
+          "representativeDoc": "ATA-56-f8c9af662981072a-a656",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "ATA-56-f8c9af644308786a-554d",
+            "ATA-56-f8c9af662981072a-a656",
+            "ATA-56-f36c9af868941448a-d4eb",
+            "ATA-56-f8c9af562162381a-5cea",
+            "ATA-54-ad8390f7dad87be16e-b3db"
+          ],
+          "queryVariants": [
+            "pare-brise droit rivets desaffleurement flushness windshield frame structural repair",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "right wing right main tank"
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "NC-2024-005",
+      "label": "Reservoir principal aile gauche / debit faible",
+      "query": "fuel tank left wing low flow suction screen reservoir debit carburant",
+      "techDocs": {
+        "export_exact": {
+          "representativeDoc": "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_0003.pdf",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_0003.pdf",
+            "MODULE 4 AIRFRAME_page_0444.md",
+            "a220-300-FCOM-1-1-13_page_0003.pdf",
+            "A220-300ARP-Issue098-00-16May2024_page_0148.md",
+            "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1528-img-0.md"
+          ],
+          "queryVariants": [
+            "fuel tank left wing low flow suction screen reservoir debit carburant",
+            "ATA 28 fuel system fuel tank collector tank surge tank",
+            "left wing left main tank"
+          ]
+        },
+        "lancedb": {
+          "representativeDoc": "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_0003.pdf",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_0003.pdf",
+            "MODULE 4 AIRFRAME_page_0444.pdf",
+            "a220-300-FCOM-1-1-13_page_0003.pdf",
+            "A220-300ARP-Issue098-00-16May2024_page_0148.pdf",
+            "a220-300-FCOM-1-1-13_page_1482.pdf"
+          ],
+          "queryVariants": [
+            "fuel tank left wing low flow suction screen reservoir debit carburant",
+            "ATA 28 fuel system fuel tank collector tank surge tank",
+            "left wing left main tank"
+          ]
+        }
+      },
+      "nonConformities": {
+        "export_exact": {
+          "representativeDoc": "ATA-28-5015904cf182848e-bfc2",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "ATA-28-5015904cf182848e-bfc2",
+            "ATA-36-7e4154da63d5e-2cd3.md",
+            "ATA-28-16740a4265776cb212-77e7.md",
+            "ATA-28-5389074cf893233e-fd5e",
+            "ATA-24-e30ff3d2f97948ef-40f4"
+          ],
+          "queryVariants": [
+            "fuel tank left wing low flow suction screen reservoir debit carburant",
+            "ATA 28 fuel system fuel tank fuel quantity fuel pump sensor wiring",
+            "left wing left main tank"
+          ]
+        },
+        "lancedb": {
+          "representativeDoc": "ATA-28-5015904cf182848e-bfc2",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "ATA-28-5015904cf182848e-bfc2",
+            "ATA-28-d1f83d41fb4c07a-4a75",
+            "ATA-28-5389074cf893233e-fd5e",
+            "ATA-28-d4f8d41fb4c07a-3da6",
+            "ATA-24-e30ff3d2f97948ef-40f4"
+          ],
+          "queryVariants": [
+            "fuel tank left wing low flow suction screen reservoir debit carburant",
+            "ATA 28 fuel system fuel tank fuel quantity fuel pump sensor wiring",
+            "left wing left main tank"
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "NC-2024-006",
+      "label": "Decharge electrostatique / reservoir secondaire aile droite",
+      "query": "electrostatic discharge reservoir tank right wing grounding electrical esd",
+      "techDocs": {
+        "export_exact": {
+          "representativeDoc": "A220-ACP-Issue004-00-20Jun2024_page_0003.pdf",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "MODULE 4 AIRFRAME_page_0017.pdf",
+            "A220-ACP-Issue004-00-20Jun2024_page_0003.pdf",
+            "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1528-img-0.md",
+            "A220-300ARP-Issue098-00-16May2024_page_0003.pdf",
+            "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1485-img-0.md"
+          ],
+          "queryVariants": [
+            "electrostatic discharge reservoir tank right wing grounding electrical esd",
+            "ATA 28 fuel system fuel tank collector tank surge tank",
+            "electrical grounding bonding electrostatic discharge static discharge ESD",
+            "ATA 28 fuel tank electrical grounding bonding electrostatic discharge right wing right main tank collector tank surge tank"
+          ]
+        },
+        "lancedb": {
+          "representativeDoc": "A220-ACP-Issue004-00-20Jun2024_page_0003.pdf",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "MODULE 4 AIRFRAME_page_0017.pdf",
+            "A220-ACP-Issue004-00-20Jun2024_page_0003.pdf",
+            "A220-300ARP-Issue098-00-16May2024_page_0003.pdf",
+            "A220-300ARP-Issue098-00-16May2024_page_0148.pdf",
+            "a220-300-FCOM-1-1-13_page_1478.pdf"
+          ],
+          "queryVariants": [
+            "electrostatic discharge reservoir tank right wing grounding electrical esd",
+            "ATA 28 fuel system fuel tank collector tank surge tank",
+            "electrical grounding bonding electrostatic discharge static discharge ESD",
+            "ATA 28 fuel tank electrical grounding bonding electrostatic discharge right wing right main tank collector tank surge tank"
+          ]
+        }
+      },
+      "nonConformities": {
+        "export_exact": {
+          "representativeDoc": "ATA-28-5015904cf182848e-bfc2",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "ATA-28-5015904cf182848e-bfc2",
+            "ATA-50-35cf29c9eac1d395-32f2.md",
+            "ATA-28-5389074cf893233e-fd5e",
+            "ATA-50-35cf29c9eac1d7-5b24.md",
+            "ATA-24-e30ff3d2f97948ef-40f4"
+          ],
+          "queryVariants": [
+            "electrostatic discharge reservoir tank right wing grounding electrical esd",
+            "ATA 28 fuel system fuel tank fuel quantity fuel pump sensor wiring",
+            "electrical grounding bonding electrostatic discharge static discharge ESD",
+            "ATA 28 fuel tank electrical grounding bonding electrostatic discharge right wing right main tank wiring fuel pump sensor"
+          ]
+        },
+        "lancedb": {
+          "representativeDoc": "ATA-28-5015904cf182848e-bfc2",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "ATA-28-5015904cf182848e-bfc2",
+            "ATA-28-d4f83d41fb4c422a-b7eb",
+            "ATA-28-5389074cf893233e-fd5e",
+            "ATA-56-a6482f4cc1d991bb-4ffb",
+            "ATA-24-e30ff3d2f97948ef-40f4"
+          ],
+          "queryVariants": [
+            "electrostatic discharge reservoir tank right wing grounding electrical esd",
+            "ATA 28 fuel system fuel tank fuel quantity fuel pump sensor wiring",
+            "electrical grounding bonding electrostatic discharge static discharge ESD",
+            "ATA 28 fuel tank electrical grounding bonding electrostatic discharge right wing right main tank wiring fuel pump sensor"
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "NC-2024-004",
+      "label": "Rayure structure aluminium zone C2-2",
+      "query": "aluminum structure scratch zone c2-2 surface damage repair structural",
+      "techDocs": {
+        "export_exact": {
+          "representativeDoc": "Aide au traitement des Non Conformités - MAP_page_0001.pdf",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "Aide au traitement des Non Conformités - MAP_page_0001.pdf",
+            "MODULE 4 AIRFRAME_page_0861.md"
+          ],
+          "queryVariants": [
+            "aluminum structure scratch zone c2-2 surface damage repair structural",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "surface damage structural repair airframe scratch zone"
+          ]
+        },
+        "lancedb": {
+          "representativeDoc": "Aide au traitement des Non Conformités - MAP_page_0001.pdf",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "Aide au traitement des Non Conformités - MAP_page_0001.pdf",
+            "MODULE 4 AIRFRAME_page_0861.pdf"
+          ],
+          "queryVariants": [
+            "aluminum structure scratch zone c2-2 surface damage repair structural",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "surface damage structural repair airframe scratch zone"
+          ]
+        }
+      },
+      "nonConformities": {
+        "export_exact": {
+          "representativeDoc": "ATA-56-f8c9af662981072a-a656",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "ATA-52-c41d3405459a02e-3217.md",
+            "ATA-56-f8c9af662981072a-a656",
+            "ATA-52-0c1e9a2f95a4e0c8-5336.md",
+            "ATA-56-f8c9af562162381a-5cea",
+            "ATA-52-c41d55476454a02e-2fde.md"
+          ],
+          "queryVariants": [
+            "aluminum structure scratch zone c2-2 surface damage repair structural",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "surface damage structural repair airframe scratch zone"
+          ]
+        },
+        "lancedb": {
+          "representativeDoc": "ATA-56-f8c9af662981072a-a656",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "ATA-55-22d4e37b1b7bbbc0-367c",
+            "ATA-56-f8c9af662981072a-a656",
+            "ATA-56-f8c9af521733043a-a361",
+            "ATA-56-f8c9af562162381a-5cea",
+            "ATA-56-f8c9af644308786a-554d"
+          ],
+          "queryVariants": [
+            "aluminum structure scratch zone c2-2 surface damage repair structural",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "surface damage structural repair airframe scratch zone"
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "NC-2025-007",
+      "label": "Porte avant droite / delaminage / ATA-52",
+      "query": "front right door delamination ATA-52 composite structure frame 20 21",
+      "techDocs": {
+        "export_exact": {
+          "representativeDoc": "MODULE 4 AIRFRAME_page_0003.pdf",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "MODULE 4 AIRFRAME_page_0003.pdf",
+            "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_0071.pdf",
+            "A220-ACP-Issue004-00-20Jun2024_page_0161.md",
+            "a220-300-FCOM-1-1-13_page_0071.pdf",
+            "A220-300ARP-Issue098-00-16May2024_page_0149-img-0.md"
+          ],
+          "queryVariants": [
+            "front right door delamination ATA-52 composite structure frame 20 21",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "ATA 52 door composite delamination frame structure",
+            "right wing right main tank"
+          ]
+        },
+        "lancedb": {
+          "representativeDoc": "MODULE 4 AIRFRAME_page_0003.pdf",
+          "hitAt5": false,
+          "hitAt10": false,
+          "topDocs": [
+            "MODULE 1 GENERAL FAMILIARIZATION_page_0003.pdf",
+            "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_0071.pdf",
+            "A220-ACP-Issue004-00-20Jun2024_page_0161.pdf",
+            "a220-300-FCOM-1-1-13_page_0071.pdf",
+            "A220-300ARP-Issue098-00-16May2024_page_0149.pdf"
+          ],
+          "queryVariants": [
+            "front right door delamination ATA-52 composite structure frame 20 21",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "ATA 52 door composite delamination frame structure",
+            "right wing right main tank"
+          ]
+        }
+      },
+      "nonConformities": {
+        "export_exact": {
+          "representativeDoc": "ATA-52-04a58fc2c1f4ffbf-da7e",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "ATA-52-04a58fc2c1f4ffbf-da7e",
+            "ATA-52-c41d5069160a02e-3467.md",
+            "ATA-52-04a58fc2c12f7ffbf-2f71",
+            "ATA-52-0c1e9a2f95a4e8c8-2eae.md",
+            "ATA-52-04a58fc6c1f4ffbf-d968"
+          ],
+          "queryVariants": [
+            "front right door delamination ATA-52 composite structure frame 20 21",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "ATA 52 door composite delamination frame structure",
+            "right wing right main tank"
+          ]
+        },
+        "lancedb": {
+          "representativeDoc": "ATA-52-04a58fc2c1f4ffbf-da7e",
+          "hitAt5": true,
+          "hitAt10": true,
+          "topDocs": [
+            "ATA-51-03c4e3c5584aabbb06c-e212",
+            "ATA-52-04a58fc2c1f4ffbf-da7e",
+            "ATA-52-04a58fc2c12f7ffbf-2f71",
+            "ATA-56-f8c9af644308786a-554d",
+            "ATA-52-04a58fc6c1f4ffbf-d968"
+          ],
+          "queryVariants": [
+            "front right door delamination ATA-52 composite structure frame 20 21",
+            "ATA 56 windshield frame rivet structural repair flushness",
+            "ATA 52 door composite delamination frame structure",
+            "right wing right main tank"
+          ]
+        }
+      }
+    }
+  ],
+  "summary": {
+    "export_exact_techDocs_hit@5": {
+      "hits": 5,
+      "total": 5,
+      "ratio": 1
+    },
+    "export_exact_techDocs_hit@10": {
+      "hits": 5,
+      "total": 5,
+      "ratio": 1
+    },
+    "export_exact_nonConformities_hit@5": {
+      "hits": 5,
+      "total": 5,
+      "ratio": 1
+    },
+    "export_exact_nonConformities_hit@10": {
+      "hits": 5,
+      "total": 5,
+      "ratio": 1
+    },
+    "lancedb_techDocs_hit@5": {
+      "hits": 4,
+      "total": 5,
+      "ratio": 0.8
+    },
+    "lancedb_techDocs_hit@10": {
+      "hits": 4,
+      "total": 5,
+      "ratio": 0.8
+    },
+    "lancedb_nonConformities_hit@5": {
+      "hits": 5,
+      "total": 5,
+      "ratio": 1
+    },
+    "lancedb_nonConformities_hit@10": {
+      "hits": 5,
+      "total": 5,
+      "ratio": 1
+    }
+  },
+  "decision": {
+    "selectedDefault": "export_exact",
+    "rationale": "export_exact keeps a better hit@10 total on the offline engine benchmark, so the fallback remains the default."
+  }
+}

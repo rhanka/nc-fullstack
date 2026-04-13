@@ -12,10 +12,13 @@ import time
 import asyncio
 import pathlib
 import re
+from uuid import uuid4
 
 from src.core import run_prompt, stream_prompt, PROMPTS, PROVIDERS
 from src.ai_stream import AGENTS, AGENTS_MSG, exec_agent, stream_agent, sse_encode
 from src.search import search_documents, search_non_conformities, format_search_results
+from src.lightweight_memory import LightweightMemoryStore
+from src.retrieval_confidence import assess_retrieval_confidence, build_low_confidence_payload
 
 # ===============================================================
 # Configuration et constantes
@@ -47,6 +50,9 @@ if ATA_CODES_PATH.is_file():
             logger.error("Failed to load or parse ATA codes: %s", e)
 else:
     logger.warning("ATA codes file not found at %s", ATA_CODES_PATH)
+MEMORY_STORE = LightweightMemoryStore()
+SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "nc_session_id")
+SESSION_COOKIE_MAX_AGE = int(os.getenv("SESSION_COOKIE_MAX_AGE", str(7 * 24 * 60 * 60)))
 
 # ===============================================================
 # Initialisation
@@ -97,6 +103,65 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def resolve_session_id(request: Request, body: Dict[str, Any]) -> str:
+    session_id = body.get("session_id") or request.cookies.get(SESSION_COOKIE_NAME)
+    return str(session_id) if session_id else str(uuid4())
+
+
+def merge_session_history(history: Any, session_memory: Dict[str, Any]) -> Any:
+    if history:
+        return history
+    recent_history = session_memory.get("recent_history") or []
+    return recent_history if recent_history else history
+
+
+def merge_episodic_results(
+    nc_results: List[Dict[str, Any]],
+    episodic_hits: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    merged: List[Dict[str, Any]] = []
+    seen = set()
+    for item in episodic_hits + nc_results:
+        identity = item.get("doc") or item.get("chunk_id")
+        if identity in seen:
+            continue
+        seen.add(identity)
+        merged.append(item)
+    return merged
+
+
+def persist_validated_memory_event(
+    memory_event: Any,
+    *,
+    session_id: str,
+    role: str,
+    label: str | None,
+    description: Any,
+    response_text: str | None,
+    sources: Dict[str, Any] | None,
+) -> bool:
+    if not isinstance(memory_event, dict):
+        return False
+    if memory_event.get("type") != "validated_output":
+        return False
+
+    summary = str(memory_event.get("summary") or response_text or "").strip()
+    if not summary:
+        return False
+
+    return MEMORY_STORE.write_validated_episode(
+        episode_id=str(memory_event.get("episode_id") or f"{session_id}:{role}:{int(time.time())}"),
+        case_ref=memory_event.get("case_ref"),
+        role=role,
+        label=str(memory_event.get("label") or label or ""),
+        summary=summary,
+        corrections=memory_event.get("corrections") or description,
+        sources=memory_event.get("sources") or sources,
+        validated=bool(memory_event.get("validated", True)),
+        supersedes=memory_event.get("supersedes"),
+    )
 
 # ===============================================================
 # Routes
@@ -240,6 +305,8 @@ async def ai_endpoint(request: Request):
     description = last.get("description", "")
     history = last.get("history", {}) or {}
     sources = last.get("sources")
+    memory_event = body.get("memory_event")
+    session_id = resolve_session_id(request, body)
 
     provider = body.get("provider", "openai")
 
@@ -248,7 +315,12 @@ async def ai_endpoint(request: Request):
     wants_stream = "text/event-stream" in accept_header
 
     async def compute_non_stream():
-        nonlocal sources
+        nonlocal sources, history
+        session_memory = await asyncio.to_thread(MEMORY_STORE.read_working_memory, session_id)
+        history = merge_session_history(history, session_memory)
+        query = None
+        tech_docs_results: List[Dict[str, Any]] = []
+        nc_results: List[Dict[str, Any]] = []
         if not sources:
             logger.info("Sources not provided, performing search...")
             query = await run_prompt("query", provider, role=role, user_message=user_message, description=description)
@@ -258,11 +330,34 @@ async def ai_endpoint(request: Request):
             
             logger.info("nc_search")
             nc_results = await asyncio.to_thread(search_non_conformities, query)
+            episodic_hits = await asyncio.to_thread(MEMORY_STORE.search_episodic_memory, query, limit=3)
+            nc_results = merge_episodic_results(nc_results, episodic_hits)
             
             sources = {
                 "tech_docs": format_search_results(tech_docs_results),
                 "non_conformities": format_search_results(nc_results),
             }
+            confidence = assess_retrieval_confidence(tech_docs_results, nc_results)
+            if confidence["level"] == "low":
+                cautious_payload = build_low_confidence_payload(
+                    role=role,
+                    user_message=user_message,
+                    description=description,
+                    sources=sources,
+                    confidence=confidence,
+                )
+                await asyncio.to_thread(
+                    MEMORY_STORE.remember_working_memory,
+                    session_id=session_id,
+                    role=role,
+                    user_message=user_message,
+                    search_query=query,
+                    label=cautious_payload.get("label"),
+                    description=cautious_payload.get("description"),
+                    response_text=cautious_payload.get("text"),
+                    sources=sources,
+                )
+                return cautious_payload
         final_json = await run_prompt(role, provider,
                                       role=role,
                                       user_message=user_message,
@@ -274,6 +369,27 @@ async def ai_endpoint(request: Request):
             final_payload = json.loads(final_json)
         except Exception:
             final_payload = {"comment": final_json}
+        await asyncio.to_thread(
+            MEMORY_STORE.remember_working_memory,
+            session_id=session_id,
+            role=role,
+            user_message=user_message,
+            search_query=query,
+            label=final_payload.get("label"),
+            description=final_payload.get("description"),
+            response_text=final_payload.get("comment"),
+            sources=sources,
+        )
+        await asyncio.to_thread(
+            persist_validated_memory_event,
+            memory_event,
+            session_id=session_id,
+            role=role,
+            label=final_payload.get("label"),
+            description=final_payload.get("description"),
+            response_text=final_payload.get("comment"),
+            sources=sources,
+        )
         return {
             "text": final_payload.get("comment"),
             "label": final_payload.get("label"),
@@ -286,10 +402,22 @@ async def ai_endpoint(request: Request):
         }
 
     if not wants_stream:
-        return await compute_non_stream()
+        payload = await compute_non_stream()
+        response = JSONResponse(content=payload)
+        response.set_cookie(
+            SESSION_COOKIE_NAME,
+            session_id,
+            max_age=SESSION_COOKIE_MAX_AGE,
+            httponly=False,
+            samesite="lax",
+        )
+        return response
 
     # --- Version streaming SSE ---
     async def event_generator():
+        nonlocal history
+        session_memory = await asyncio.to_thread(MEMORY_STORE.read_working_memory, session_id)
+        history = merge_session_history(history, session_memory)
         # delta encoding header
         yield sse_encode("delta_encoding", "v1")
 
@@ -312,10 +440,35 @@ async def ai_endpoint(request: Request):
             logger.info("nc_search")
             yield sse_encode(None, {"type": "action", "text": "Search for similar non-conformities", "metadata": "nc_search"})
             nc_results = await asyncio.to_thread(search_non_conformities, query)
+            episodic_hits = await asyncio.to_thread(MEMORY_STORE.search_episodic_memory, query, limit=3)
+            nc_results = merge_episodic_results(nc_results, episodic_hits)
             non_conf = format_search_results(nc_results)
             yield sse_encode(None, {"type": "result", "text": non_conf, "metadata": "nc_search"})
 
             current_sources = {"tech_docs": tech_docs, "non_conformities": non_conf}
+            confidence = assess_retrieval_confidence(tech_docs_results, nc_results)
+            if confidence["level"] == "low":
+                yield sse_encode(None, {"type": "action", "text": "Generate cautious answer", "metadata": role})
+                result_block = build_low_confidence_payload(
+                    role=role,
+                    user_message=user_message,
+                    description=description,
+                    sources=current_sources,
+                    confidence=confidence,
+                )
+                await asyncio.to_thread(
+                    MEMORY_STORE.remember_working_memory,
+                    session_id=session_id,
+                    role=role,
+                    user_message=user_message,
+                    search_query=query,
+                    label=result_block.get("label"),
+                    description=result_block.get("description"),
+                    response_text=result_block.get("text"),
+                    sources=current_sources,
+                )
+                yield sse_encode(None, {"type": "result", "text": result_block, "metadata": "final"})
+                return
         else:
             current_sources = sources
 
@@ -348,9 +501,42 @@ async def ai_endpoint(request: Request):
             "role": "ai",
             "user_role": role,
         }
+        await asyncio.to_thread(
+            MEMORY_STORE.remember_working_memory,
+            session_id=session_id,
+            role=role,
+            user_message=user_message,
+            search_query=query,
+            label=final_payload.get("label"),
+            description=final_payload.get("description"),
+            response_text=final_payload.get("comment"),
+            sources=current_sources,
+        )
+        await asyncio.to_thread(
+            persist_validated_memory_event,
+            memory_event,
+            session_id=session_id,
+            role=role,
+            label=final_payload.get("label"),
+            description=final_payload.get("description"),
+            response_text=final_payload.get("comment"),
+            sources=current_sources,
+        )
         yield sse_encode(None, {"type": "result", "text": result_block, "metadata": "final"})
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    response = StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        session_id,
+        max_age=SESSION_COOKIE_MAX_AGE,
+        httponly=False,
+        samesite="lax",
+    )
+    return response
 
 @app.post("/register")
 async def register(payload: Dict[str, str]):

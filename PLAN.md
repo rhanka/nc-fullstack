@@ -1,0 +1,107 @@
+# PLAN
+
+- Status date: 2026-04-11
+- Specs actives:
+  - `spec/SPEC_INTENT_2026-04-10_ai-architecture-refresh.md`
+  - `spec/SPEC_EVOL_2026-04-10_ai-architecture-refresh.md`
+  - `spec/SPEC_EVOL_VECTOR_DB.md`
+- Tags:
+  - `AUTO`: validation statique ou déterministe
+  - `TEST`: validation par tests, benchmarks ou evals
+  - `UAT`: validation utilisateur explicite
+
+## Lot 0 - Baseline et cadrage exécutable
+
+- [x] L0.1 Figer le contrat actuel de `/ai` en entrée, sortie et streaming. Recette: fixtures documentées + au moins un test contractuel backend repo-local. `TEST`
+- [x] L0.2 Valider l'hypothèse d'index Chroma incomplet en build/run et corriger si nécessaire. Recette: preuve repo-locale que `chroma.sqlite3` référence des segments vectoriels requis, qu'un snapshot `sqlite-only` les perd, et que le `Dockerfile` copie désormais `vectordb/` complet. `TEST`
+- [x] L0.3 Construire un baseline de pertinence à partir de `api/test/scenarios.csv` et de quelques cas NC représentatifs. Recette: `hit@k`, revue qualitative des sources et mini-jeu d'eval conservé dans le repo. `TEST`
+- [x] L0.4 Figer le niveau de détail du reasoning visible et la forme de transition backend TS. Recette: arbitrage utilisateur documenté dans la spec active. `UAT`
+
+## Lot 1 - Backend TypeScript foundation + routing modèle et reasoning
+
+- [x] L1.1 Formaliser le contrat source `/ai` et le contrat cible `/ai/v2` pour la transition TS. Recette: schémas versionnés et fixtures de compatibilité. `TEST`
+- [x] L1.2 Monter un backend TypeScript incrémental dans le même repo, sans façade séparée, avec couches `contracts / retrieval / llm / services / routes`. Recette: squelette exécutable et endpoint de smoke test. `TEST`
+- [x] L1.3 Introduire un registre de profils d'exécution (`search_rewrite`, `draft_simple`, `draft_standard_000`, `analysis_standard_100`, `analysis_deep`) dans le runtime TS. Recette: tests unitaires sur le routing. `TEST`
+- [x] L1.4 Faire évoluer l'abstraction LLM pour porter des options par appel dont `reasoning.effort`, `json_mode`, `stream` et limites de sortie. Recette: API interne clarifiée et couverte par tests. `TEST`
+- [x] L1.5 Migrer l'intégration OpenAI vers un runtime compatible GPT-5.4 et préparer l'usage de `Responses API`. Recette: smoke tests non-stream et stream. `TEST`
+- [x] L1.6 Router le profil d'exécution et l'effort de reasoning via un analyseur de complexité `gpt-5.4-nano`, tout en gardant le modèle final (`gpt-5.4-nano` ou `gpt-5.4`) à la main de l'utilisateur avec défaut `gpt-5.4-nano`. Recette: logs de décision + revue coût / latence sur cas réels + validation utilisateur du mécanisme `auto`. `TEST` + `UAT`
+- [x] L1.7 Retirer la responsabilité du choix final de modèle des prompts Dataiku. Recette: prompts métier conservés, politique runtime centralisée. `AUTO`
+- Note: ce lot est backend only. Aucun usage de Vercel ici.
+- Note: le backend TS commence ici pour éviter de faire le routing/reasoning une première fois en Python puis une seconde fois en TS.
+
+## Lot 2 - Migration UI chat
+
+- [x] L2.0 Produire une étude fonction par fonction entre `nc-fullstack` et `../top-ai-ideas-fullstack/ui` pour geler ce qui est repris, ce qui est écarté et ce qui passe via `@ai-sdk/svelte`. Recette: matrice documentée dans la spec active. `AUTO`
+- [x] L2.1 Remplacer `deep-chat` par une base `@ai-sdk/svelte` en priorité. Recette: `npm run build` vert + absence de nouvelles erreurs `svelte-check` sur `Chatbot.svelte`; le `npm run check` global reste bloqué par la dette `checkJs` legacy hors zone chat. `TEST`
+- [x] L2.2 Représenter les étapes métier, les sources et les mises à jour du canevas via des `parts` structurées plutôt qu'un parsing SSE ad hoc. Recette: streaming complet lisible et stable sur un cas réel. `TEST`
+- [x] L2.3 Conserver un mode flottant avec fallback panel / docked. Recette: layout `floating/docked` branché, build UI vert et fallback mobile explicite; validation utilisateur consolidée en `L5.2`. `TEST`
+- [x] L2.4 Implémenter l'affichage du reasoning dans l'UI via un résumé court, collapsible, embarqué dans le chat. Recette: bloc `reasoning_summary` visible et repliable dans le flux assistant; validation utilisateur consolidée en `L5.2`. `TEST`
+- [x] L2.5 Si nécessaire, extraire ou adapter le shell `ChatWidget` / `ChatPanel` de `../top-ai-ideas-fullstack/ui` au lieu de reconstruire ce comportement depuis zéro. Recette: décision d'intégration documentée et shell fonctionnel. `TEST`
+- [x] L2.6 Migrer en TypeScript les modules UI critiques du chat, des stores et des contrats. Recette: disparition des principaux `.js` sur la zone chat et build UI vert; le `svelte-check` global reste encore bloqué par la dette legacy hors zone chat. `TEST`
+- Note: `Vercel` ici veut dire SDK UI du chat uniquement, pas plateforme backend.
+- Note: la cible n'est pas un transplant complet de `ChatWidget` / `ChatPanel`; on vise un hybride `@ai-sdk/svelte` + shell / patterns repris sélectivement + rendu métier NC spécifique.
+- Note: le composeur devra exposer un sélecteur `modèle + niveau de réflexion`, par défaut `gpt-5.4-nano` + `auto`.
+- Note: l'étude lot 2 est déjà rédigée dans `spec/SPEC_EVOL_2026-04-10_ai-architecture-refresh.md`, mais ne doit être cochée qu'au moment où l'exécution atteint réellement ce lot.
+- Note: pour rendre `@ai-sdk/svelte` buildable sur ce repo, l'UI est passée à `svelte@5.55.3` et `@ai-sdk/svelte@2.1.12`; `svelte-pdf` garde un peer warning `^4.2.12`, sans casser le build actuel.
+- Note: `L2.2` a nécessité une normalisation du payload final legacy quand `/ai` encapsule encore le JSON complet dans `text` avec des retours ligne littéraux; le bridge AI SDK reconstruit désormais `text + sources + nc_update` avant rendu.
+- Note: conformément à l'arbitrage utilisateur, les validations UX manuelles intermédiaires sont reportées à `L5.2`; les lots UI intermédiaires sont fermés sur critères techniques reproductibles.
+
+## Lot 3 - RAG v2 light
+
+- [x] L3.1 Ajouter un canal lexical séparé au vector search, idéalement via SQLite FTS5. Recette: index généré localement sans nouveau service externe, validé par `python api/tests/run_l3_1_checks.py`. `TEST`
+- [x] L3.2 Fusionner lexical + vectoriel avec Reciprocal Rank Fusion. Recette: benchmark comparatif `vector / rrf / rrf+rewrite` versionné par `python api/test/run_rrf_eval.py`; sur ce mini-corpus, `rrf` seul est benchmarké mais ne crée pas le gain sans `L3.3`. `TEST`
+- [x] L3.3 Ajouter un query rewrite léger piloté par `gpt-5.4-nano` pour ATA, zones, pièces et synonymes métier. Recette: comparaison avant / après versionnée via `python api/tests/run_l3_3_checks.py` et `python api/test/run_rrf_eval.py`, avec gain NC `hit@5` de `0.8` à `1.0`. `TEST`
+- [x] L3.4 Introduire une mémoire légère à deux niveaux, session et épisodique, avec confiance minimale et supersession simple. Recette: lecture / écriture testées via `python api/tests/run_l3_4_checks.py`, persistance épisodique limitée aux sorties validées, session récupérée via cookie `nc_session_id`. `TEST`
+- [x] L3.5 Ajouter une politique de réponse prudente quand la confiance retrieval est basse. Recette: garde-fou technique vérifié par `python api/tests/run_l3_5_checks.py` sur cas pauvres; validation utilisateur consolidée en `L5.2`. `TEST` + `UAT`
+
+## Lot 4 - Migration des endpoints TS, parité et cutover
+
+- [x] L4.1 Implémenter progressivement les endpoints critiques dans le runtime TS. Recette: parité fonctionnelle sur `/ai`, `/nc` puis `/doc` ou décision explicite d'exclusion. `TEST`
+- [x] L4.2 Générer ou maintenir des types partagés consommés côté UI. Recette: build UI propre et suppression des principales zones implicites. `TEST`
+- [x] L4.3 Ajouter des tests de parité et d'intégration pour le backend TS, `/ai/v2`, `/nc` et le stream. Recette: suite locale verte, reproductible, avec mocks et snapshots suffisants pour autoriser un switch sans UAT intermédiaire. `TEST`
+- [x] L4.4 Préparer soit une coexistence courte, soit un cutover final unique Python -> TS selon la confiance de la suite de parité. Recette: arbitrage documenté avec rollback simple. `TEST`
+
+## Lot 4B - Migration Vector DB native TS
+
+- [x] L4B.1 Formaliser le choix de la cible vector DB et la stratégie de migration depuis Chroma. Recette: spec dédiée versionnée avec comparaison LanceDB / Qdrant / libSQL / vec1 et décision exécutable. `AUTO`
+- [x] L4B.2 Introduire une abstraction explicite de moteur retrieval avec au moins `export_exact` et `lancedb`. Recette: sélection par configuration observable, backend TS testable sans fork applicatif. `TEST`
+- [x] L4B.3 Ajouter l'ingestion LanceDB OSS locale par corpus dans le même container que l'API TS. Recette: artefacts `api/data/*/lancedb/` générés repo-localement ou au build. `TEST`
+- [x] L4B.4 Brancher le runtime `/ai` sur LanceDB pour le vectoriel + BM25 / FTS + hybrid search, avec fallback temporaire `export_exact`. Recette: tests backend verts et runtime status explicite. `TEST`
+- [x] L4B.5 Comparer `lancedb` vs `export_exact` sur le mini-corpus retrieval et choisir le défaut runtime. Recette: benchmark versionné et décision de cutover documentée. `TEST`
+
+## Lot 5 - Cutover et nettoyage
+
+- [x] L5.1 Décommissionner les chemins Python devenus obsolètes une fois la parité TS atteinte. Recette: inventaire supprimé sans rupture de contrat. `TEST`
+- [ ] L5.2 Lancer l'UAT utilisateur de fin de chantier sur le système unifié. Recette: validation utilisateur finale avant nettoyage complet. `UAT`
+- [ ] L5.2a Rétablir un état visible de requête dès le clic côté chat. Recette: transition explicite `idle -> submitted -> generating -> done/error` visible dans le widget sans ambiguïté utilisateur. `TEST` + `UAT`
+- [ ] L5.2b Rétablir le streaming du texte assistant dans le chat. Recette: la bulle assistant se remplit progressivement au lieu d'attendre uniquement la finalisation JSON. `TEST` + `UAT`
+- [ ] L5.2c Rétablir le streaming optimiste des mises à jour du rapport / UI métier. Recette: les updates JSON partielles réapparaissent pendant la génération, pas seulement après finalisation. `TEST` + `UAT`
+- [ ] L5.2d Rétablir l'affichage du reasoning visible dans l'UI. Recette: résumé collapsible présent et alimenté par le runtime, avec état cohérent pendant et après génération. `TEST` + `UAT`
+- [ ] L5.2e Remplacer la fausse bulle assistant de transition par un shell runtime type `ChatGPT / Claude / top-ai-ideas`. Recette: aucun message parasite du type `Drafting the response...`; l'état courant vit dans un bloc runtime distinct de la réponse finale. `TEST` + `UAT`
+- [ ] L5.2f Rétablir un sélecteur de modèle visible dans le composeur. Recette: l'utilisateur choisit explicitement `gpt-5.4-nano` ou `gpt-5.4` avant envoi, avec défaut `gpt-5.4-nano`, et le choix est observable dans la requête. `TEST` + `UAT`
+- [ ] L5.2g Rétablir un sélecteur visible du niveau de réflexion / complexité. Recette: l'utilisateur choisit `auto` ou un niveau explicite dans le composeur, et ce choix pilote bien le runtime sans détour par un CTA générique. `TEST` + `UAT`
+- [ ] L5.2h Rendre les étapes `query`, `doc_search`, `nc_search` et `final` comme étapes runtime / tool calls de premier rang. Recette: chaque étape est visible pendant l'exécution, avec statut, détail et résultat compact, sans passer par du texte ad hoc dans la bulle assistant. `TEST` + `UAT`
+- [ ] L5.2i Aligner l'ergonomie générale du chat sur le comportement `../top-ai-ideas-fullstack` et un shell moderne type ChatGPT. Recette: runtime inline compact, détails repliables, reasoning streamé, outils streamés et composeur orienté conversation plutôt qu'action métier figée. `TEST` + `UAT`
+- [ ] L5.2j Aligner visuellement le composeur sur `../top-ai-ideas-fullstack`, avec contrôles plus petits et disposition adaptative mono-ligne puis multi-ligne. Recette: modèle + effort restent lisibles, compacts et s'empilent proprement quand l'espace manque. `TEST` + `UAT`
+- [ ] L5.2k Réintroduire les quick actions d'accueil dans la session vide sans les remettre dans la barre de saisie. Recette: les actions type `Propose task description` restent disponibles dans l'écran vide; l'ouverture du chat n'auto-envoie rien. `TEST` + `UAT`
+- [ ] L5.2l Réduire l'encombrement du runtime panel pour converger vers `StreamMessage.svelte`. Recette: runtime plus compact, détails repliés par défaut, lecture plus proche de `top-ai-ideas`. `TEST` + `UAT`
+- [ ] L5.2m Refaire le rendu des sources en citations compactes et dépliables. Recette: plus de longue liste brute de fichiers; les références deviennent compactes, groupées et actionnables. `TEST` + `UAT`
+- [ ] L5.2n Réaligner l'identité visuelle du widget fermé et du favicon sur les assets produit. Recette: bubble fermée plus proche de `top-ai-ideas`; favicon issu de `../sentech-forge`. `TEST` + `UAT`
+- [ ] L5.2o Retirer le dump `NC update` du chat et le remplacer par un lien compact vers la task amendée. Recette: le chat n'affiche plus les champs du canevas; il propose seulement un accès court à l'objet amendé (`000`, `100`, etc.) dans l'application. `TEST` + `UAT`
+- [ ] L5.3 Nettoyer la dette de transition côté UI et backend. Recette: plus de double chemin critique non justifié. `AUTO`
+- Note: les updates finales après finalisation sont déjà présentes; les bugs ouverts portent désormais sur la qualité du shell runtime, la sélection modèle / reasoning et le rendu outillage / reasoning pendant l'exécution.
+
+## Critères de sortie
+
+- [ ] Le choix modèle / reasoning est explicite et observable. `TEST`
+- [ ] Le chat expose un état de progression explicite pendant l'appel. `TEST` + `UAT`
+- [ ] Le streaming du texte assistant dans le chat est rétabli. `TEST` + `UAT`
+- [ ] Le streaming optimiste des updates du rapport / UI est rétabli. `TEST` + `UAT`
+- [ ] Le reasoning visible est présent et cohérent dans l'UI. `TEST` + `UAT`
+- [ ] Le runtime n'utilise plus de fausse bulle assistant de chargement. `TEST` + `UAT`
+- [ ] Le composeur expose le choix modèle + niveau de réflexion. `TEST` + `UAT`
+- [ ] Les étapes retrieval / génération sont rendues comme runtime / tool calls lisibles. `TEST` + `UAT`
+- [ ] Le shell conversationnel est aligné sur `../top-ai-ideas-fullstack` et les UX modernes type ChatGPT / Claude / Gemini. `TEST` + `UAT`
+- [ ] Le chat ne dépend plus d'un parsing ad hoc dans `Chatbot.svelte`. `TEST`
+- [ ] La pertinence retrieval progresse sur benchmark et en revue utilisateur. `TEST` + `UAT`
+- [ ] L'API TS est protégée par contrats et contrôles répétables. `TEST`
