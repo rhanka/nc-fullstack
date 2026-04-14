@@ -1,7 +1,7 @@
 <script>
   import { marked } from "marked"; // Import the marked library
   import Icon from "@iconify/svelte";
-  import { taskLabel } from "./store.js";
+  import { taskLabel } from "./store";
   export let task;
   export let history;
   export let expand;

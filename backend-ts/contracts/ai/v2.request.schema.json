@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI V2 Request",
+  "type": "object",
+  "required": ["version", "task", "input", "runtime"],
+  "additionalProperties": false,
+  "$defs": {
+    "RoleCode": {
+      "type": "string",
+      "enum": ["000", "100", "200", "300", "400", "500"]
+    },
+    "ExecutionProfile": {
+      "type": "string",
+      "enum": [
+        "search_rewrite",
+        "draft_simple",
+        "draft_standard_000",
+        "analysis_standard_100",
+        "analysis_deep"
+      ]
+    },
+    "ModelSelection": {
+      "type": "string",
+      "enum": ["gpt-5.4-nano", "gpt-5.4"]
+    },
+    "ComplexitySelection": {
+      "type": "string",
+      "enum": ["auto", "simple", "standard", "deep"]
+    },
+    "TechDocSource": {
+      "type": "object",
+      "required": ["doc", "content"],
+      "additionalProperties": true,
+      "properties": {
+        "doc": { "type": "string" },
+        "chunk": { "type": ["string", "null"] },
+        "content": { "type": "string" }
+      }
+    },
+    "NcSource": {
+      "type": "object",
+      "required": ["doc", "content"],
+      "additionalProperties": true,
+      "properties": {
+        "doc": { "type": "string" },
+        "ATA_code": { "type": ["string", "null"] },
+        "ATA_category": { "type": ["string", "null"] },
+        "content": { "type": "string" }
+      }
+    },
+    "SourceBundle": {
+      "type": "object",
+      "required": ["tech_docs", "non_conformities"],
+      "additionalProperties": false,
+      "properties": {
+        "tech_docs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TechDocSource" }
+        },
+        "non_conformities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NcSource" }
+        }
+      }
+    }
+  },
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "v2"
+    },
+    "task": {
+      "type": "object",
+      "required": ["role"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "$ref": "#/$defs/RoleCode" }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": ["message"],
+      "additionalProperties": false,
+      "properties": {
+        "message": { "type": "string" },
+        "description": { "type": ["string", "null"] },
+        "history": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "retrieval": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourcePolicy": {
+          "type": "string",
+          "enum": ["auto", "provided_only", "refresh"]
+        },
+        "providedSources": { "$ref": "#/$defs/SourceBundle" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["providerId", "modelSelection", "complexitySelection"],
+      "additionalProperties": false,
+      "properties": {
+        "providerId": {
+          "type": "string",
+          "enum": ["openai", "anthropic", "google", "mistral"]
+        },
+        "modelSelection": { "$ref": "#/$defs/ModelSelection" },
+        "complexitySelection": { "$ref": "#/$defs/ComplexitySelection" },
+        "maxOutputTokens": {
+          "type": ["integer", "null"]
+        }
+      }
+    },
+    "client": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accept": {
+          "type": "string",
+          "enum": ["blocking", "sse"]
+        },
+        "traceId": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": "v2",
+  "task": {
+    "role": "000"
+  },
+  "input": {
+    "message": "Rewrite the non-conformity report using the most relevant references.",
+    "description": "Right windshield area rivet flushness out of tolerance.",
+    "history": []
+  },
+  "retrieval": {
+    "sourcePolicy": "auto"
+  },
+  "runtime": {
+    "providerId": "openai",
+    "modelSelection": "gpt-5.4-nano",
+    "complexitySelection": "auto",
+    "maxOutputTokens": 1200
+  },
+  "client": {
+    "accept": "blocking",
+    "traceId": "fixture-l1-1"
+  }
+}

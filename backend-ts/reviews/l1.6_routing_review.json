@@ -1,0 +1,134 @@
+{
+  "generated_at": "2026-04-12T13:35:42.168Z",
+  "source": "api/test/baseline_cases.json + api/test/eval_cases.json",
+  "summary": {
+    "total_cases": 5,
+    "by_profile": {
+      "analysis_deep": 2,
+      "analysis_standard_100": 1,
+      "draft_standard_000": 1,
+      "search_rewrite": 1
+    },
+    "by_model": {
+      "gpt-5.4": 1,
+      "gpt-5.4-nano": 4
+    }
+  },
+  "cases": [
+    {
+      "case_id": "NC-2024-003-query",
+      "title": "Pare-brise droit / query rewrite",
+      "excerpt": "pare-brise droit rivets desaffleurement flushness windshield frame structural repair",
+      "selected_profile": "search_rewrite",
+      "model": "gpt-5.4-nano",
+      "model_selection_source": "default",
+      "reasoning_effort": "minimal",
+      "resolved_complexity": "simple",
+      "requested_model_selection": "gpt-5.4-nano",
+      "requested_complexity_selection": "auto",
+      "complexity_analyzer_model": null,
+      "max_output_tokens": 400,
+      "cost_class": "low",
+      "latency_class": "fast",
+      "reasons": [
+        "search rewrite bypasses complexity analysis",
+        "search rewrite stays on the dedicated nano profile",
+        "default model selection uses gpt-5.4-nano",
+        "estimated cost=low",
+        "estimated latency=fast"
+      ]
+    },
+    {
+      "case_id": "NC-2024-005-000",
+      "title": "Reservoir principal aile gauche / role 000",
+      "excerpt": "Débit faible de la crépine d’aspiration sur le réservoir principal aile gauche.",
+      "selected_profile": "draft_standard_000",
+      "model": "gpt-5.4-nano",
+      "model_selection_source": "default",
+      "reasoning_effort": "low",
+      "resolved_complexity": "standard",
+      "requested_model_selection": "gpt-5.4-nano",
+      "requested_complexity_selection": "auto",
+      "complexity_analyzer_model": "gpt-5.4-nano",
+      "max_output_tokens": 1800,
+      "cost_class": "low",
+      "latency_class": "fast",
+      "reasons": [
+        "complexity analyzed as standard by gpt-5.4-nano",
+        "role 000 stays pinned to the 000 draft profile",
+        "default model selection uses gpt-5.4-nano",
+        "estimated cost=low",
+        "estimated latency=fast"
+      ]
+    },
+    {
+      "case_id": "NC-2024-004-100",
+      "title": "Rayure structure aluminium / role 100",
+      "excerpt": "Rayure de 10 cm sur structure aluminium zone C2-2 avec besoin de validation expert.",
+      "selected_profile": "analysis_standard_100",
+      "model": "gpt-5.4-nano",
+      "model_selection_source": "default",
+      "reasoning_effort": "high",
+      "resolved_complexity": "standard",
+      "requested_model_selection": "gpt-5.4-nano",
+      "requested_complexity_selection": "auto",
+      "complexity_analyzer_model": "gpt-5.4-nano",
+      "max_output_tokens": 2800,
+      "cost_class": "low",
+      "latency_class": "fast",
+      "reasons": [
+        "complexity analyzed as standard by gpt-5.4-nano",
+        "standard complexity uses the standard analysis profile",
+        "default model selection uses gpt-5.4-nano",
+        "estimated cost=low",
+        "estimated latency=fast"
+      ]
+    },
+    {
+      "case_id": "NC-2024-006-100-low-confidence",
+      "title": "Decharge electrostatique / retrieval confidence basse",
+      "excerpt": "Cas hybride reservoir secondaire aile droite + conductivité fils de décharge électrostatique.",
+      "selected_profile": "analysis_deep",
+      "model": "gpt-5.4-nano",
+      "model_selection_source": "default",
+      "reasoning_effort": "high",
+      "resolved_complexity": "standard",
+      "requested_model_selection": "gpt-5.4-nano",
+      "requested_complexity_selection": "auto",
+      "complexity_analyzer_model": "gpt-5.4-nano",
+      "max_output_tokens": 3600,
+      "cost_class": "low",
+      "latency_class": "fast",
+      "reasons": [
+        "complexity analyzed as standard by gpt-5.4-nano",
+        "low retrieval confidence forces the deep analysis profile",
+        "default model selection uses gpt-5.4-nano",
+        "estimated cost=low",
+        "estimated latency=fast"
+      ]
+    },
+    {
+      "case_id": "NC-2025-007-100-deep",
+      "title": "Porte avant droite / delaminage / deep analysis",
+      "excerpt": "Plusieurs cas de délaminages sur 5 plis de carbone entre les cadres 20 et 21.",
+      "selected_profile": "analysis_deep",
+      "model": "gpt-5.4",
+      "model_selection_source": "manual",
+      "reasoning_effort": "xhigh",
+      "resolved_complexity": "deep",
+      "requested_model_selection": "gpt-5.4",
+      "requested_complexity_selection": "auto",
+      "complexity_analyzer_model": "gpt-5.4-nano",
+      "max_output_tokens": 3600,
+      "cost_class": "high",
+      "latency_class": "slow",
+      "reasons": [
+        "complexity analyzed as deep by gpt-5.4-nano",
+        "deep complexity promotes the deep analysis profile",
+        "manual model selection uses gpt-5.4",
+        "estimated cost=high",
+        "estimated latency=slow"
+      ]
+    }
+  ]
+}

@@ -1,9 +1,22 @@
-version: "3.8"
-
 services:
   api:
+    build:
+      target: dev
     volumes:
-      - ./api/src/:/app/src
-      - ./api/data/a220-tech-docs:/app/data/a220-tech-docs
-      - ./api/data/a220-non-conformities:/app/data/a220-non-conformities
-    command: ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] 
+      - ./backend-ts:/app/backend-ts
+      - /app/backend-ts/node_modules
+      - ./shared:/app/shared
+      - ./api/src:/app/api/src
+      - ./api/data/a220-tech-docs:/app/api/data/a220-tech-docs
+      - ./api/data/a220-non-conformities:/app/api/data/a220-non-conformities
+    working_dir: /app/backend-ts
+    command: ["npm", "run", "dev"]
+  ui:
+    environment:
+      - VITE_API_URL=http://localhost:${API_PORT:-8000}
+    command:
+      - sh
+      - -lc
+      - npm ci --legacy-peer-deps && npm run dev -- --host 0.0.0.0 --port 5173 --strictPort
+  nginx:
+    profiles: ["nginx-dev-only"]

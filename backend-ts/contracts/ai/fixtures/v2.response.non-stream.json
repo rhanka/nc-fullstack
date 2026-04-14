@@ -1,0 +1,99 @@
+{
+  "version": "v2",
+  "requestId": "fixture-request-0001",
+  "task": {
+    "role": "000"
+  },
+  "output": {
+    "message": {
+      "role": "assistant",
+      "text": "Draft updated with technical references.",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Draft updated with technical references."
+        },
+        {
+          "type": "reasoning_summary",
+          "text": "Cross-checked technical references and similar ATA-56 non-conformities before updating the draft."
+        },
+        {
+          "type": "sources",
+          "sources": {
+            "tech_docs": [
+              {
+                "doc": "A220-300ARP-Issue098-00-16May2024_page_0031.md",
+                "chunk": "page_0031",
+                "content": "The tools, fixtures, and test equipment that are necessary for a given maintenance task are listed in a table."
+              }
+            ],
+            "non_conformities": [
+              {
+                "doc": "ATA-56-demo-case",
+                "ATA_code": "ATA-56",
+                "ATA_category": "WINDOWS",
+                "content": "Similar windshield area flushness discrepancy detected during quality inspection."
+              }
+            ]
+          }
+        },
+        {
+          "type": "nc_update",
+          "label": "Windshield skin rivet flushness out of tolerance",
+          "description": {
+            "designation": {
+              "aircraft_id": "0070",
+              "aircraft_zone": "Right windshield lower skin",
+              "ATA_code": "ATA-56",
+              "part_id": "[to be completed]",
+              "nc_event_date": "[to be completed]"
+            },
+            "observation": "Measured rivet flushness between -0.20 mm and -0.25 mm below the right windshield.",
+            "root_cause": "[to be completed]",
+            "dimensions": "- Flushness: -0.20 mm to -0.25 mm",
+            "references": "- A220-300ARP-Issue098-00-16May2024_page_0031.md: equivalent tools and fixture usage constraints"
+          }
+        }
+      ]
+    }
+  },
+  "retrieval": {
+    "performed": true,
+    "query": "ATA 56 windshield rivet flushness below tolerance",
+    "sources": {
+      "tech_docs": [
+        {
+          "doc": "A220-300ARP-Issue098-00-16May2024_page_0031.md",
+          "chunk": "page_0031",
+          "content": "The tools, fixtures, and test equipment that are necessary for a given maintenance task are listed in a table."
+        }
+      ],
+      "non_conformities": [
+        {
+          "doc": "ATA-56-demo-case",
+          "ATA_code": "ATA-56",
+          "ATA_category": "WINDOWS",
+          "content": "Similar windshield area flushness discrepancy detected during quality inspection."
+        }
+      ]
+    }
+  },
+  "runtime": {
+    "providerId": "openai",
+    "profile": "draft_standard_000",
+    "model": "gpt-5.4-nano",
+    "reasoningEffort": "low",
+    "requestedModelSelection": "gpt-5.4-nano",
+    "modelSelectionSource": "default",
+    "requestedComplexitySelection": "auto",
+    "resolvedComplexity": "standard",
+    "complexityAnalyzerModel": "gpt-5.4-nano",
+    "routingReasons": [
+      "complexity analyzed as standard by gpt-5.4-nano",
+      "role 000 stays pinned to the 000 draft profile",
+      "default model selection uses gpt-5.4-nano",
+      "estimated cost=low",
+      "estimated latency=fast"
+    ]
+  }
+}

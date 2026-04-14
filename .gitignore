@@ -20,6 +20,18 @@ __pycache__/
 .wrangler
 /.svelte-kit
 /build
+ui/.svelte-kit/
+ui/build/
+.playwright-mcp
+.playwright-mcp/
+.codex
+.codex/
+.deploy_output.json
+.deploy_output.log
+.env-root
+hop
+hop.json
+hopla
 
 # OS
 .DS_Store

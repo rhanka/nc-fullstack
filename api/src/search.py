@@ -5,6 +5,8 @@ import os
 from typing import List, Dict, Any
 import chromadb.utils.embedding_functions as embedding_functions
 import cohere
+from src.lexical_search import search_documents_lexical, search_non_conformities_lexical
+from src.query_rewrite import rewrite_retrieval_query
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -16,6 +18,9 @@ NC_DISTANCE_FACTOR = 1.2
 # Limites finales du nombre de résultats
 MAX_TECH_DOCS_RESULTS = 10
 MAX_NC_RESULTS = 10
+RRF_K = int(os.getenv("RETRIEVAL_RRF_K", "60"))
+VECTOR_CANDIDATE_LIMIT = int(os.getenv("VECTOR_CANDIDATE_LIMIT", "15"))
+LEXICAL_CANDIDATE_LIMIT = int(os.getenv("LEXICAL_CANDIDATE_LIMIT", "15"))
 
 # Build paths relative to this script's location
 SCRIPT_DIR = pathlib.Path(__file__).parent.parent
@@ -74,7 +79,154 @@ if RERANKING_ENABLED:
 else:
     logger.info("Reranking is disabled.")
 
-def search_documents(query: str, n_results: int = 15) -> List[Dict[str, Any]]:
+
+def normalize_result_identity(item: Dict[str, Any]) -> str:
+    doc = item.get("doc") or item.get("chunk_id") or ""
+    normalized = pathlib.Path(str(doc).split(" ")[0]).stem.lower()
+    return normalized
+
+
+def merge_result_payload(existing: Dict[str, Any], incoming: Dict[str, Any], channel: str) -> Dict[str, Any]:
+    merged = dict(existing)
+    for key, value in incoming.items():
+        if key not in merged or merged.get(key) in (None, "", []):
+            merged[key] = value
+
+    if channel == "vector" and "distance" in incoming:
+        merged["vector_distance"] = incoming["distance"]
+    if channel == "lexical" and "bm25_score" in incoming:
+        merged["lexical_score"] = incoming["bm25_score"]
+
+    if len(str(incoming.get("content", ""))) > len(str(merged.get("content", ""))):
+        merged["content"] = incoming.get("content")
+
+    return merged
+
+
+def reciprocal_rank_fuse(
+    *,
+    vector_results: List[Dict[str, Any]],
+    lexical_results: List[Dict[str, Any]],
+    final_limit: int,
+) -> List[Dict[str, Any]]:
+    fused: Dict[str, Dict[str, Any]] = {}
+
+    for channel_name, results in (
+        ("vector", vector_results),
+        ("lexical", lexical_results),
+    ):
+        for rank, item in enumerate(results, start=1):
+            identity = normalize_result_identity(item)
+            if not identity:
+                continue
+
+            if identity not in fused:
+                fused[identity] = {
+                    "item": dict(item),
+                    "rrf_score": 0.0,
+                    "best_rank": rank,
+                    "channels": set(),
+                }
+
+            fused_entry = fused[identity]
+            fused_entry["item"] = merge_result_payload(
+                fused_entry["item"],
+                item,
+                channel_name,
+            )
+            fused_entry["rrf_score"] += 1.0 / (RRF_K + rank)
+            fused_entry["best_rank"] = min(fused_entry["best_rank"], rank)
+            fused_entry["channels"].add(channel_name)
+
+    ranked = sorted(
+        fused.values(),
+        key=lambda entry: (
+            -entry["rrf_score"],
+            entry["best_rank"],
+            str(entry["item"].get("doc", "")),
+        ),
+    )
+
+    results: List[Dict[str, Any]] = []
+    for output_rank, entry in enumerate(ranked[:final_limit], start=1):
+        result = dict(entry["item"])
+        result["retrieval_channels"] = sorted(entry["channels"])
+        result["rrf_score"] = round(entry["rrf_score"], 8)
+        result["retrieval_rank"] = output_rank
+        results.append(result)
+    return results
+
+
+def reciprocal_rank_fuse_batches(
+    *,
+    ranked_batches: List[List[Dict[str, Any]]],
+    channel: str,
+    final_limit: int,
+) -> List[Dict[str, Any]]:
+    fused: Dict[str, Dict[str, Any]] = {}
+
+    for batch_index, results in enumerate(ranked_batches, start=1):
+        for rank, item in enumerate(results, start=1):
+            identity = normalize_result_identity(item)
+            if not identity:
+                continue
+
+            if identity not in fused:
+                fused[identity] = {
+                    "item": dict(item),
+                    "rrf_score": 0.0,
+                    "best_rank": rank,
+                    "query_batches": set(),
+                }
+
+            fused_entry = fused[identity]
+            fused_entry["item"] = merge_result_payload(
+                fused_entry["item"],
+                item,
+                channel,
+            )
+            fused_entry["rrf_score"] += 1.0 / (RRF_K + rank)
+            fused_entry["best_rank"] = min(fused_entry["best_rank"], rank)
+            fused_entry["query_batches"].add(batch_index)
+
+    ranked = sorted(
+        fused.values(),
+        key=lambda entry: (
+            -entry["rrf_score"],
+            entry["best_rank"],
+            str(entry["item"].get("doc", "")),
+        ),
+    )
+
+    results: List[Dict[str, Any]] = []
+    for output_rank, entry in enumerate(ranked[:final_limit], start=1):
+        result = dict(entry["item"])
+        result[f"{channel}_rrf_score"] = round(entry["rrf_score"], 8)
+        result[f"{channel}_variant_hits"] = len(entry["query_batches"])
+        result[f"{channel}_rank"] = output_rank
+        results.append(result)
+    return results
+
+
+def collect_query_variants(
+    query: str,
+    *,
+    corpus: str,
+    use_query_rewrite: bool,
+) -> List[str]:
+    normalized_query = str(query).strip()
+    if not use_query_rewrite:
+        return [normalized_query]
+
+    rewrite = rewrite_retrieval_query(normalized_query, corpus=corpus)
+    return list(rewrite.variants) or [normalized_query]
+
+
+def search_documents_vector(
+    query: str,
+    n_results: int = VECTOR_CANDIDATE_LIMIT,
+    result_limit: int = MAX_TECH_DOCS_RESULTS,
+) -> List[Dict[str, Any]]:
     """
     Searches for documents, then optionally reranks them using Cohere for relevance.
     """
@@ -100,7 +252,7 @@ def search_documents(query: str, n_results: int = 15) -> List[Dict[str, Any]]:
                 model='rerank-english-v2.0',
                 query=query,
                 documents=[doc for doc in documents],
-                top_n=MAX_TECH_DOCS_RESULTS
+                top_n=result_limit
             )
             
             final_results = []
@@ -126,13 +278,18 @@ def search_documents(query: str, n_results: int = 15) -> List[Dict[str, Any]]:
                     "content": documents[i],
                     **metadata
                 })
-            return top_results[:MAX_TECH_DOCS_RESULTS]
+            return top_results[:result_limit]
 
     except Exception as e:
         logger.error(f"Failed to query or rerank tech docs. Error: {e}", exc_info=True)
         return []
 
-def search_non_conformities(query: str, n_results: int = 15) -> List[Dict[str, Any]]:
+
+def search_non_conformities_vector(
+    query: str,
+    n_results: int = VECTOR_CANDIDATE_LIMIT,
+    result_limit: int = MAX_NC_RESULTS,
+) -> List[Dict[str, Any]]:
     """
     Searches for non-conformities, then optionally reranks them using Cohere for relevance.
     """
@@ -158,7 +315,7 @@ def search_non_conformities(query: str, n_results: int = 15) -> List[Dict[str, A
                 model='rerank-english-v2.0',
                 query=query,
                 documents=[doc for doc in documents],
-                top_n=MAX_NC_RESULTS
+                top_n=result_limit
             )
             
             final_results = []
@@ -183,11 +340,91 @@ def search_non_conformities(query: str, n_results: int = 15) -> List[Dict[str, A
                     "content": documents[i],
                     **metadata
                 })
-            return top_results[:MAX_NC_RESULTS]
+            return top_results[:result_limit]
 
     except Exception as e:
         logger.error(f"Failed to query or rerank non-conformities. Error: {e}", exc_info=True)
         return []
+
+
+def search_documents(
+    query: str,
+    n_results: int = 15,
+    *,
+    use_query_rewrite: bool = True,
+) -> List[Dict[str, Any]]:
+    final_limit = min(max(n_results, 1), MAX_TECH_DOCS_RESULTS)
+    candidate_limit = max(final_limit, VECTOR_CANDIDATE_LIMIT, LEXICAL_CANDIDATE_LIMIT)
+    query_variants = collect_query_variants(
+        query,
+        corpus="tech_docs",
+        use_query_rewrite=use_query_rewrite,
+    )
+    vector_results = reciprocal_rank_fuse_batches(
+        ranked_batches=[
+            search_documents_vector(
+                variant,
+                n_results=candidate_limit,
+                result_limit=candidate_limit,
+            )
+            for variant in query_variants
+        ],
+        channel="vector",
+        final_limit=candidate_limit,
+    )
+    lexical_results = reciprocal_rank_fuse_batches(
+        ranked_batches=[
+            search_documents_lexical(variant, n_results=candidate_limit)
+            for variant in query_variants
+        ],
+        channel="lexical",
+        final_limit=candidate_limit,
+    )
+    return reciprocal_rank_fuse(
+        vector_results=vector_results,
+        lexical_results=lexical_results,
+        final_limit=final_limit,
+    )
+
+
+def search_non_conformities(
+    query: str,
+    n_results: int = 15,
+    *,
+    use_query_rewrite: bool = True,
+) -> List[Dict[str, Any]]:
+    final_limit = min(max(n_results, 1), MAX_NC_RESULTS)
+    candidate_limit = max(final_limit, VECTOR_CANDIDATE_LIMIT, LEXICAL_CANDIDATE_LIMIT)
+    query_variants = collect_query_variants(
+        query,
+        corpus="non_conformities",
+        use_query_rewrite=use_query_rewrite,
+    )
+    vector_results = reciprocal_rank_fuse_batches(
+        ranked_batches=[
+            search_non_conformities_vector(
+                variant,
+                n_results=candidate_limit,
+                result_limit=candidate_limit,
+            )
+            for variant in query_variants
+        ],
+        channel="vector",
+        final_limit=candidate_limit,
+    )
+    lexical_results = reciprocal_rank_fuse_batches(
+        ranked_batches=[
+            search_non_conformities_lexical(variant, n_results=candidate_limit)
+            for variant in query_variants
+        ],
+        channel="lexical",
+        final_limit=candidate_limit,
+    )
+    return reciprocal_rank_fuse(
+        vector_results=vector_results,
+        lexical_results=lexical_results,
+        final_limit=final_limit,
+    )
 
 def format_search_results(results: Any) -> Dict[str, Any]:
     """Formate les résultats de recherche pour le frontend pour contenir une clé 'sources'."""

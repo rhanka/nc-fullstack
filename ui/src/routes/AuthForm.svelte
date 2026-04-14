@@ -1,10 +1,12 @@
 <script>
-  import { accessToken } from "./store.js";
+  import { getApiBaseUrl } from "$lib/api-base";
+  import { accessToken } from "./store";
   import { createEventDispatcher } from "svelte";
 
   export let type = "login"; // "login" ou "register"
 
   const dispatch = createEventDispatcher();
+  const apiBaseUrl = getApiBaseUrl();
 
   $: title = type === "login" ? "Login" : "Register";
 
@@ -24,7 +26,7 @@
       return;
     }
 
-    const apiUrl = `${import.meta.env.VITE_API_URL}/${type}`;
+    const apiUrl = `${apiBaseUrl}/${type}`;
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {

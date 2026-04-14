@@ -1,0 +1,39 @@
+name: PR CI
+
+on:
+  pull_request:
+    branches:
+      - master
+
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ts-checks:
+    name: TS checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            ui/package-lock.json
+            backend-ts/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run TS build and tests
+        run: make check-ts
+
+      - name: Run TS backend smoke test
+        run: make api-smoke-ts

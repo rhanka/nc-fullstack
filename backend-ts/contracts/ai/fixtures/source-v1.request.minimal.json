@@ -1,0 +1,11 @@
+{
+  "provider": "openai",
+  "messages": [
+    {
+      "role": "000",
+      "text": "Rewrite the non-conformity report using the most relevant references.",
+      "description": "Right windshield area rivet flushness out of tolerance.",
+      "history": []
+    }
+  ]
+}
