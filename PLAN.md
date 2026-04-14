@@ -5,6 +5,8 @@
   - `spec/SPEC_INTENT_2026-04-10_ai-architecture-refresh.md`
   - `spec/SPEC_EVOL_2026-04-10_ai-architecture-refresh.md`
   - `spec/SPEC_EVOL_VECTOR_DB.md`
+  - `spec/SPEC_EVOL_LLM_WIKI.md`
+  - `spec/SPEC_EVOL_DATAPREP_TS.md`
 - Tags:
   - `AUTO`: validation statique ou déterministe
   - `TEST`: validation par tests, benchmarks ou evals
@@ -68,6 +70,7 @@
 - [x] L4B.3 Ajouter l'ingestion LanceDB OSS locale par corpus dans le même container que l'API TS. Recette: artefacts `api/data/*/lancedb/` générés repo-localement ou au build. `TEST`
 - [x] L4B.4 Brancher le runtime `/ai` sur LanceDB pour le vectoriel + BM25 / FTS + hybrid search, avec fallback temporaire `export_exact`. Recette: tests backend verts et runtime status explicite. `TEST`
 - [x] L4B.5 Comparer `lancedb` vs `export_exact` sur le mini-corpus retrieval et choisir le défaut runtime. Recette: benchmark versionné et décision de cutover documentée. `TEST`
+- Note: ce lot documente une exploration déjà exécutée. La direction active suivante n'est plus "pousser LanceDB", mais décider si cette intégration doit être supprimée pour revenir à un seul moteur runtime.
 
 ## Lot 5 - Cutover et nettoyage
 
@@ -90,6 +93,15 @@
 - [ ] L5.2o Retirer le dump `NC update` du chat et le remplacer par un lien compact vers la task amendée. Recette: le chat n'affiche plus les champs du canevas; il propose seulement un accès court à l'objet amendé (`000`, `100`, etc.) dans l'application. `TEST` + `UAT`
 - [ ] L5.3 Nettoyer la dette de transition côté UI et backend. Recette: plus de double chemin critique non justifié. `AUTO`
 - Note: les updates finales après finalisation sont déjà présentes; les bugs ouverts portent désormais sur la qualité du shell runtime, la sélection modèle / reasoning et le rendu outillage / reasoning pendant l'exécution.
+
+## Lot 6 - Couche connaissance, dataprep TS et LLM Wiki
+
+- [x] L6.1 Mener une session de QA produit / technique pour préciser l'utilité attendue de `LLM Wiki` sur le même dataset que le RAG. Recette: questions/réponses versionnées dans la spec active, avec arbitrages explicites sur audience, artefacts, cycle de mise à jour et critères de valeur. `UAT`
+- [x] L6.2 Définir une ontologie minimale A220 utile au retrieval et à la synthèse. Recette: taxonomie versionnée couvrant au minimum `ATA / système / pièce / zone`, avec gestion des alias et variantes métier. `AUTO`
+- [ ] L6.3 Migrer le dataprep en TypeScript autour d'un corpus manifest canonique unique. Recette: pipeline TS produisant `vector-export`, `lexical/fts.sqlite3` et manifestes sans dépendance Python dans la chaîne backend. `TEST`
+- [ ] L6.4 Prototyper un `LLM Wiki` humain-navigable sur le même dataset que le RAG, branché sur `vector-export + SQLite FTS5 + RRF`. Recette: pages compilées par pièce / sous-ensemble, liens utiles vers les docs, et troisième vue `entities/wiki` au même niveau que `tech docs` et `NC` pendant la recherche. `TEST`
+- [ ] L6.5 Décider explicitement si `graphify` apporte une valeur additionnelle après ontologie + wiki; sinon le différer sans ambiguïté. Recette: note de décision versionnée, sans intégration implicite. `AUTO` + `UAT`
+- [ ] L6.6 Superséder la cible LanceDB et supprimer l'intégration `lancedb` devenue inutile du runtime, du build et de la documentation si aucun besoin concret ne justifie son maintien. Recette: plus de dépendance `@lancedb/lancedb`, plus de copies `api/data/*/lancedb/`, plus de chemin moteur `lancedb`, et spec réalignée sur un seul moteur runtime. `TEST`
 
 ## Critères de sortie
 

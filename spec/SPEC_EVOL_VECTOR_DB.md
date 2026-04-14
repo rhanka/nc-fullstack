@@ -5,7 +5,26 @@
 - Related specs:
   - `SPEC_EVOL_2026-04-10_ai-architecture-refresh.md`
   - `SPEC_INTENT_2026-04-10_ai-architecture-refresh.md`
-- Last updated: 2026-04-12
+- Last updated: 2026-04-14
+
+## Mise à jour de décision du 2026-04-14
+
+Cette spec documente une exploration réelle menée autour de `LanceDB`.
+Elle ne doit plus être lue comme la cible active du projet.
+
+Etat réel à date:
+
+- le backend prod tourne en TypeScript
+- le moteur retrieval runtime actif est `export_exact`
+- `lancedb` existe encore dans le repo comme intégration alternative
+- cette intégration n'est plus considérée comme la cible par défaut
+
+Direction active désormais retenue:
+
+- conserver un seul moteur runtime autour de `vector-export + SQLite FTS5 + RRF`
+- migrer le dataprep en TypeScript
+- supprimer l'intégration `lancedb` si aucun besoin concret ne justifie son maintien
+- traiter cette spec comme archive d'une option benchmarkée, pas comme feuille de route active
 
 ## Objectif
 
@@ -295,10 +314,12 @@ Il faut donc benchmarker, pas supposer.
 - le benchmark retrieval sur le mini-corpus repo n'est pas inférieur au mode `export_exact`
 - la sélection du moteur retrieval est explicite, observable, et réversible
 
-## Décision exécutable
+## Décision exécutable historique du 2026-04-12
 
-Décision proposée pour exécution:
+La décision initialement proposée dans cette spec était:
 
 - **adopter LanceDB OSS comme cible vector DB native TS**
 - **garder `vector-export-v1` uniquement comme étape transitoire et fallback**
 - **ne pas réintroduire de service externe type Qdrant à ce stade**
+
+Cette décision est désormais supersédée par la mise à jour du 2026-04-14 ci-dessus.
