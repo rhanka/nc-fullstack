@@ -31,8 +31,8 @@
 
   let loaded = false;
   let canvas;
-  let page_num = 0;
-  let pageCount = 0;
+  let page_num = null;
+  let pageCount = null;
   let pdfDoc = null;
   let pageRendering = false;
   let pageNumPending = null;
@@ -48,15 +48,44 @@
   let passwordError = false;
   let passwordMessage = "";
   let isInitialized = false;
+  let loadToken = 0;
   const minScale = 1.0;
   const maxScale = 2.3;
 
+  const resetViewerState = () => {
+    loadToken += 1;
+    loaded = false;
+    canvas = null;
+    page_num = null;
+    pageCount = null;
+    pdfDoc = null;
+    pageRendering = false;
+    pageNumPending = null;
+    totalPage = 0;
+    pdfContent = "";
+    readingTime = 0;
+    pages = [];
+    passwordError = false;
+    passwordMessage = "";
+    isInitialized = false;
+    pageNum = 1;
+  };
+
   const renderPage = (num) => {
+    if (!pdfDoc || !canvas) {
+      return;
+    }
+
     pageRendering = true;
+    const activePdfDoc = pdfDoc;
     // Using promise to fetch the page
-    pdfDoc.getPage(num).then(function (page) {
+    activePdfDoc.getPage(num).then(function (page) {
       let viewport = page.getViewport({ scale: scale, rotation: rotation });
-      const canvasContext = canvas.getContext("2d");
+      const canvasContext = canvas?.getContext?.("2d");
+      if (!canvasContext || !canvas) {
+        pageRendering = false;
+        return;
+      }
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
@@ -71,29 +100,24 @@
       renderTask.promise.then(function () {
         pageRendering = false;
         if (pageNumPending !== null) {
-          // New page rendering is pending
-          // renderPage(pageNumPending);
-          if (pageNum < pdfDoc.totalPage) {
-            pages[pageNum] = canvas;
-            pageNum++;
-            pdfDoc.getPage(pageNum).then(renderPage);
-          } else {
-            for (let i = 1; i < pages.length; i++) {
-              canvas.appendChild(pages[i]);
-            }
-          }
+          const pendingPage = pageNumPending;
           pageNumPending = null;
+          renderPage(pendingPage);
         }
       });
     });
 
     // Update page counters
-    showButtons.length ? (page_num.textContent = num) : null;
+    if (showButtons.length && page_num) {
+      page_num.textContent = String(num);
+    }
   };
 
-  $: if (url) {
-    loaded = false;
+  $: if (url || data) {
+    resetViewerState();
     initialLoad();
+  } else {
+    resetViewerState();
   }
 
   const queueRenderPage = (num) => {
@@ -167,6 +191,10 @@
    */
 
   const initialLoad = async () => {
+    if (!url && !data) {
+      return;
+    }
+    const currentLoadToken = ++loadToken;
     loaded = false;
     let loadingTask = pdfjs.getDocument({
       ...(url && { url }),
@@ -177,17 +205,29 @@
 
     loadingTask.promise
       .then(async function (pdfDoc_) {
-        loaded = true;
+        if (currentLoadToken !== loadToken) {
+          return;
+        }
         pdfDoc = pdfDoc_;
         passwordError = false;
+        loaded = true;
         await tick();
 
-        showButtons.length ? (pageCount.textContent = pdfDoc.numPages) : null;
+        if (currentLoadToken !== loadToken) {
+          return;
+        }
+
+        if (showButtons.length && pageCount) {
+          pageCount.textContent = String(pdfDoc.numPages);
+        }
         totalPage = pdfDoc.numPages;
         if (showButtons.length) {
           for (let number = 1; number <= totalPage; number++) {
             // Extract the text
             getPageText(number, pdfDoc).then(function (textPage) {
+              if (currentLoadToken !== loadToken) {
+                return;
+              }
               // Show the text of the page in the console
               pdfContent = pdfContent.concat(textPage);
               readingTime = calcRT(pdfContent);
@@ -197,11 +237,13 @@
         isInitialized = true;
       })
       .catch(function (error) {
+        if (currentLoadToken !== loadToken) {
+          return;
+        }
         passwordError = true;
         passwordMessage = error.message;
       });
   };
-  initialLoad();
   $: if (isInitialized && loaded) queueRenderPage(pageNum);
 
   //turn page after certain time interval

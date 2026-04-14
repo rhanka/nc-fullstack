@@ -319,10 +319,19 @@
   <div class="pane">
     {#each tabs as tab}
       <div style="padding-top:0;display: {$activeTabValue === tab.rail.value ? 'block' : 'none'};">
-        <svelte:component
-          this={tab.content.component}
-          {...tab.content.arguments}
-        />
+        {#if tab.content.component === ShowDocument}
+          {#key tab.content.arguments.url ?? "no-document-selected"}
+            <svelte:component
+              this={tab.content.component}
+              {...tab.content.arguments}
+            />
+          {/key}
+        {:else}
+          <svelte:component
+            this={tab.content.component}
+            {...tab.content.arguments}
+          />
+        {/if}
       </div>
     {/each}
   </div>
