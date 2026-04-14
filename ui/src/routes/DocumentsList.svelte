@@ -2,7 +2,6 @@
   import { createEventDispatcher } from "svelte";
   import { marked } from "marked"; // Import the marked library
   import {
-    referencesList,
     selectDoc,
     activeTabValue,
   } from "./store";

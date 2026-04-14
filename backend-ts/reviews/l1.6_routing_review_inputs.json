@@ -1,0 +1,57 @@
+{
+  "generated_at": "2026-04-11",
+  "source": "api/test/baseline_cases.json + api/test/eval_cases.json",
+  "cases": [
+    {
+      "case_id": "NC-2024-003-query",
+      "title": "Pare-brise droit / query rewrite",
+      "excerpt": "pare-brise droit rivets desaffleurement flushness windshield frame structural repair",
+      "stage": "search_rewrite",
+      "userRole": "query",
+      "complexitySelection": "auto",
+      "simulatedAutoComplexity": "simple",
+      "retrievalConfidence": "medium"
+    },
+    {
+      "case_id": "NC-2024-005-000",
+      "title": "Reservoir principal aile gauche / role 000",
+      "excerpt": "Débit faible de la crépine d’aspiration sur le réservoir principal aile gauche.",
+      "stage": "assistant_response",
+      "userRole": "000",
+      "complexitySelection": "auto",
+      "simulatedAutoComplexity": "standard",
+      "retrievalConfidence": "medium"
+    },
+    {
+      "case_id": "NC-2024-004-100",
+      "title": "Rayure structure aluminium / role 100",
+      "excerpt": "Rayure de 10 cm sur structure aluminium zone C2-2 avec besoin de validation expert.",
+      "stage": "assistant_response",
+      "userRole": "100",
+      "complexitySelection": "auto",
+      "simulatedAutoComplexity": "standard",
+      "retrievalConfidence": "high"
+    },
+    {
+      "case_id": "NC-2024-006-100-low-confidence",
+      "title": "Decharge electrostatique / retrieval confidence basse",
+      "excerpt": "Cas hybride reservoir secondaire aile droite + conductivité fils de décharge électrostatique.",
+      "stage": "assistant_response",
+      "userRole": "100",
+      "complexitySelection": "auto",
+      "simulatedAutoComplexity": "standard",
+      "retrievalConfidence": "low"
+    },
+    {
+      "case_id": "NC-2025-007-100-deep",
+      "title": "Porte avant droite / delaminage / deep analysis",
+      "excerpt": "Plusieurs cas de délaminages sur 5 plis de carbone entre les cadres 20 et 21.",
+      "stage": "assistant_response",
+      "userRole": "100",
+      "modelSelection": "gpt-5.4",
+      "complexitySelection": "auto",
+      "simulatedAutoComplexity": "deep",
+      "retrievalConfidence": "medium"
+    }
+  ]
+}

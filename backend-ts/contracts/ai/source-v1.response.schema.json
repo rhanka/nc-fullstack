@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI Source V1 Response",
+  "type": "object",
+  "required": [
+    "text",
+    "label",
+    "description",
+    "sources",
+    "user_query",
+    "input_description",
+    "role",
+    "user_role"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "TechDocSource": {
+      "type": "object",
+      "required": ["doc", "content"],
+      "additionalProperties": true,
+      "properties": {
+        "doc": { "type": "string" },
+        "chunk": { "type": ["string", "null"] },
+        "content": { "type": "string" }
+      }
+    },
+    "NcSource": {
+      "type": "object",
+      "required": ["doc", "content"],
+      "additionalProperties": true,
+      "properties": {
+        "doc": { "type": "string" },
+        "ATA_code": { "type": ["string", "null"] },
+        "ATA_category": { "type": ["string", "null"] },
+        "content": { "type": "string" }
+      }
+    },
+    "SourceContainerTechDocs": {
+      "type": "object",
+      "required": ["sources"],
+      "additionalProperties": false,
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TechDocSource" }
+        }
+      }
+    },
+    "SourceContainerNc": {
+      "type": "object",
+      "required": ["sources"],
+      "additionalProperties": false,
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NcSource" }
+        }
+      }
+    }
+  },
+  "properties": {
+    "text": { "type": ["string", "null"] },
+    "label": { "type": ["string", "null"] },
+    "description": { "type": ["object", "string", "null"] },
+    "sources": {
+      "type": "object",
+      "required": ["tech_docs", "non_conformities"],
+      "additionalProperties": false,
+      "properties": {
+        "tech_docs": { "$ref": "#/$defs/SourceContainerTechDocs" },
+        "non_conformities": { "$ref": "#/$defs/SourceContainerNc" }
+      }
+    },
+    "user_query": { "type": "string" },
+    "input_description": { "type": ["string", "null"] },
+    "role": { "type": "string", "const": "ai" },
+    "user_role": { "type": "string", "minLength": 1 }
+  }
+}

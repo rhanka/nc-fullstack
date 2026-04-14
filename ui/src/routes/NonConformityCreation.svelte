@@ -5,7 +5,7 @@
     resetCreatedItem,
     createdItem,
     updateCreatedItem,
-  } from "./store.js";
+  } from "./store";
   import Icon from '@iconify/svelte';
 
   let taskMask = null;

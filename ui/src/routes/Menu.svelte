@@ -2,7 +2,7 @@
 <script>
   import { createEventDispatcher } from "svelte";
   import Icon from "@iconify/svelte";
-  import { accessToken } from "./store.js";
+  import { accessToken } from "./store";
 
   const dispatch = createEventDispatcher();
 

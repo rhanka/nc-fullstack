@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev run ui-install ui-build docker-build docker-push build deploy deps env config clean help check-db create-tech-docs-db create-nc-db create-db
+.PHONY: dev dev-stop up down up-ts ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help check-db create-tech-docs-db create-nc-db create-db api-build api-build-ts api-install-ts api-image-publish api-image-publish-ts api-test-ts api-smoke-ts api-contracts-ts api-review-routing-ts check-ts deploy-api deploy-api-ts deploy-api-python-container rollback-api-python
 
 # ----------------------------
 # Helpers
@@ -12,6 +12,8 @@
 export UI_DIR          ?= ui
 export API_IMAGE_NAME  ?= nc-chatbot-api
 export API_VERSION     ?= $(shell echo "api/src api/requirements.txt api/Dockerfile" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_TS_IMAGE_NAME ?= nc-chatbot-api-ts
+export API_TS_VERSION ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/Dockerfile shared api/src api/requirements.txt" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_CPU_LIMIT   ?= 250
 export API_MEM_LIMIT   ?= 512
 export UI_VERSION      ?= $(shell echo "ui/src ui/static ui/package.json ui/Dockerfile ui/vite.config.ts ui/svelte.config.js ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
@@ -23,6 +25,9 @@ export S3_ENDPOINT_URL ?= https://s3.fr-par.scw.cloud
 export VITE_API_URL    ?=
 export TECH_DOCS_DIR   ?= a220-tech-docs
 export NC_DIR          ?= a220-non-conformities
+export API_PORT        ?= 8000
+export UI_PORT         ?= 5177
+export NGINX_PORT      ?= 8080
 export DC_OPTS         ?= --build --force-recreate
 
 # ----------------------------
@@ -30,7 +35,7 @@ export DC_OPTS         ?= --build --force-recreate
 # ----------------------------
 
 version:
-	@echo ui:$(UI_VERSION)-api:$(API_VERSION)
+	@echo ui:$(UI_VERSION)-api-ts:$(API_TS_VERSION)
 
 dev:
 	@echo "▶ Starting API and UI in dev mode with Docker..."
@@ -42,6 +47,10 @@ dev-stop:
 
 up:
 	@echo "▶ Running API and UI in production mode with Docker..."
+	docker compose -f docker-compose.yml up ${DC_OPTS} -d
+
+up-ts:
+	@echo "▶ Running TS API and UI in production mode with Docker..."
 	docker compose -f docker-compose.yml up ${DC_OPTS} -d
 
 down:
@@ -67,25 +76,58 @@ ui-build: ui-install
 	@echo "▶ Building UI..."
 	cd $(UI_DIR) && VITE_API_URL=$(VITE_API_URL) npm run build
 
+ui-check: ui-install
+	@echo "▶ Checking UI..."
+	cd $(UI_DIR) && npm run check
+
 # ----------------------------
 # Containerisation
 # ----------------------------
 
 api-build: dataprep-download-minimal
-	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
+	@echo "▶ Building Docker image for TS API: $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)"
 	docker compose build api
+
+api-build-ts: dataprep-download-minimal
+	@$(MAKE) api-build
+
+api-install-ts:
+	@echo "▶ Installing TS backend dependencies..."
+	cd backend-ts && npm ci
+
+api-test-ts: api-install-ts
+	@echo "▶ Running TS backend tests..."
+	cd backend-ts && npm run test
+
+api-smoke-ts: api-install-ts
+	@echo "▶ Running TS backend smoke test..."
+	cd backend-ts && npm run smoke
+
+api-contracts-ts: api-install-ts
+	@echo "▶ Checking TS backend contracts..."
+	cd backend-ts && npm run contracts:check
+
+api-review-routing-ts: api-install-ts
+	@echo "▶ Reviewing TS backend routing decisions..."
+	cd backend-ts && npm run review:routing
+
+check-ts: ui-build api-test-ts api-contracts-ts
+	@echo "✔️ TS UI build and backend checks completed."
 
 docker-login:
 	@echo "▶ Logging in to registry"
 	@echo "$(DOCKER_PASSWORD)" | docker login $(REGISTRY) -u $(DOCKER_USERNAME) --password-stdin
 
 api-image-check: docker-login
-	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
-	docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
+	@echo "▶ Checking if TS image $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION) exists"
+	docker manifest inspect $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION) does not exist" && exit 1)
 
 api-image-publish: docker-login
-	@echo "▶ Pushing image to registry"
-	docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
+	@echo "▶ Pushing TS API image to registry"
+	docker push $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)
+
+api-image-publish-ts: docker-login
+	@$(MAKE) api-image-publish
 
 build: ui-build api-build
 
@@ -111,10 +153,22 @@ check-scw:
 # ----------------------------
 
 deploy-api-container: check-scw
-	@echo "▶️ Updating new container $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) to Scaleway..."
+	@echo "▶️ Updating container $(API_IMAGE_NAME) to TS image $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)..."
+	API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
+	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)" > .deploy_output.log
+	@echo "✅ TS deployment initiated."
+
+deploy-api-ts-container: check-scw
+	@echo "▶️ Updating container $(API_IMAGE_NAME) to TS image $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)..."
+	API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
+	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)" > .deploy_output.log
+	@echo "✅ TS cutover deployment initiated."
+
+deploy-api-python-container: check-scw
+	@echo "▶️ Rolling back container $(API_IMAGE_NAME) to legacy Python image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)..."
 	API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
 	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" > .deploy_output.log
-	@echo "✅ New container deployment initiated."
+	@echo "✅ Legacy Python rollback deployment initiated."
 
 wait-for-container: check-scw
 	@printf "⌛ Waiting for container to become ready.."
@@ -127,6 +181,10 @@ wait-for-container: check-scw
 	printf "\n✅ New container is ready.\n"
 
 deploy-api: deploy-api-container wait-for-container
+
+deploy-api-ts: deploy-api
+
+rollback-api-python: deploy-api-python-container wait-for-container
 
 # ----------------------------
 # Data upload to Scaleway
@@ -196,13 +254,19 @@ dataprep-download-minimal: check-s5cmd
 	@echo "▶ Downloading minimal data from Scaleway..."
 	@sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb || mkdir -p api/data/${TECH_DOCS_DIR}/vectordb &&\
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		cp s3://${S3_BUCKET_DOCS}/vectordb/chroma.sqlite3 'api/data/${TECH_DOCS_DIR}/vectordb/chroma.sqlite3'
+		sync s3://${S3_BUCKET_DOCS}/vectordb/* 'api/data/${TECH_DOCS_DIR}/vectordb/'
+	@mkdir -p 'api/data/${TECH_DOCS_DIR}/lexical/' &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_DOCS}/lexical/* 'api/data/${TECH_DOCS_DIR}/lexical/'
 	@mkdir -p 'api/data/${TECH_DOCS_DIR}/pages/' &&\
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_DOCS}/pages/* 'api/data/${TECH_DOCS_DIR}/pages/'
 	@sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb || mkdir -p api/data/${NC_DIR}/vectordb &&\
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		cp s3://${S3_BUCKET_NC}/vectordb/chroma.sqlite3 'api/data/${NC_DIR}/vectordb/chroma.sqlite3'
+		sync s3://${S3_BUCKET_NC}/vectordb/* 'api/data/${NC_DIR}/vectordb/'
+	@mkdir -p 'api/data/${NC_DIR}/lexical/' && \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_NC}/lexical/* 'api/data/${NC_DIR}/lexical/'
 	@mkdir -p 'api/data/${NC_DIR}/json/' && \
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_NC}/json/* 'api/data/${NC_DIR}/json/'

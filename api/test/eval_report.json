@@ -1,0 +1,509 @@
+{
+  "generated_at": "2026-04-11",
+  "tech_doc_corpus_size": 26445,
+  "non_conformity_corpus_size": 4925,
+  "cases": [
+    {
+      "case_id": "NC-2024-003",
+      "label": "Pare-brise droit / rivets / desaffleurement",
+      "query": "pare-brise droit rivets desaffleurement flushness windshield frame structural repair",
+      "review_note": "Cas structure cockpit / pare-brise. On attend surtout des sources structure / repair process et des NC ATA-56.",
+      "metrics": {
+        "tech_hit@5": false,
+        "nc_hit@5": false,
+        "tech_hit@10": false,
+        "nc_hit@10": false
+      },
+      "top_tech_docs": [
+        {
+          "name": "MODULE 4 AIRFRAME_page_0854.md",
+          "score": 47
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0861.md",
+          "score": 45
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0863.md",
+          "score": 41
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_1151-img-0.md",
+          "score": 35
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_1151__with_img_desc.md",
+          "score": 35
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0862.md",
+          "score": 31
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0855__with_img_desc.md",
+          "score": 29
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_1121__with_img_desc.md",
+          "score": 29
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_1207__with_img_desc.md",
+          "score": 29
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0850.md",
+          "score": 27
+        }
+      ],
+      "top_non_conformities": [
+        {
+          "name": "ATA-52-c41d96453465a02e-02c8.md",
+          "score": 134
+        },
+        {
+          "name": "ATA-52-f90594a728198b74-62e1.md",
+          "score": 134
+        },
+        {
+          "name": "ATA-52-9c1e9a2f49a4e8c8-b6b7.md",
+          "score": 126
+        },
+        {
+          "name": "ATA-52-c41d96453465a02e-c197.md",
+          "score": 124
+        },
+        {
+          "name": "ATA-52-0c1e9a2f95a4e0c8-857e.md",
+          "score": 114
+        },
+        {
+          "name": "ATA-52-c41d74001994a02e-b8a0.md",
+          "score": 112
+        },
+        {
+          "name": "ATA-52-c41d96453465a02e-c58d.md",
+          "score": 112
+        },
+        {
+          "name": "ATA-57-baf9eeb48311f603-6d73.md",
+          "score": 110
+        },
+        {
+          "name": "ATA-57-baf9eeb94816f603-49cb.md",
+          "score": 110
+        },
+        {
+          "name": "ATA-57-baf9eeb70715f7-6528.md",
+          "score": 108
+        }
+      ]
+    },
+    {
+      "case_id": "NC-2024-005",
+      "label": "Reservoir principal aile gauche / debit faible",
+      "query": "fuel tank left wing low flow suction screen reservoir debit carburant",
+      "review_note": "Cas carburant. Les docs attendues sont les references fuel/tank, et les NC analogues doivent tomber en ATA-28.",
+      "metrics": {
+        "tech_hit@5": false,
+        "nc_hit@5": false,
+        "tech_hit@10": true,
+        "nc_hit@10": false
+      },
+      "top_tech_docs": [
+        {
+          "name": "MODULE 5 POWER PLANT_page_0411.md",
+          "score": 142
+        },
+        {
+          "name": "MODULE 2 ELECTRICAL_page_0509-img-0.md",
+          "score": 122
+        },
+        {
+          "name": "MODULE 2 ELECTRICAL_page_0509__with_img_desc.md",
+          "score": 122
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0290.md",
+          "score": 112
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0900.md",
+          "score": 112
+        },
+        {
+          "name": "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1498__with_img_desc.md",
+          "score": 110
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0408.md",
+          "score": 106
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0280.md",
+          "score": 102
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0941__with_img_desc.md",
+          "score": 100
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0941-img-0.md",
+          "score": 98
+        }
+      ],
+      "top_non_conformities": [
+        {
+          "name": "ATA-73-ed85ee1b22fa5ca3-13b5.md",
+          "score": 150
+        },
+        {
+          "name": "ATA-73-ed8ee2b73fa72ca3-1bc3.md",
+          "score": 148
+        },
+        {
+          "name": "ATA-71-ccd88aa2b61d8231-0d15.md",
+          "score": 138
+        },
+        {
+          "name": "ATA-73-ed85ee1b22fa5ca3-7a99.md",
+          "score": 136
+        },
+        {
+          "name": "ATA-73-85d1dcc7c5e882ef-5438.md",
+          "score": 134
+        },
+        {
+          "name": "ATA-73-ed85ee1b22fa5ca3-367e.md",
+          "score": 128
+        },
+        {
+          "name": "ATA-74-4be425d7fb2f9121-40e1.md",
+          "score": 128
+        },
+        {
+          "name": "ATA-74-4be425d7fb8231f9121-85b4.md",
+          "score": 128
+        },
+        {
+          "name": "ATA-74-4be425d7fb2f9121-ad88.md",
+          "score": 126
+        },
+        {
+          "name": "ATA-73-ed8ee1b22fa72ca1-0126.md",
+          "score": 124
+        }
+      ]
+    },
+    {
+      "case_id": "NC-2024-006",
+      "label": "Decharge electrostatique / reservoir secondaire aile droite",
+      "query": "electrostatic discharge reservoir tank right wing grounding electrical esd",
+      "review_note": "Cas hybride reservoir + electrostatique. On veut voir ressortir grounding / ESD et des NC carburant analogues.",
+      "metrics": {
+        "tech_hit@5": true,
+        "nc_hit@5": true,
+        "tech_hit@10": true,
+        "nc_hit@10": true
+      },
+      "top_tech_docs": [
+        {
+          "name": "MODULE 5 POWER PLANT_page_0290.md",
+          "score": 76
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0455.md",
+          "score": 68
+        },
+        {
+          "name": "MODULE 2 ELECTRICAL_page_0263-img-0.md",
+          "score": 67
+        },
+        {
+          "name": "MODULE 2 ELECTRICAL_page_0263__with_img_desc.md",
+          "score": 67
+        },
+        {
+          "name": "a220-300-FCOM-1-1-13_page_1479__with_img_desc.md",
+          "score": 64
+        },
+        {
+          "name": "MODULE 1 GENERAL FAMILIARIZATION_page_0039__with_img_desc.md",
+          "score": 62
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0457.md",
+          "score": 62
+        },
+        {
+          "name": "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1488-img-0.md",
+          "score": 60
+        },
+        {
+          "name": "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1488__with_img_desc.md",
+          "score": 60
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0556.md",
+          "score": 56
+        }
+      ],
+      "top_non_conformities": [
+        {
+          "name": "ATA-24-0421cf4f89ca20c7-47e6.md",
+          "score": 72
+        },
+        {
+          "name": "ATA-32-c4b89f02e9508745-b8fa.md",
+          "score": 66
+        },
+        {
+          "name": "ATA-27-e0f5c75adee008cc-0998.md",
+          "score": 62
+        },
+        {
+          "name": "ATA-25-4e746f39954c6a88-9741.md",
+          "score": 60
+        },
+        {
+          "name": "ATA-28-621c0824b5880cb1-f6f1.md",
+          "score": 60
+        },
+        {
+          "name": "ATA-28-79b879e85e67c3-f9b0.md",
+          "score": 60
+        },
+        {
+          "name": "ATA-36-dc85b8dc1178ad5b584-32df.md",
+          "score": 60
+        },
+        {
+          "name": "ATA-50-35cf29c9eac1d7-5b24.md",
+          "score": 60
+        },
+        {
+          "name": "ATA-25-0b0e0509e367c3-7980.md",
+          "score": 58
+        },
+        {
+          "name": "ATA-30-7b1da0b3b5a56562-1a3b.md",
+          "score": 58
+        }
+      ]
+    },
+    {
+      "case_id": "NC-2024-004",
+      "label": "Rayure structure aluminium zone C2-2",
+      "query": "aluminum structure scratch zone c2-2 surface damage repair structural",
+      "review_note": "Cas dommage surfacique structure. On attend des guides de reparation et des NC structurelles proches, pas forcement un ATA unique.",
+      "metrics": {
+        "tech_hit@5": true,
+        "nc_hit@5": false,
+        "tech_hit@10": true,
+        "nc_hit@10": false
+      },
+      "top_tech_docs": [
+        {
+          "name": "MODULE 1 GENERAL FAMILIARIZATION_page_0732.md",
+          "score": 90
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0854.md",
+          "score": 86
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0861.md",
+          "score": 76
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0850.md",
+          "score": 74
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0862.md",
+          "score": 60
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0852.md",
+          "score": 56
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0863.md",
+          "score": 50
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0873.md",
+          "score": 44
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0855__with_img_desc.md",
+          "score": 42
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0867__with_img_desc.md",
+          "score": 42
+        }
+      ],
+      "top_non_conformities": [
+        {
+          "name": "ATA-52-c41d96453465a02e-02c8.md",
+          "score": 206
+        },
+        {
+          "name": "ATA-52-c41d74001994a02e-b8a0.md",
+          "score": 186
+        },
+        {
+          "name": "ATA-52-9c1e9a2f49a4e8c8-b6b7.md",
+          "score": 182
+        },
+        {
+          "name": "ATA-52-c41d96453465a02e-c197.md",
+          "score": 180
+        },
+        {
+          "name": "ATA-52-c41d3405459a02e-3217.md",
+          "score": 172
+        },
+        {
+          "name": "ATA-52-0c1e9a2f95a4e0c8-857e.md",
+          "score": 170
+        },
+        {
+          "name": "ATA-52-c41d41622082a02e-6679.md",
+          "score": 168
+        },
+        {
+          "name": "ATA-52-c41d55476454a02e-2fde.md",
+          "score": 166
+        },
+        {
+          "name": "ATA-52-c41d45101272a02e-e3fa.md",
+          "score": 156
+        },
+        {
+          "name": "ATA-52-c41d57972401a02e-4f4a.md",
+          "score": 156
+        }
+      ]
+    },
+    {
+      "case_id": "NC-2025-007",
+      "label": "Porte avant droite / delaminage / ATA-52",
+      "query": "front right door delamination ATA-52 composite structure frame 20 21",
+      "review_note": "Cas porte composite explicite en ATA-52. Les NC analogues doivent sortir sur ATA-52, avec docs airframe / door.",
+      "metrics": {
+        "tech_hit@5": true,
+        "nc_hit@5": true,
+        "tech_hit@10": true,
+        "nc_hit@10": true
+      },
+      "top_tech_docs": [
+        {
+          "name": "MODULE 4 AIRFRAME_page_0885.md",
+          "score": 193
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0884.md",
+          "score": 157
+        },
+        {
+          "name": "a220-300-FCOM-2-2-13_page_0025.md",
+          "score": 143
+        },
+        {
+          "name": "a220-300-cs300-bd500-1a11-quick-reference-handbook_page_0019.md",
+          "score": 143
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0888.md",
+          "score": 141
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0021.md",
+          "score": 139
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0020.md",
+          "score": 135
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0887.md",
+          "score": 133
+        },
+        {
+          "name": "MODULE 5 POWER PLANT_page_0022.md",
+          "score": 126
+        },
+        {
+          "name": "MODULE 4 AIRFRAME_page_0931__with_img_desc.md",
+          "score": 99
+        }
+      ],
+      "top_non_conformities": [
+        {
+          "name": "ATA-55-4793c1db7a90516f-0afa.md",
+          "score": 163
+        },
+        {
+          "name": "ATA-52-f90594a728198b74-62e1.md",
+          "score": 154
+        },
+        {
+          "name": "ATA-52-f18920a468609b02-331c.md",
+          "score": 153
+        },
+        {
+          "name": "ATA-52-f18920a468609b02-3c0b.md",
+          "score": 149
+        },
+        {
+          "name": "ATA-55-4793c1db7a283f-96bd.md",
+          "score": 149
+        },
+        {
+          "name": "ATA-57-fcf674f87b3e34b882-2613.md",
+          "score": 149
+        },
+        {
+          "name": "ATA-57-fcf674f87b3e705b3-997a.md",
+          "score": 149
+        },
+        {
+          "name": "ATA-55-4793c1db0a31156f-aced.md",
+          "score": 147
+        },
+        {
+          "name": "ATA-55-de7f337c0b5123b-aa33.md",
+          "score": 143
+        },
+        {
+          "name": "ATA-52-c41d3405459a02e-3217.md",
+          "score": 141
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "tech_hit@5": {
+      "hits": 3,
+      "total": 5,
+      "ratio": 0.6
+    },
+    "tech_hit@10": {
+      "hits": 4,
+      "total": 5,
+      "ratio": 0.8
+    },
+    "nc_hit@5": {
+      "hits": 2,
+      "total": 5,
+      "ratio": 0.4
+    },
+    "nc_hit@10": {
+      "hits": 2,
+      "total": 5,
+      "ratio": 0.4
+    }
+  }
+}
