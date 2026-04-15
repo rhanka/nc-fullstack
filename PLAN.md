@@ -98,10 +98,10 @@
 
 - [x] L6.1 Mener une session de QA produit / technique pour préciser l'utilité attendue de `LLM Wiki` sur le même dataset que le RAG. Recette: questions/réponses versionnées dans la spec active, avec arbitrages explicites sur audience, artefacts, cycle de mise à jour et critères de valeur. `UAT`
 - [x] L6.2 Définir une ontologie minimale A220 utile au retrieval et à la synthèse. Recette: taxonomie versionnée couvrant au minimum `ATA / système / pièce / zone`, avec gestion des alias et variantes métier. `AUTO`
-- [ ] L6.3 Migrer le dataprep en TypeScript autour d'un corpus manifest canonique unique. Recette: pipeline TS produisant `vector-export`, `lexical/fts.sqlite3` et manifestes sans dépendance Python dans la chaîne backend. `TEST`
-- [ ] L6.4 Prototyper un `LLM Wiki` humain-navigable sur le même dataset que le RAG, branché sur `vector-export + SQLite FTS5 + RRF`. Recette: pages compilées par pièce / sous-ensemble, liens utiles vers les docs, et troisième vue `entities/wiki` au même niveau que `tech docs` et `NC` pendant la recherche. `TEST`
-- [ ] L6.5 Décider explicitement si `graphify` apporte une valeur additionnelle après ontologie + wiki; sinon le différer sans ambiguïté. Recette: note de décision versionnée, sans intégration implicite. `AUTO` + `UAT`
-- [ ] L6.6 Superséder la cible LanceDB et supprimer l'intégration `lancedb` devenue inutile du runtime, du build et de la documentation si aucun besoin concret ne justifie son maintien. Recette: plus de dépendance `@lancedb/lancedb`, plus de copies `api/data/*/lancedb/`, plus de chemin moteur `lancedb`, et spec réalignée sur un seul moteur runtime. `TEST`
+- [x] L6.3 Migrer le dataprep en TypeScript autour d'un corpus manifest canonique unique. Recette: pipeline TS produisant `vector-export`, `lexical/fts.sqlite3` et manifestes sans dépendance Python dans la chaîne backend. `TEST`
+- [x] L6.4 Prototyper un `LLM Wiki` humain-navigable sur le même dataset que le RAG, branché sur `vector-export + SQLite FTS5 + RRF`. Recette: pages compilées par pièce / sous-ensemble, liens utiles vers les docs, et troisième vue `entities/wiki` au même niveau que `tech docs` et `NC` pendant la recherche. `TEST`
+- [x] L6.5 Décider explicitement si `graphify` apporte une valeur additionnelle après ontologie + wiki; sinon le différer sans ambiguïté. Recette: note de décision versionnée, sans intégration implicite. `AUTO` + `UAT`
+- [x] L6.6 Superséder la cible LanceDB et supprimer l'intégration `lancedb` devenue inutile du runtime, du build et de la documentation si aucun besoin concret ne justifie son maintien. Recette: plus de dépendance `@lancedb/lancedb`, plus de copies `api/data/*/lancedb/`, plus de chemin moteur `lancedb`, et spec réalignée sur un seul moteur runtime. `TEST`
 
 ## Critères de sortie
 

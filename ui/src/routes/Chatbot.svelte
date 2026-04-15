@@ -126,7 +126,19 @@
   };
 
   const aiUrl = `${getApiBaseUrl()}/ai`;
-  const runtimeStageOrder = ["query", "doc_search", "nc_search", "000", "100", "200", "300", "400", "500", "final"];
+  const runtimeStageOrder = [
+    "query",
+    "doc_search",
+    "nc_search",
+    "wiki_search",
+    "000",
+    "100",
+    "200",
+    "300",
+    "400",
+    "500",
+    "final",
+  ];
   const modelOptions: Array<{ value: ChatModelSelection; label: string }> = [
     { value: "gpt-5.4-nano", label: "GPT-5.4 Nano" },
     { value: "gpt-5.4", label: "GPT-5.4" },
@@ -581,7 +593,11 @@
       return result;
     }
 
-    if (metadata === "doc_search" || metadata === "nc_search") {
+    if (
+      metadata === "doc_search" ||
+      metadata === "nc_search" ||
+      metadata === "wiki_search"
+    ) {
       const count = countSources(result);
       return `${count} source${count > 1 ? "s" : ""}`;
     }
@@ -595,11 +611,12 @@
   ) {
     const techDocsCount = countSources(payload.sources?.tech_docs);
     const nonConformitiesCount = countSources(payload.sources?.non_conformities);
+    const entitiesWikiCount = countSources(payload.sources?.entities_wiki);
     const fragments: string[] = [];
 
-    if (techDocsCount || nonConformitiesCount) {
+    if (techDocsCount || nonConformitiesCount || entitiesWikiCount) {
       fragments.push(
-        `Built a targeted retrieval query, reviewed ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"} and ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"}.`,
+        `Built a targeted retrieval query, reviewed ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"}, ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"} and ${entitiesWikiCount} entity/wiki reference${entitiesWikiCount === 1 ? "" : "s"}.`,
       );
     }
 
@@ -743,6 +760,7 @@
     hints: {
       techDocsCount?: number;
       nonConformitiesCount?: number;
+      entitiesWikiCount?: number;
       usingProvidedSources?: boolean;
     } = {},
   ): string {
@@ -758,8 +776,9 @@
 
     const techDocsCount = hints.techDocsCount ?? 0;
     const nonConformitiesCount = hints.nonConformitiesCount ?? 0;
-    if (techDocsCount || nonConformitiesCount) {
-      return `Drafting the task ${taskRole} response after reviewing ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"} and ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"}.`;
+    const entitiesWikiCount = hints.entitiesWikiCount ?? 0;
+    if (techDocsCount || nonConformitiesCount || entitiesWikiCount) {
+      return `Drafting the task ${taskRole} response after reviewing ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"}, ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"} and ${entitiesWikiCount} entity/wiki reference${entitiesWikiCount === 1 ? "" : "s"}.`;
     }
 
     return `Drafting the final task ${taskRole} response.`;
@@ -824,6 +843,11 @@
           title: "Searching similar non-conformities",
           detail: "Collecting comparable cases.",
         };
+      case "wiki_search":
+        return {
+          title: "Searching entities and wiki",
+          detail: "Resolving ATA, part and zone context.",
+        };
       default:
         return {
           title: "Generating answer",
@@ -842,6 +866,9 @@
       case "search_non_conformities":
       case "nc_search":
         return "Search similar non-conformities";
+      case "search_entities_wiki":
+      case "wiki_search":
+        return "Search entities and wiki";
       default:
         return fallbackMetadata === "final" ? "Generate final answer" : "Working";
     }
@@ -1108,6 +1135,7 @@
               usingProvidedSources,
               techDocsCount: countSources(normalizedPayload.sources?.tech_docs),
               nonConformitiesCount: countSources(normalizedPayload.sources?.non_conformities),
+              entitiesWikiCount: countSources(normalizedPayload.sources?.entities_wiki),
             }),
         };
         appendAssistantRuntimeReasoning(
@@ -1124,6 +1152,8 @@
             ? "Technical documents retrieved"
             : metadata === "nc_search"
               ? "Similar non-conformities retrieved"
+              : metadata === "wiki_search"
+                ? "Entities and wiki retrieved"
               : "Step completed";
 
       upsertAssistantRuntimeStep(assistantMessageId, {
@@ -1153,6 +1183,15 @@
           "streaming",
           "Similar non-conformities retrieved",
           summarizeLegacyResult(metadata, payload.text) ?? "Relevant prior cases found.",
+        );
+      }
+
+      if (metadata === "wiki_search") {
+        setAssistantRuntimeState(
+          assistantMessageId,
+          "streaming",
+          "Entities and wiki retrieved",
+          summarizeLegacyResult(metadata, payload.text) ?? "Relevant entity pages found.",
         );
       }
     };
@@ -1406,6 +1445,11 @@
         label: "Similar non-conformities",
         items: (part.sources?.non_conformities?.sources ?? []) as ReferenceSourceItem[],
       },
+      {
+        key: "entities_wiki" as const,
+        label: "Entities / wiki",
+        items: (part.sources?.entities_wiki?.sources ?? []) as ReferenceSourceItem[],
+      },
     ].filter((group) => group.items.length > 0);
   }
 
@@ -1423,10 +1467,27 @@
     return undefined;
   }
 
-  function openSource(groupKey: "tech_docs" | "non_conformities", item: ReferenceSourceItem) {
+  function openSource(
+    groupKey: "tech_docs" | "non_conformities" | "entities_wiki",
+    item: ReferenceSourceItem,
+  ) {
     if (groupKey === "tech_docs" && typeof item.doc === "string" && item.doc.trim()) {
       selectDoc.set({ doc: item.doc });
       activeTabValue.set(2);
+      return;
+    }
+
+    if (groupKey === "entities_wiki") {
+      const primaryDoc =
+        typeof item.primary_doc === "string" && item.primary_doc.trim()
+          ? item.primary_doc
+          : typeof item.doc === "string" && item.doc.trim()
+            ? item.doc
+            : null;
+      if (primaryDoc) {
+        selectDoc.set({ doc: primaryDoc });
+        activeTabValue.set(2);
+      }
       return;
     }
 

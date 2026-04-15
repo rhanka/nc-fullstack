@@ -10,9 +10,10 @@ Current guarantees:
 - smoke endpoint available on `GET /ping`
 - `/ai` default path is native TS
 - vector retrieval runtime expects `api/data/*/vector-export/manifest.json`
-- retrieval engine is selected by `NC_RETRIEVAL_ENGINE`
-  - `export_exact` = current neutral-export fallback
-  - `lancedb` = embedded LanceDB OSS backend
+- retrieval runtime is fixed on `export_exact`
+  - exact dense search over `vector-export`
+  - lexical search over `SQLite FTS5`
+  - hybrid fusion via `RRF`
 
 Useful commands:
 
@@ -20,13 +21,6 @@ Useful commands:
 - `npm --prefix backend-ts run smoke`
 - `npm --prefix backend-ts run start`
 - `npm --prefix backend-ts run vectors:export`
-- `npm --prefix backend-ts run lancedb:import`
-
-Import behavior:
-
-- `lancedb:import` builds the embedded LanceDB corpora repo-locally from `vector-export`
-- by default it materializes the table plus the FTS index only
-- set `LANCEDB_BUILD_VECTOR_INDEX=1` if you explicitly want the LanceDB ANN/vector index during import
 
 Cutover commands:
 

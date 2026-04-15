@@ -305,13 +305,15 @@ Le critère principal retenu est:
 
 ## Décision sur `graphify`
 
-Position actuelle:
+Décision active:
 
+- `graphify` n'est pas retenu pour cette phase
 - `graphify` n'est pas requis pour la V0
-- il reste une option à évaluer après:
+- la trajectoire active reste:
   - ontologie minimale
   - wiki compilé
   - vue `entities/wiki`
+- aucun lot technique ne doit introduire `graphify` tant qu'un besoin concret n'est pas démontré
 
 Seuil de réouverture:
 
@@ -335,10 +337,13 @@ Seuil de réouverture:
 - wiki compilé
 - vue `entities/wiki`
 - liens vers docs techniques
+- prototype runtime branché:
+  - troisième groupe de sources `entities/wiki`
+  - ouverture vers le document technique primaire quand il existe
 
 ### `L6.5`
 
-- décision explicite `graphify: oui/non plus tard`
+- décision explicite `graphify: non pour cette phase`
 
 ### `L6.6`
 

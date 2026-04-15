@@ -16,14 +16,14 @@ Etat réel à date:
 
 - le backend prod tourne en TypeScript
 - le moteur retrieval runtime actif est `export_exact`
-- `lancedb` existe encore dans le repo comme intégration alternative
-- cette intégration n'est plus considérée comme la cible par défaut
+- l'intégration `lancedb` a été retirée du runtime, du build et des dépendances
+- cette spec doit être lue comme archive d'une exploration benchmarkée, pas comme cible active
 
 Direction active désormais retenue:
 
 - conserver un seul moteur runtime autour de `vector-export + SQLite FTS5 + RRF`
 - migrer le dataprep en TypeScript
-- supprimer l'intégration `lancedb` si aucun besoin concret ne justifie son maintien
+- ne pas réintroduire `lancedb` sans nouveau benchmark et nouvel arbitrage explicite
 - traiter cette spec comme archive d'une option benchmarkée, pas comme feuille de route active
 
 ## Objectif

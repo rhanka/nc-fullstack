@@ -144,6 +144,23 @@ function createDependencies() {
             retrieval_rank: 1,
           },
         ],
+        entitiesWiki: [
+          {
+            slug: "windshield-frame",
+            title: "Windshield frame",
+            path: "wiki/windshield-frame.md",
+            ata_codes: ["ATA 56"],
+            zones: ["RH windshield frame"],
+            aliases: ["cockpit window frame"],
+            supporting_docs: ["tech-window.md"],
+            doc: "Windshield frame",
+            chunk_id: "windshield-frame",
+            content: "ATA 56 · RH windshield frame · cockpit window frame",
+            wiki_rank: 1,
+            wiki_score: 6,
+            primary_doc: "tech-window.md",
+          },
+        ],
         debug: {
           techDocs: {
             corpus: "tech_docs",
@@ -154,6 +171,10 @@ function createDependencies() {
             corpus: "non_conformities",
             vectorEnabled: true,
             queryVariants: [query],
+          },
+          entitiesWiki: {
+            indexReady: true,
+            queryTokens: ["ata", "56", "windshield", "frame", "rivet", "flushness"],
           },
         },
       };
@@ -213,6 +234,7 @@ test("NativeAiOrchestrator.compute returns a source-v1 payload without Python ru
     result.payload.sources.non_conformities?.sources?.[0]?.doc,
     "ATA-56-2024-0001",
   );
+  assert.equal(result.payload.sources.entities_wiki?.sources?.[0]?.doc, "Windshield frame");
 });
 
 test("NativeAiOrchestrator.openStream emits legacy SSE blocks without Python runtime", async () => {
@@ -228,6 +250,7 @@ test("NativeAiOrchestrator.openStream emits legacy SSE blocks without Python run
   assert.ok(chunks.some((chunk) => chunk.includes('"metadata":"query"')));
   assert.ok(chunks.some((chunk) => chunk.includes('"metadata":"doc_search"')));
   assert.ok(chunks.some((chunk) => chunk.includes('"metadata":"nc_search"')));
+  assert.ok(chunks.some((chunk) => chunk.includes('"metadata":"wiki_search"')));
   assert.ok(chunks.some((chunk) => chunk.includes('event: delta')));
   assert.ok(chunks.some((chunk) => chunk.includes("event: status")));
   assert.ok(chunks.some((chunk) => chunk.includes("event: tool_call_start")));

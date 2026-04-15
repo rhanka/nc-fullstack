@@ -15,8 +15,6 @@ services:
       - TECH_DOCS_DIR
       - NC_DIR
       - RETRIEVAL_EMBEDDING_MODEL
-      - NC_RETRIEVAL_ENGINE=export_exact
-      - LANCEDB_TABLE_NAME=chunks
     networks:
       - app-network
 
