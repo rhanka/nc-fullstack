@@ -26,7 +26,7 @@ Clarification importante par rapport aux itérations précédentes:
 
 - le backend prod tourne bien en TypeScript
 - le moteur retrieval runtime actif est `export_exact`, pas `lancedb`
-- `lancedb` existe encore dans le repo comme intégration optionnelle explorée, mais ce n'est plus la cible active
+- l'intégration `lancedb` a été retirée du runtime et du build
 - le dataprep n'est pas encore migré en TypeScript; c'est désormais une dette explicite
 - la prochaine couche "knowledge" ne doit pas supposer `graphify` par défaut
 
@@ -792,10 +792,12 @@ Arbitrages utilisateur désormais retenus avant `L6.3+`:
 
 7. **Position de `graphify`**
    - l'utilité de `graphify` n'est pas démontrée à ce stade
-   - il reste différé jusqu'à preuve qu'il apporte plus que:
+   - `graphify` n'est pas retenu pour cette phase
+   - la trajectoire active reste:
      - une ontologie minimale
      - un wiki compilé
      - des liens explicites vers les docs
+   - une réouverture n'est recevable qu'en présence d'un besoin concret d'audit ou d'exploration que l'ontologie + wiki ne couvrent pas
 
 8. **Poids des NC historiques**
    - les NC historiques étant fictives à ce stade, elles ne doivent pas piloter le design de la couche connaissance

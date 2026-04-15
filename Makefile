@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down up-ts ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help check-db create-tech-docs-db create-nc-db create-db api-build api-build-ts api-install-ts api-image-publish api-image-publish-ts api-test-ts api-smoke-ts api-contracts-ts api-review-routing-ts check-ts deploy-api deploy-api-ts deploy-api-python-container rollback-api-python
+.PHONY: dev dev-stop up down up-ts ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help check-db create-tech-docs-db create-nc-db create-db api-build api-build-ts api-install-ts api-image-publish api-image-publish-ts api-test-ts api-smoke-ts api-contracts-ts api-review-routing-ts check-ts deploy-api deploy-api-ts deploy-api-python-container rollback-api-python dataprep-ts dataprep-ts-tech-docs dataprep-ts-nc
 
 # ----------------------------
 # Helpers
@@ -110,6 +110,18 @@ api-contracts-ts: api-install-ts
 api-review-routing-ts: api-install-ts
 	@echo "▶ Reviewing TS backend routing decisions..."
 	cd backend-ts && npm run review:routing
+
+dataprep-ts: api-install-ts
+	@echo "▶ Running TS dataprep for all corpora..."
+	cd backend-ts && npm run dataprep:ts
+
+dataprep-ts-tech-docs: api-install-ts
+	@echo "▶ Running TS dataprep for tech docs..."
+	cd backend-ts && npm run dataprep:ts:tech-docs
+
+dataprep-ts-nc: api-install-ts
+	@echo "▶ Running TS dataprep for non-conformities..."
+	cd backend-ts && npm run dataprep:ts:nc
 
 check-ts: ui-build api-test-ts api-contracts-ts
 	@echo "✔️ TS UI build and backend checks completed."

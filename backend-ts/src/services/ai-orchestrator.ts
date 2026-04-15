@@ -188,6 +188,9 @@ function normalizeSources(input: unknown): AiSourceGroups | null {
   return {
     tech_docs: techDocs as AiSourceGroups["tech_docs"],
     non_conformities: nonConformities as AiSourceGroups["non_conformities"],
+    ...(record.entities_wiki
+      ? { entities_wiki: record.entities_wiki as AiSourceGroups["entities_wiki"] }
+      : {}),
   };
 }
 
@@ -409,6 +412,7 @@ export class NativeAiOrchestrator implements AiRuntime {
     const sources: AiSourceGroups = {
       tech_docs: formatSearchResults([...retrieval.techDocs]),
       non_conformities: formatSearchResults(mergedNcResults),
+      entities_wiki: formatSearchResults([...retrieval.entitiesWiki]),
     };
     const confidence = assessRetrievalConfidence(
       [...retrieval.techDocs],
@@ -464,6 +468,7 @@ export class NativeAiOrchestrator implements AiRuntime {
         description: context.description,
         search_docs: jsonStringify(sources.tech_docs),
         search_nc: jsonStringify(sources.non_conformities),
+        search_entities_wiki: jsonStringify(sources.entities_wiki),
         history: jsonStringify(history),
         modelSelection: context.modelSelection,
         complexitySelection: context.complexitySelection,
@@ -615,9 +620,33 @@ export class NativeAiOrchestrator implements AiRuntime {
             metadata: "nc_search",
           });
 
+          yield sseEncode("tool_call_start", {
+            tool_call_id: "wiki_search",
+            name: "search_entities_wiki",
+            args: query,
+          });
+          yield sseEncode(null, {
+            type: "action",
+            text: "Search for relevant entities and wiki articles",
+            metadata: "wiki_search",
+          });
+          yield sseEncode("tool_call_result", {
+            tool_call_id: "wiki_search",
+            result: {
+              status: "completed",
+              summary: `${retrieval.entitiesWiki.length} source${retrieval.entitiesWiki.length === 1 ? "" : "s"}`,
+            },
+          });
+          yield sseEncode(null, {
+            type: "result",
+            text: formatSearchResults([...retrieval.entitiesWiki]),
+            metadata: "wiki_search",
+          });
+
           sources = {
             tech_docs: formatSearchResults([...retrieval.techDocs]),
             non_conformities: formatSearchResults(mergedNcResults),
+            entities_wiki: formatSearchResults([...retrieval.entitiesWiki]),
           };
           retrievalConfidence = assessRetrievalConfidence(
             [...retrieval.techDocs],
@@ -663,6 +692,7 @@ export class NativeAiOrchestrator implements AiRuntime {
         const activeSources = sources ?? {
           tech_docs: { sources: [] },
           non_conformities: { sources: [] },
+          entities_wiki: { sources: [] },
         };
 
         yield sseEncode("status", {
@@ -684,6 +714,7 @@ export class NativeAiOrchestrator implements AiRuntime {
             description: context.description,
             search_docs: jsonStringify(activeSources.tech_docs),
             search_nc: jsonStringify(activeSources.non_conformities),
+            search_entities_wiki: jsonStringify(activeSources.entities_wiki),
             history: jsonStringify(history),
             modelSelection: context.modelSelection,
             complexitySelection: context.complexitySelection,
