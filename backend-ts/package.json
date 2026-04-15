@@ -16,6 +16,8 @@
     "dataprep:ts": "node --experimental-strip-types scripts/run_dataprep.ts all",
     "dataprep:ts:tech-docs": "node --experimental-strip-types scripts/run_dataprep.ts tech_docs",
     "dataprep:ts:nc": "node --experimental-strip-types scripts/run_dataprep.ts non_conformities",
+    "dataprep:ts:knowledge": "node --experimental-strip-types scripts/run_knowledge_dataprep.ts all",
+    "dataprep:ts:knowledge:tech-docs": "node --experimental-strip-types scripts/run_knowledge_dataprep.ts tech_docs",
     "vectors:export": "python scripts/export_chroma_vectors.py all"
   }
 }
