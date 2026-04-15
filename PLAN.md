@@ -121,6 +121,7 @@
 - [ ] L6U.1 Vérifier en UAT la présence et l'utilité réelle du troisième canal `entities/wiki` au même niveau que `tech docs` et `similar NC`. Recette: cas `000` et `100` avec validation explicite de la lisibilité et de l'actionnabilité. `UAT`
 - [ ] L6U.2 Vérifier en UAT la pertinence des liens `wiki -> doc technique primaire`. Recette: au moins 3 parcours réels où l'ouverture depuis `entities/wiki` aide réellement l'analyse. `UAT`
 - [ ] L6U.3 Vérifier en UAT que les pages wiki par `part / sous-ensemble` améliorent la résolution de problème, et pas seulement la navigation. Recette: retour utilisateur explicite sur au moins 2 cas. `UAT`
+- Gate: cette UAT ne démarre qu'après un full rebuild TS des artefacts `vector-export / lexical / ontology / wiki` sur le corpus canonique, afin d'éviter une validation sur un état hybride.
 
 ## Lot 6.3 - Fix post-UAT couche connaissance
 
@@ -135,6 +136,7 @@
 - [x] L6S.3 Vérifier qu'aucune dépendance `graphify` ou `lancedb` n'a été réintroduite pendant les fixes. Recette: grep repo-local propre + checks backend verts. `TEST`
 
 - Note: un bloqueur pré-UAT du lot 6 a été corrigé: si `ontology/` ou `wiki/` manque, le backend TS bootstrap désormais la couche connaissance en mode déterministe sans embeddings, et filtre les faux concepts documentaires génériques (`1. Scope`, `Reference`, etc.).
+- Note: ce bootstrap local sert uniquement à débloquer le runtime et les checks techniques; il ne remplace pas le full rebuild TS attendu avant l'UAT utilisateur du lot 6.
 
 ## Critères de sortie
 
