@@ -11,6 +11,7 @@ import {
   normalizeTechDocsPreparedRow,
   parseDelimitedTable,
   runDataprepForCorpus,
+  runKnowledgeDataprepForCorpus,
   type DataprepCorpusConfig,
   type EmbeddingProvider,
   type PartCanonicalizer,
@@ -176,4 +177,114 @@ test("runDataprepForCorpus builds retrieval and knowledge artifacts from prepare
   ) as Array<Record<string, unknown>>;
   assert.equal(ncOccurrences[0]?.task_kind, "000");
   assert.ok(Array.isArray(ncOccurrences[0]?.part_numbers));
+});
+
+test("runKnowledgeDataprepForCorpus builds ontology and wiki without embeddings", async () => {
+  const root = buildTestRoot();
+  const techSource = path.join(root, "tech_docs.csv.gz");
+  const techOutputRoot = path.join(root, "tech");
+  mkdirSync(techOutputRoot, { recursive: true });
+
+  writeGzipTsv(techSource, [
+    ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"],
+    [
+      "A220-ATA56-window-page_0001.pdf",
+      "A220-ATA56-window.pdf",
+      "A220-ATA56-window-page_0001.json",
+      "# RH Windshield Frame\nFlushness inspection around the RH windshield frame and cockpit window surround.",
+      "110",
+      "A220-ATA56-window-page_0001.pdf 0",
+      "ATA 56",
+      "RH Windshield Frame",
+      "procedure",
+    ],
+  ]);
+
+  const techConfig: DataprepCorpusConfig = {
+    corpus: "tech_docs",
+    sourceFile: techSource,
+    outputRoot: techOutputRoot,
+    hasHeader: true,
+    normalizeRow: normalizeTechDocsPreparedRow,
+  };
+
+  const result = await runKnowledgeDataprepForCorpus(techConfig);
+
+  assert.equal(result.recordCount, 1);
+  assert.ok(result.ontology.partCount >= 1);
+  assert.ok(result.wiki.pageCount >= 1);
+  const wikiIndex = JSON.parse(readFileSync(result.wiki.indexPath, "utf8")) as Array<Record<string, unknown>>;
+  assert.equal(String(wikiIndex[0]?.title ?? ""), "Rh Windshield Frame");
+});
+
+test("runKnowledgeDataprepForCorpus truncates oversized wiki slugs deterministically", async () => {
+  const root = buildTestRoot();
+  const techSource = path.join(root, "tech_docs.csv.gz");
+  const techOutputRoot = path.join(root, "tech");
+  mkdirSync(techOutputRoot, { recursive: true });
+
+  writeGzipTsv(techSource, [
+    ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"],
+    [
+      "A220-ATA57-wing-page_0001.pdf",
+      "A220-ATA57-wing.pdf",
+      "A220-ATA57-wing-page_0001.json",
+      "Wing structure inspection reference.",
+      "64",
+      "A220-ATA57-wing-page_0001.pdf 0",
+      "ATA 57",
+      "Spar Rear Spar FWD Hinge Rib 5 Hinge Rib 4 Hinge Rib 3 Hinge Rib 2 Hinge Rib 1 Closure Rib Ref Rib 7 Outb Rib 6 Outb Rib 5 Outb Rib 4 Outb Rib 3 Outb Rib 2 Outb Rib 1 Outb Splice Rib Outb Rib 9 Inbd Rib 8 Inbd Rib 7 Inbd Rib 6 Inbd Rib 5 Inbd Rib 4 Inbd Rib 3 Inbd Rib 2 Inbd Rib 1 Inbd Splice Rib Inbd",
+      "procedure",
+    ],
+  ]);
+
+  const techConfig: DataprepCorpusConfig = {
+    corpus: "tech_docs",
+    sourceFile: techSource,
+    outputRoot: techOutputRoot,
+    hasHeader: true,
+    normalizeRow: normalizeTechDocsPreparedRow,
+  };
+
+  const result = await runKnowledgeDataprepForCorpus(techConfig);
+  const wikiIndex = JSON.parse(readFileSync(result.wiki.indexPath, "utf8")) as Array<Record<string, unknown>>;
+  const wikiPath = String(wikiIndex[0]?.path ?? "");
+  assert.match(wikiPath, /^parts\/[a-z0-9-]+\.md$/u);
+  assert.ok(wikiPath.length < 120);
+});
+
+test("runKnowledgeDataprepForCorpus filters generic section headings from wiki pages", async () => {
+  const root = buildTestRoot();
+  const techSource = path.join(root, "tech_docs.csv.gz");
+  const techOutputRoot = path.join(root, "tech");
+  mkdirSync(techOutputRoot, { recursive: true });
+
+  writeGzipTsv(techSource, [
+    ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"],
+    [
+      "A220-ATA52-door-page_0001.pdf",
+      "A220-ATA52-door.pdf",
+      "A220-ATA52-door-page_0001.json",
+      "# 1. Scope\n# Door Frame\nDoor frame inspection instructions.",
+      "64",
+      "A220-ATA52-door-page_0001.pdf 0",
+      "ATA 52",
+      "1. Scope; Door Frame",
+      "procedure",
+    ],
+  ]);
+
+  const techConfig: DataprepCorpusConfig = {
+    corpus: "tech_docs",
+    sourceFile: techSource,
+    outputRoot: techOutputRoot,
+    hasHeader: true,
+    normalizeRow: normalizeTechDocsPreparedRow,
+  };
+
+  const result = await runKnowledgeDataprepForCorpus(techConfig);
+  const wikiIndex = JSON.parse(readFileSync(result.wiki.indexPath, "utf8")) as Array<Record<string, unknown>>;
+  const titles = wikiIndex.map((entry) => String(entry.title ?? ""));
+  assert.ok(titles.includes("Door Frame"));
+  assert.ok(!titles.includes("1. Scope"));
 });

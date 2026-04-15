@@ -124,15 +124,17 @@
 
 ## Lot 6.3 - Fix post-UAT couche connaissance
 
-- [ ] L6F.1 Corriger les écarts de retrieval ou de rendu révélés par l'UAT `Lot 6.2`. Recette: liste de fixes fermée, sans dérive de périmètre vers un graphe généraliste. `TEST`
-- [ ] L6F.2 Ajuster l'ontologie minimale `ATA / part / zone / alias` si l'UAT révèle des trous bloquants. Recette: spec et artefacts réalignés, IDs stables préservés. `TEST`
+- [x] L6F.1 Corriger les écarts de retrieval ou de rendu révélés par l'UAT `Lot 6.2`. Recette: liste de fixes fermée, sans dérive de périmètre vers un graphe généraliste. `TEST`
+- [x] L6F.2 Ajuster l'ontologie minimale `ATA / part / zone / alias` si l'UAT révèle des trous bloquants. Recette: spec et artefacts réalignés, IDs stables préservés. `TEST`
 - [ ] L6F.3 Ajuster le rendu UI `entities/wiki` si l'UAT montre un manque de lisibilité ou d'utilité. Recette: rendu compact, ouvrable et cohérent avec le shell chat existant. `TEST`
 
 ## Lot 6.4 - Smoke tests UAT couche connaissance
 
 - [ ] L6S.1 Rejouer un smoke test `000` après les fixes post-UAT. Recette: `entities/wiki` présent, liens ouvrables, aucune régression chat/réponse/rapport. `TEST` + `UAT`
 - [ ] L6S.2 Rejouer un smoke test `100` après les fixes post-UAT. Recette: même validation sur un cas d'analyse plus riche. `TEST` + `UAT`
-- [ ] L6S.3 Vérifier qu'aucune dépendance `graphify` ou `lancedb` n'a été réintroduite pendant les fixes. Recette: grep repo-local propre + checks backend verts. `TEST`
+- [x] L6S.3 Vérifier qu'aucune dépendance `graphify` ou `lancedb` n'a été réintroduite pendant les fixes. Recette: grep repo-local propre + checks backend verts. `TEST`
+
+- Note: un bloqueur pré-UAT du lot 6 a été corrigé: si `ontology/` ou `wiki/` manque, le backend TS bootstrap désormais la couche connaissance en mode déterministe sans embeddings, et filtre les faux concepts documentaires génériques (`1. Scope`, `Reference`, etc.).
 
 ## Critères de sortie
 

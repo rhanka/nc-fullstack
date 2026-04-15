@@ -91,6 +91,13 @@ export interface RunDataprepResult {
   readonly knowledgeManifestPath: string;
 }
 
+export interface RunKnowledgeDataprepResult {
+  readonly corpus: DataprepCorpusName;
+  readonly recordCount: number;
+  readonly ontology: RunDataprepResult["ontology"];
+  readonly wiki: RunDataprepResult["wiki"];
+}
+
 type MutablePartCanonicalizerInput = {
   seedName: string;
   aliases: string[];
@@ -124,6 +131,11 @@ const ZONE_PATTERNS: readonly [RegExp, string][] = [
 const PART_NUMBER_RE = /\b[A-Z0-9]+(?:-[A-Z0-9]+){2,}\b/gu;
 const ATA_RE = /\bATA[\s-]?(\d{2})\b/giu;
 const HEADING_RE = /^#{1,3}\s+(.+)$/gmu;
+const GENERIC_PART_CANDIDATE_RE =
+  /\b(scope|reference|references|purpose|abbreviations|acronyms|requirements|manual|familiarization|policy|appendix|table of contents)\b/iu;
+const SECTION_HEADING_RE = /^\(?\d+(?:\.\d+)*\)?[\s.:_-]+/u;
+const PART_LIKE_TOKEN_RE =
+  /\b(door|frame|panel|tank|wing|window|windshield|fuselage|rib|spar|valve|pump|seal|flap|gear|screen|orifice|drain|hinge|sensor|duct|pipe|skin|bracket|beam|bulkhead|fairing|actuator|reservoir|strut|spoiler|aileron|rudder|elevator|nacelle|cowl|latch|handle|seal)\b/iu;
 
 function titleCase(value: string): string {
   return value
@@ -133,8 +145,15 @@ function titleCase(value: string): string {
     .join(" ");
 }
 
-function slugify(value: string): string {
+function normalizeCandidateLabel(value: string): string {
   return value
+    .replace(/<br\s*\/?>/giu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function slugify(value: string): string {
+  const base = value
     .normalize("NFKD")
     .replace(/[^\x00-\x7F]/gu, "")
     .toLowerCase()
@@ -142,6 +161,11 @@ function slugify(value: string): string {
     .replace(/^-+/u, "")
     .replace(/-+$/u, "")
     .replace(/-{2,}/gu, "-");
+  if (base.length <= 96) {
+    return base;
+  }
+  const hash = createHash("sha1").update(base).digest("hex").slice(0, 10);
+  return `${base.slice(0, 85).replace(/-+$/u, "")}-${hash}`;
 }
 
 function uniqueSorted(values: Iterable<string>): string[] {
@@ -152,6 +176,23 @@ function uniqueSorted(values: Iterable<string>): string[] {
         .filter(Boolean),
     ),
   ).sort((left, right) => left.localeCompare(right));
+}
+
+function isPartCandidate(value: string): boolean {
+  const normalized = normalizeCandidateLabel(value);
+  if (normalized.length < 4 || normalized.length > 400) {
+    return false;
+  }
+  if (SECTION_HEADING_RE.test(normalized)) {
+    return false;
+  }
+  if (GENERIC_PART_CANDIDATE_RE.test(normalized)) {
+    return false;
+  }
+  if (!PART_LIKE_TOKEN_RE.test(normalized) && !/\bATA[\s-]?\d{2}\b/iu.test(normalized)) {
+    return false;
+  }
+  return true;
 }
 
 function chunkText(value: string, maxLength: number): string {
@@ -168,18 +209,20 @@ export function splitPartsField(value: string): string[] {
   return uniqueSorted(
     value
       .split(/[;,|]/u)
-      .map((part) => part.trim())
-      .filter((part) => part.length >= 3),
+      .map((part) => normalizeCandidateLabel(part))
+      .filter((part) => part.length >= 3)
+      .filter((part) => isPartCandidate(part)),
   );
 }
 
 function extractHeadingCandidates(content: string): string[] {
   const candidates: string[] = [];
   for (const match of content.matchAll(HEADING_RE)) {
-    const heading = match[1]?.trim() ?? "";
+    const heading = normalizeCandidateLabel(match[1]?.trim() ?? "");
     if (
       heading.length >= 4 &&
-      heading.length <= 80 &&
+      heading.length <= 120 &&
+      isPartCandidate(heading) &&
       !/^airbus$/iu.test(heading) &&
       !/confidential|administrative office|appendix|table of contents/iu.test(heading)
     ) {
@@ -386,7 +429,7 @@ export function readPreparedRecords(config: DataprepCorpusConfig): PreparedRecor
   return normalized;
 }
 
-function buildSourceFingerprint(config: DataprepCorpusConfig, records: readonly PreparedRecord[]): string {
+export function buildSourceFingerprint(config: DataprepCorpusConfig, records: readonly PreparedRecord[]): string {
   const hash = createHash("sha256");
   hash.update(config.sourceFile);
   hash.update("\n");
@@ -580,7 +623,7 @@ function collectPartCandidates(record: PreparedRecord): string[] {
   return extractHeadingCandidates(record.content);
 }
 
-function buildOntologyArtifacts(
+export function buildOntologyArtifacts(
   config: DataprepCorpusConfig,
   records: readonly PreparedRecord[],
   fingerprint: string,
@@ -749,7 +792,7 @@ function buildOntologyArtifacts(
   };
 }
 
-function buildWikiArtifacts(
+export function buildWikiArtifacts(
   config: DataprepCorpusConfig,
   ontologyRoot: string,
 ): RunDataprepResult["wiki"] {
@@ -1053,6 +1096,32 @@ export async function runDataprepForCorpus(
     corpus: config.corpus,
     ...partialResult,
     knowledgeManifestPath,
+  };
+}
+
+export async function runKnowledgeDataprepForCorpus(
+  config: DataprepCorpusConfig,
+  options: Pick<RunDataprepOptions, "partCanonicalizer" | "llmAssistMode"> = {},
+): Promise<RunKnowledgeDataprepResult> {
+  const records = readPreparedRecords(config);
+  const fingerprint = buildSourceFingerprint(config, records);
+  const partCanonicalizations = await canonicalizeParts(records, {
+    embeddingProvider: {
+      model: "knowledge-only",
+      async embed() {
+        throw new Error("embeddingProvider is not used in knowledge-only dataprep");
+      },
+    },
+    partCanonicalizer: options.partCanonicalizer,
+    llmAssistMode: options.llmAssistMode ?? "off",
+  });
+  const ontology = buildOntologyArtifacts(config, records, fingerprint, partCanonicalizations);
+  const wiki = buildWikiArtifacts(config, ontology.root);
+  return {
+    corpus: config.corpus,
+    recordCount: records.length,
+    ontology,
+    wiki,
   };
 }
 

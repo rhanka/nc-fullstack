@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down up-ts ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help check-db create-tech-docs-db create-nc-db create-db api-build api-build-ts api-install-ts api-image-publish api-image-publish-ts api-test-ts api-smoke-ts api-contracts-ts api-review-routing-ts check-ts deploy-api deploy-api-ts deploy-api-python-container rollback-api-python dataprep-ts dataprep-ts-tech-docs dataprep-ts-nc
+.PHONY: dev dev-stop up down up-ts ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help check-db create-tech-docs-db create-nc-db create-db api-build api-build-ts api-install-ts api-image-publish api-image-publish-ts api-test-ts api-smoke-ts api-contracts-ts api-review-routing-ts check-ts deploy-api deploy-api-ts deploy-api-python-container rollback-api-python dataprep-ts dataprep-ts-tech-docs dataprep-ts-nc dataprep-ts-knowledge dataprep-ts-knowledge-tech-docs
 
 # ----------------------------
 # Helpers
@@ -122,6 +122,14 @@ dataprep-ts-tech-docs: api-install-ts
 dataprep-ts-nc: api-install-ts
 	@echo "▶ Running TS dataprep for non-conformities..."
 	cd backend-ts && npm run dataprep:ts:nc
+
+dataprep-ts-knowledge: api-install-ts
+	@echo "▶ Running TS knowledge-only dataprep for all corpora..."
+	cd backend-ts && npm run dataprep:ts:knowledge
+
+dataprep-ts-knowledge-tech-docs: api-install-ts
+	@echo "▶ Running TS knowledge-only dataprep for tech docs..."
+	cd backend-ts && npm run dataprep:ts:knowledge:tech-docs
 
 check-ts: ui-build api-test-ts api-contracts-ts
 	@echo "✔️ TS UI build and backend checks completed."
