@@ -93,6 +93,19 @@
 - [ ] L5.2o Retirer le dump `NC update` du chat et le remplacer par un lien compact vers la task amendée. Recette: le chat n'affiche plus les champs du canevas; il propose seulement un accès court à l'objet amendé (`000`, `100`, etc.) dans l'application. `TEST` + `UAT`
 - [ ] L5.3 Nettoyer la dette de transition côté UI et backend. Recette: plus de double chemin critique non justifié. `AUTO`
 - Note: les updates finales après finalisation sont déjà présentes; les bugs ouverts portent désormais sur la qualité du shell runtime, la sélection modèle / reasoning et le rendu outillage / reasoning pendant l'exécution.
+- Checklist UAT `L5.2` à exécuter sur un cas `000` réaliste:
+  1. Ouvrir le widget en mode flottant, vérifier la présence des quick actions de session vide, puis vérifier que rien n'est auto-envoyé.
+  2. Vérifier que le composeur expose `Model` et `Reasoning effort`, avec défaut `GPT-5.4 Nano` + `Auto`.
+  3. Envoyer un prompt `000` depuis le chat et vérifier la transition visible `submitted -> streaming -> ready`, sans bulle parasite de type `Drafting the response...`.
+  4. Pendant la génération, vérifier que le runtime affiche au moins les étapes `Request prepared`, `Technical documents retrieved`, `Similar non-conformities retrieved` et, quand disponible, `Entities and wiki retrieved`.
+  5. Pendant la génération, vérifier qu'un résumé de reasoning est visible et dépliable, puis qu'il reste cohérent une fois la réponse terminée.
+  6. Vérifier que le texte assistant apparaît avant la fin de génération et que les mises à jour du rapport sont poussées dans l'application sans dump brut dans le chat.
+  7. Ouvrir `Sources`, vérifier le rendu compact par groupes, puis ouvrir au moins une source `tech docs`, une source `similar NC` et, si présente, une source `entities/wiki`.
+  8. Vérifier que `Updated report` ou `Updated task` renvoie bien vers l'objet amendé dans l'application.
+- Checklist UAT `L5.2` à exécuter sur un cas `100` réel:
+  1. Refaire la même séquence avec `currentTask = 100`.
+  2. Vérifier que les quick actions et le texte produit sont adaptés à l'analyse plutôt qu'à la seule observation factuelle.
+  3. Vérifier que le niveau de reasoning visible et les étapes runtime restent lisibles avec une réponse plus longue.
 
 ## Lot 6 - Couche connaissance, dataprep TS et LLM Wiki
 
