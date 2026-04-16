@@ -11,13 +11,12 @@
     "dev": "node --experimental-strip-types --watch src/server.ts",
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "smoke": "node --experimental-strip-types --test test/smoke.test.ts",
-    "contracts:check": "python contracts/validate_contracts.py",
+    "contracts:check": "node --experimental-strip-types scripts/validate-contracts.ts",
     "review:routing": "node --experimental-strip-types scripts/review-routing-decisions.ts",
-    "dataprep:ts": "node --experimental-strip-types scripts/run_dataprep.ts all",
-    "dataprep:ts:tech-docs": "node --experimental-strip-types scripts/run_dataprep.ts tech_docs",
-    "dataprep:ts:nc": "node --experimental-strip-types scripts/run_dataprep.ts non_conformities",
-    "dataprep:ts:knowledge": "node --experimental-strip-types scripts/run_knowledge_dataprep.ts all",
-    "dataprep:ts:knowledge:tech-docs": "node --experimental-strip-types scripts/run_knowledge_dataprep.ts tech_docs",
-    "vectors:export": "python scripts/export_chroma_vectors.py all"
+    "dataprep": "node --experimental-strip-types scripts/run_dataprep.ts all",
+    "dataprep:tech-docs": "node --experimental-strip-types scripts/run_dataprep.ts tech_docs",
+    "dataprep:nc": "node --experimental-strip-types scripts/run_dataprep.ts non_conformities",
+    "dataprep:knowledge": "node --experimental-strip-types scripts/run_knowledge_dataprep.ts all",
+    "dataprep:knowledge:tech-docs": "node --experimental-strip-types scripts/run_knowledge_dataprep.ts tech_docs"
   }
 }

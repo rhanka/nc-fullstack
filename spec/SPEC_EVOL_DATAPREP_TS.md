@@ -237,9 +237,25 @@ Produire un manifest de build décrivant:
 
 La V1 doit exposer des commandes repo-locales explicites, par exemple:
 
-- `make dataprep-ts`
-- `make dataprep-ts-tech-docs`
-- `make dataprep-ts-nc`
+- `make dataprep`
+- `make dataprep-tech-docs`
+- `make dataprep-nc`
+- `make dataprep-knowledge`
+- `make api-prepare-data-ci`
+
+## Intégration CI/CD
+
+La préparation `ontology/wiki` doit être exécutée dans le chemin CI/CD de l'image API, pas manuellement avant déploiement.
+
+Règles:
+
+- `api/data/` reste hors Git
+- les sources et artefacts lourds sont récupérés depuis Scaleway Object Storage
+- `make api-prepare-data-ci` télécharge le dataset minimal et relance le dataprep knowledge-only
+- `make api-image-check` prépare les artefacts avant de calculer le tag d'image
+- `make api-build` prépare les artefacts avant de construire l'image
+- le `Dockerfile` embarque `ontology/`, `wiki/` et `knowledge-manifest.json`
+- les fichiers horodatés ne doivent pas rendre le hash d'image instable
 
 Le nom exact pourra évoluer, mais la règle est:
 

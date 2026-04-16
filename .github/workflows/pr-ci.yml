@@ -27,13 +27,8 @@ jobs:
             ui/package-lock.json
             backend-ts/package-lock.json
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Run build and tests
+        run: make check
 
-      - name: Run TS build and tests
-        run: make check-ts
-
-      - name: Run TS backend smoke test
-        run: make api-smoke-ts
+      - name: Run backend smoke test
+        run: make api-smoke

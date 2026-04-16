@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: backend-ts/Dockerfile
-    image: ${REGISTRY}/${API_TS_IMAGE_NAME:-nc-chatbot-api-ts}:${API_TS_VERSION:-latest}
+    image: ${REGISTRY}/${API_IMAGE_NAME:-nc-chatbot-api}:${API_VERSION:-latest}
     ports:
       - "${API_PORT:-8000}:8000"
     environment:

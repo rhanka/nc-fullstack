@@ -115,6 +115,7 @@
 - [x] L6.4 Prototyper un `LLM Wiki` humain-navigable sur le même dataset que le RAG, branché sur `vector-export + SQLite FTS5 + RRF`. Recette: pages compilées par pièce / sous-ensemble, liens utiles vers les docs, et troisième vue `entities/wiki` au même niveau que `tech docs` et `NC` pendant la recherche. `TEST`
 - [x] L6.5 Décider explicitement si `graphify` apporte une valeur additionnelle après ontologie + wiki; sinon le différer sans ambiguïté. Recette: note de décision versionnée, sans intégration implicite. `AUTO` + `UAT`
 - [x] L6.6 Superséder la cible LanceDB et supprimer l'intégration `lancedb` devenue inutile du runtime, du build et de la documentation si aucun besoin concret ne justifie son maintien. Recette: plus de dépendance `@lancedb/lancedb`, plus de copies `api/data/*/lancedb/`, plus de chemin moteur `lancedb`, et spec réalignée sur un seul moteur runtime. `TEST`
+- [x] L6.7 Intégrer la préparation `ontology/wiki` au CI/CD de l'image API. Recette: `api-image-check` et `api-build` téléchargent les données minimales depuis Scaleway, régénèrent les artefacts knowledge via dataprep, excluent les fichiers horodatés du hash d'image, et embarquent `ontology/`, `wiki/` et `knowledge-manifest.json` dans le container. `TEST`
 
 ## Lot 6.2 - UAT couche connaissance
 
