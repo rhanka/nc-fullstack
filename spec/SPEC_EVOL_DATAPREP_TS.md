@@ -29,12 +29,15 @@ Cette phase ne doit pas:
 
 ### 1. Corpus source canonique
 
-La source de vérité de V1 reste les datasets déjà "prepared" du pipeline actuel.
+La source de vérité amont de V1 reste les datasets déjà "prepared" du pipeline actuel.
+
+Pour les documents techniques, cette source amont est d'abord projetée en CSV canonique local afin de restaurer la parité legacy: seuls les chunks dont la page PDF est servie dans `pages/` sont indexables.
 
 Concrètement:
 
 - tech docs:
-  - `api/data/a220-tech-docs/managed_dataset/a220_tech_docs_content_prepared.csv.gz`
+  - source amont: `api/data/a220-tech-docs/managed_dataset/a220_tech_docs_content_prepared.csv.gz`
+  - source canonique RAG: `api/data/a220-tech-docs/managed_dataset/a220_tech_docs_content_canonical.csv.gz`
 - non-conformities:
   - le même périmètre que le pipeline actuel, ni plus ni moins
   - en pratique aujourd'hui:
@@ -119,9 +122,15 @@ Pas de sortie HTML dédiée en V1.
 
 ### Tech docs
 
-Entrée canonique:
+Entrée amont:
 
 - `managed_dataset/a220_tech_docs_content_prepared.csv.gz`
+
+Entrée canonique consommée par le RAG TS:
+
+- `managed_dataset/a220_tech_docs_content_canonical.csv.gz`
+- produite par `make dataprep-prepare-tech-docs`
+- les lignes conservées doivent rester identiques au caractère près à l'entrée amont
 
 Colonnes attendues d'après le pipeline actuel:
 

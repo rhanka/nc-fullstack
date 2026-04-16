@@ -122,6 +122,7 @@
 - [ ] L6U.1 Vérifier en UAT la présence et l'utilité réelle du troisième canal `entities/wiki` au même niveau que `tech docs` et `similar NC`. Recette: cas `000` et `100` avec validation explicite de la lisibilité et de l'actionnabilité. `UAT`
 - [ ] L6U.2 Vérifier en UAT la pertinence des liens `wiki -> doc technique primaire`. Recette: au moins 3 parcours réels où l'ouverture depuis `entities/wiki` aide réellement l'analyse. `UAT`
 - [ ] L6U.3 Vérifier en UAT que les pages wiki par `part / sous-ensemble` améliorent la résolution de problème, et pas seulement la navigation. Recette: retour utilisateur explicite sur au moins 2 cas. `UAT`
+- [ ] L6U.4 Vérifier en UAT la cohérence `sources RAG -> /doc`: toutes les sources `tech docs` affichées doivent ouvrir une page servie, sans filtrage runtime qui réduise artificiellement le top-k. Recette: sur un cas `000` et un cas `100`, ouvrir les sources techniques retournées; aucun 404 et aucune disparition de sources attendues. `UAT`
 - Gate: cette UAT ne démarre qu'après un full rebuild TS des artefacts `vector-export / lexical / ontology / wiki` sur le corpus canonique, afin d'éviter une validation sur un état hybride.
 
 ## Lot 6.3 - Fix post-UAT couche connaissance
@@ -129,6 +130,11 @@
 - [x] L6F.1 Corriger les écarts de retrieval ou de rendu révélés par l'UAT `Lot 6.2`. Recette: liste de fixes fermée, sans dérive de périmètre vers un graphe généraliste. `TEST`
 - [x] L6F.2 Ajuster l'ontologie minimale `ATA / part / zone / alias` si l'UAT révèle des trous bloquants. Recette: spec et artefacts réalignés, IDs stables préservés. `TEST`
 - [ ] L6F.3 Ajuster le rendu UI `entities/wiki` si l'UAT montre un manque de lisibilité ou d'utilité. Recette: rendu compact, ouvrable et cohérent avec le shell chat existant. `TEST`
+- [x] L6F.4 Corriger la cohérence corpus/RAG si l'UAT révèle des sources techniques non servies par `/doc`. Recette: audit reproductible `managed_dataset / pages / vector-export / lexical / wiki`, correction à la source des données ou de la préparation, puis rebuild complet sans filtre runtime masquant le top-k. `TEST`
+- [x] L6F.4a Spécifier la préparation canonique du CSV tech docs avant indexation. Recette: spec dédiée décrivant entrée amont, sortie canonique, audit et garantie de diff caractère par caractère sur les lignes conservées. `AUTO`
+- [x] L6F.4b Implémenter `dataprep-prepare-tech-docs`. Recette: génération de `a220_tech_docs_content_canonical.csv.gz` + audit JSON, lignes conservées recopiées sans re-sérialisation, lignes sans page servie exclues du corpus canonique. `TEST`
+- [x] L6F.4c Brancher le RAG TS sur le CSV canonique. Recette: `dataprep`, `dataprep-tech-docs`, `dataprep-knowledge*` et `api-prepare-data-ci` consomment le canonique sans filtre runtime. `TEST`
+- [x] L6F.4d Rebuilder les artefacts tech docs depuis le CSV canonique. Recette: `vector-export / lexical / ontology / wiki` régénérés et audit local montrant zéro source technique non servable dans les artefacts. `TEST`
 
 ## Lot 6.4 - Smoke tests UAT couche connaissance
 

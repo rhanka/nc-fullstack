@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { DatabaseSync } from "node:sqlite";
+import { resolveDefaultTechDocsSourceFile } from "./tech-docs-canonical.ts";
 
 export type DataprepCorpusName = "tech_docs" | "non_conformities";
 
@@ -331,7 +332,7 @@ export function buildDefaultCorpusConfigs(): Record<DataprepCorpusName, Dataprep
   return {
     tech_docs: {
       corpus: "tech_docs",
-      sourceFile: path.join(API_ROOT, "data", TECH_DOCS_DIR, "managed_dataset", "a220_tech_docs_content_prepared.csv.gz"),
+      sourceFile: resolveDefaultTechDocsSourceFile(),
       outputRoot: path.join(API_ROOT, "data", TECH_DOCS_DIR),
       hasHeader: true,
       normalizeRow: normalizeTechDocsPreparedRow,
