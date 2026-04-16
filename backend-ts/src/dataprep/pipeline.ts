@@ -96,6 +96,7 @@ export interface RunKnowledgeDataprepResult {
   readonly recordCount: number;
   readonly ontology: RunDataprepResult["ontology"];
   readonly wiki: RunDataprepResult["wiki"];
+  readonly knowledgeManifestPath: string;
 }
 
 type MutablePartCanonicalizerInput = {
@@ -908,6 +909,33 @@ function buildKnowledgeManifest(
   return outputPath;
 }
 
+function buildKnowledgeOnlyManifest(
+  config: DataprepCorpusConfig,
+  fingerprint: string,
+  result: Omit<RunKnowledgeDataprepResult, "knowledgeManifestPath" | "corpus">,
+): string {
+  const outputPath = path.join(config.outputRoot, "knowledge-manifest.json");
+  writeFileSync(
+    outputPath,
+    JSON.stringify(
+      {
+        corpus: config.corpus,
+        generatedAt: new Date().toISOString(),
+        sourceFile: config.sourceFile,
+        fingerprint,
+        mode: "knowledge-only",
+        recordCount: result.recordCount,
+        ontology: result.ontology,
+        wiki: result.wiki,
+      },
+      null,
+      2,
+    ) + "\n",
+    "utf8",
+  );
+  return outputPath;
+}
+
 function buildPartCanonicalizerPrompt(input: PartCanonicalizerInput): string {
   return [
     "Normalize the following aircraft part concept into one canonical part / subassembly entry.",
@@ -1117,11 +1145,16 @@ export async function runKnowledgeDataprepForCorpus(
   });
   const ontology = buildOntologyArtifacts(config, records, fingerprint, partCanonicalizations);
   const wiki = buildWikiArtifacts(config, ontology.root);
-  return {
-    corpus: config.corpus,
+  const partialResult = {
     recordCount: records.length,
     ontology,
     wiki,
+  };
+  const knowledgeManifestPath = buildKnowledgeOnlyManifest(config, fingerprint, partialResult);
+  return {
+    corpus: config.corpus,
+    ...partialResult,
+    knowledgeManifestPath,
   };
 }
 

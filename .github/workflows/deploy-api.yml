@@ -31,12 +31,14 @@ jobs:
           REGISTRY: ${{ secrets.REGISTRY }}
           DOCKER_USERNAME: nologin
           DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         continue-on-error: true
 
       - name: Download data and Build API
         run: make api-build
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         if: steps.image-check.outcome == 'failure'
 
       - name: Publish API docker image
