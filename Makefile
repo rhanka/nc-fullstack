@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci
+.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci
 
 # ----------------------------
 # Helpers
@@ -104,6 +104,10 @@ api-contracts: api-install
 api-review-routing: api-install
 	@echo "▶ Reviewing backend routing decisions..."
 	cd backend-ts && npm run review:routing
+
+dataprep-prepare-tech-docs: api-install
+	@echo "▶ Preparing canonical tech docs CSV..."
+	cd backend-ts && npm run dataprep:prepare-tech-docs
 
 dataprep: api-install
 	@echo "▶ Running dataprep for all corpora..."
@@ -311,6 +315,7 @@ help:
 	@echo "  down          Stop and remove containers, networks"
 	@echo "  logs          Follow log output"
 	@echo "  shell         Access the api container shell"
+	@echo "  dataprep-prepare-tech-docs  Build canonical tech docs CSV"
 	@echo "  dataprep      Rebuild retrieval and knowledge artifacts"
 	@echo "  dataprep-knowledge  Rebuild ontology and wiki artifacts"
 	@echo "  clean         Remove build artifacts"
