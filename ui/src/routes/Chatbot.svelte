@@ -86,7 +86,8 @@
 
   type IntroQuickAction = {
     label: string;
-    prompt: string | (() => string);
+    prompt?: string | (() => string);
+    run?: () => void | Promise<void>;
   };
 
   type EntitySourceItem = ReferenceSourceItem & {
@@ -196,6 +197,7 @@
   let demoModePrompted = false;
   let demoModeTimer: number | null = null;
   let demoModeOpenedChat = false;
+  let reportDescriptionTypingRun = 0;
 
   $: dynamicWidth =
     windowInnerWidth !== undefined && windowInnerWidth <= 768
@@ -945,6 +947,81 @@
     return randomNonConformityDescriptions[index] ?? randomNonConformityDescriptions[0];
   }
 
+  function sleep(ms: number) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  function getTypingChunkLength(text: string, position: number) {
+    const nextChar = text[position];
+
+    if (!nextChar || nextChar === "\n" || /[.,;:!?]/.test(nextChar)) {
+      return 1;
+    }
+
+    const remaining = text.length - position;
+    const burst = Math.random() < 0.25 ? 3 : Math.random() < 0.7 ? 2 : 1;
+    return Math.min(remaining, burst);
+  }
+
+  function getTypingDelayMs(chunk: string) {
+    const lastChar = chunk[chunk.length - 1] ?? "";
+
+    if (lastChar === "\n") {
+      return 140 + Math.random() * 120;
+    }
+
+    if (/[.!?]/.test(lastChar)) {
+      return 160 + Math.random() * 180;
+    }
+
+    if (/[,;:]/.test(lastChar)) {
+      return 90 + Math.random() * 120;
+    }
+
+    return 28 + Math.random() * 54;
+  }
+
+  function setReportDescription(text: string) {
+    createdItem.update((current) => {
+      const next = cloneData(current) ?? current;
+      const taskRole = "000";
+      const history = next.analysis_history ?? {};
+      const steps = history[taskRole] ?? [];
+      const currentStep = steps[0] ?? {};
+
+      steps[0] = {
+        ...currentStep,
+        description: text,
+      };
+      history[taskRole] = steps;
+      next.analysis_history = history;
+      next.currentTask = taskRole;
+
+      return next;
+    });
+  }
+
+  async function typeReportDescription(text: string) {
+    const typingRun = ++reportDescriptionTypingRun;
+    let cursor = 0;
+
+    setReportDescription("");
+
+    while (cursor < text.length && typingRun === reportDescriptionTypingRun) {
+      const chunkLength = getTypingChunkLength(text, cursor);
+      const nextCursor = cursor + chunkLength;
+      const nextText = text.slice(0, nextCursor);
+
+      setReportDescription(nextText);
+      cursor = nextCursor;
+      await sleep(getTypingDelayMs(text.slice(cursor - chunkLength, cursor)));
+    }
+  }
+
+  async function fillRandomReportDescription() {
+    await typeReportDescription(getRandomNonConformityDescription());
+  }
+
   function getIntroQuickActions(taskRole: string): IntroQuickAction[] {
     if (taskRole === "100") {
       return [
@@ -969,7 +1046,7 @@
       },
       {
         label: "Random non conformity description",
-        prompt: getRandomNonConformityDescription,
+        run: fillRandomReportDescription,
       },
       {
         label: "Translate to French",
@@ -980,7 +1057,16 @@
   }
 
   async function triggerIntroQuickAction(action: IntroQuickAction) {
+    if (action.run) {
+      await action.run();
+      return;
+    }
+
     const prompt = typeof action.prompt === "function" ? action.prompt() : action.prompt;
+    if (!prompt) {
+      return;
+    }
+
     await submitUserMessage({ text: prompt });
   }
 
@@ -995,12 +1081,18 @@
   }
 
   async function startDemoMode() {
+    const shouldCloseChatAfterStart = demoModeOpenedChat;
+
     demoModePrompted = true;
     demoModeModalOpen = false;
     demoModeOpenedChat = false;
     clearDemoModeTimer();
-    $showChatbot = true;
-    await submitUserMessage({ text: getRandomNonConformityDescription() });
+
+    if (shouldCloseChatAfterStart) {
+      $showChatbot = false;
+    }
+
+    await fillRandomReportDescription();
   }
 
   async function consumeLegacySseResponse(
@@ -2050,8 +2142,8 @@
         <p class="demo-mode-modal__eyebrow">Demo mode</p>
         <h3 id="demo-mode-title">Start with a random non-conformity?</h3>
         <p>
-          Use one of the sample problem descriptions to exercise the retrieval,
-          reasoning, sources and report update flow.
+          Fill the report description with one of the sample problem descriptions,
+          using a simulated typing flow. No chat message is sent.
         </p>
         <div class="demo-mode-modal__actions">
           <button type="button" class="demo-mode-modal__secondary" on:click={dismissDemoMode}>
