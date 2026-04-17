@@ -195,6 +195,7 @@
   let demoModeModalOpen = false;
   let demoModePrompted = false;
   let demoModeTimer: number | null = null;
+  let demoModeOpenedChat = false;
 
   $: dynamicWidth =
     windowInnerWidth !== undefined && windowInnerWidth <= 768
@@ -214,7 +215,6 @@
 
   function isDemoModeCandidate() {
     return (
-      $showChatbot &&
       getCurrentTaskRole() === "000" &&
       chatMessages.length === 0 &&
       composerInput.trim().length === 0 &&
@@ -235,6 +235,8 @@
       demoModeTimer = window.setTimeout(() => {
         demoModeTimer = null;
         if (isDemoModeCandidate() && !demoModePrompted) {
+          demoModeOpenedChat = !$showChatbot;
+          $showChatbot = true;
           demoModePrompted = true;
           demoModeModalOpen = true;
         }
@@ -986,12 +988,18 @@
     demoModePrompted = true;
     demoModeModalOpen = false;
     clearDemoModeTimer();
+    if (demoModeOpenedChat) {
+      $showChatbot = false;
+      demoModeOpenedChat = false;
+    }
   }
 
   async function startDemoMode() {
     demoModePrompted = true;
     demoModeModalOpen = false;
+    demoModeOpenedChat = false;
     clearDemoModeTimer();
+    $showChatbot = true;
     await submitUserMessage({ text: getRandomNonConformityDescription() });
   }
 
