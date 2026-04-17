@@ -93,18 +93,20 @@
 - [x] L5.2o Retirer le dump `NC update` du chat et le remplacer par un lien compact vers la task amendée. Recette: le chat n'affiche plus les champs du canevas; il propose seulement un accès court à l'objet amendé (`000`, `100`, etc.) dans l'application. `TEST` + `UAT`
 - [x] L5.2p Ajouter une quick action `Random non conformity description` sur l'accueil vierge du chat. Recette: le bouton tire au hasard une des 4 descriptions `Description du Problème` de `api/test/scenarios.csv`, remplit la description du rapport `000` en pseudo streaming de saisie avec listes Markdown lisibles, puis lance l'assistant une fois la saisie terminée. `TEST` + `UAT`
 - [x] L5.2q Ajouter un mode demo propose apres 15 secondes sur chat et rapport `000` vierges. Recette: si le chat task `000` et le rapport restent vides et inactifs, meme widget ferme, un modal plein écran propose de remplir la description du rapport `000` avec une random non conformity; après confirmation, la saisie simulée se termine avant le lancement assistant. `TEST` + `UAT`
+- [x] L5.2r Corriger les quick actions par rôle. Recette: task `000` affiche la proposition de description + random NC; task `100` n'affiche jamais `Propose task description` ni random NC, même après changement de tâche ou réouverture du chat. `TEST` + `UAT`
 - [ ] L5.3 Nettoyer la dette de transition côté UI et backend. Recette: plus de double chemin critique non justifié. `AUTO`
 - Note: l'UAT de portage Python -> TS est considérée comme passée en prod pour les aspects fonctionnels de base du chat. Les items encore ouverts du lot 5 portent désormais surtout sur le design UI, le polissage ergonomique et le nettoyage final.
 - Checklist UAT `L5.2` à exécuter sur un cas `000` réaliste:
   1. Ouvrir le widget en mode flottant, vérifier la présence des quick actions de session vide, puis vérifier que rien n'est auto-envoyé.
   2. Si le chat et le rapport `000` restent vierges pendant 15 secondes, widget ferme inclus, vérifier que le modal demo plein écran apparaît, que `Not now` le ferme, et que `Start demo` remplit la description du rapport en pseudo streaming, avec retours ligne sur les listes, puis lance l'assistant après la fin de saisie; vérifier aussi qu'il ne s'affiche pas si la description ou le label du rapport est déjà renseigné.
-  3. Vérifier que le composeur expose `Model` et `Reasoning effort`, avec défaut `GPT-5.4 Nano` + `Auto`.
-  4. Envoyer un prompt `000` depuis le chat et vérifier la transition visible `submitted -> streaming -> ready`, sans bulle parasite de type `Drafting the response...`.
-  5. Pendant la génération, vérifier que le runtime affiche au moins les étapes `Request prepared`, `Technical documents retrieved`, `Similar non-conformities retrieved` et, quand disponible, `Entities retrieved`.
-  6. Pendant la génération, vérifier qu'un résumé de reasoning est visible et dépliable, puis qu'il reste cohérent une fois la réponse terminée.
-  7. Vérifier que le texte assistant apparaît avant la fin de génération et que les mises à jour du rapport sont poussées dans l'application sans dump brut dans le chat.
-  8. Ouvrir `Sources`, vérifier le rendu compact par groupes, puis ouvrir au moins une source `tech docs`, une source `similar NC` et, si présente, une source `Entities`.
-  9. Vérifier que `Updated report` ou `Updated task` renvoie bien vers l'objet amendé dans l'application.
+  3. Passer sur la task `100`, ouvrir un chat vide et vérifier que les quick actions affichent `Propose analysis summary` / traduction, sans `Propose task description` ni random NC.
+  4. Vérifier que le composeur expose `Model` et `Reasoning effort`, avec défaut `GPT-5.4 Nano` + `Auto`.
+  5. Envoyer un prompt `000` depuis le chat et vérifier la transition visible `submitted -> streaming -> ready`, sans bulle parasite de type `Drafting the response...`.
+  6. Pendant la génération, vérifier que le runtime affiche au moins les étapes `Request prepared`, `Technical documents retrieved`, `Similar non-conformities retrieved` et, quand disponible, `Entities retrieved`.
+  7. Pendant la génération, vérifier qu'un résumé de reasoning est visible et dépliable, puis qu'il reste cohérent une fois la réponse terminée.
+  8. Vérifier que le texte assistant apparaît avant la fin de génération et que les mises à jour du rapport sont poussées dans l'application sans dump brut dans le chat.
+  9. Ouvrir `Sources`, vérifier le rendu compact par groupes, puis ouvrir au moins une source `tech docs`, une source `similar NC` et, si présente, une source `Entities`.
+  10. Vérifier que `Updated report` ou `Updated task` renvoie bien vers l'objet amendé dans l'application.
 - Checklist UAT `L5.2` à exécuter sur un cas `100` réel:
   1. Refaire la même séquence avec `currentTask = 100`.
   2. Vérifier que les quick actions et le texte produit sont adaptés à l'analyse plutôt qu'à la seule observation factuelle.
