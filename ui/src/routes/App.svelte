@@ -3,13 +3,16 @@
 <script lang="ts">
   import { run } from "svelte/legacy";
   import { onMount } from "svelte";
+  import { get } from "svelte/store";
 
   import Header from "./Header.svelte";
   import NonConformityList from "./NonConformityList.svelte";
   import NonConformityCreationList from "./NonConformityCreationList.svelte";
   import DocumentsList from "./DocumentsList.svelte";
+  import EntitiesList from "./EntitiesList.svelte";
   import NonConformityDetail from "./NonConformityDetail.svelte";
   import ShowDocument from "./ShowDocument.svelte";
+  import EntityDetail from "./EntityDetail.svelte";
   import NonConformityCreation from "./NonConformityCreation.svelte";
   import Chatbot from "./Chatbot.svelte";
   import Rail from "./Rail.svelte";
@@ -30,6 +33,7 @@
     createdItem,
     selectItem,
     selectDoc,
+    selectEntity,
     activeTabValue,
     resetCreatedItem
   } from "./store";
@@ -127,8 +131,10 @@
   let maxRows = 5000;
   let apiUrl = `${apiBaseUrl}/nc?max_rows=${maxRows}`;
   let nonConformitiesFilter: Array<{ doc?: string; [key: string]: unknown }> = [];
+  let entitiesFilter: ReferenceSourceItem[] = [];
   let nc_num = 0;
   let doc_num = 0;
+  let entity_num = 0;
   let selectDocUrl: string | null = null;
   let documentsList: DocumentListEntry[] = [];
   let tabs: Tab[] = [];
@@ -137,9 +143,30 @@
   let chatHeight = "70vh";
   let isChatDocked = false;
 
+  function entitySelectionKey(item: ReferenceSourceItem | null | undefined): string | null {
+    if (!item) {
+      return null;
+    }
+
+    const candidate = item as ReferenceSourceItem & {
+      readonly path?: unknown;
+      readonly title?: unknown;
+      readonly slug?: unknown;
+    };
+
+    for (const value of [candidate.path, candidate.slug, candidate.doc, candidate.title, candidate.chunk_id]) {
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+
+    return null;
+  }
+
   function clearRetrievedSources() {
     clearReferenceSourceGroup("non_conformities");
     clearReferenceSourceGroup("tech_docs");
+    clearReferenceSourceGroup("entities_wiki");
   }
 
   $: isChatDocked = $showChatbot && $chatLayoutMode === "docked";
@@ -196,6 +223,31 @@
         arguments: {
           url: selectDocUrl
         },
+      }
+    },
+    {
+      rail: {
+        label: "Entities",
+        icon: "mdi:vector-link",
+        value: 4,
+        selected: $activeTabValue === 4,
+        active: entity_num > 0,
+        num: entity_num
+      },
+      drawer: {
+        component: EntitiesList,
+        cleanCallBack: clearRetrievedSources,
+        selected: $selectEntity,
+        arguments: {
+          entitiesList: entitiesFilter
+        }
+      },
+      content: {
+        component: EntityDetail,
+        arguments: {
+          selectedEntity: $selectEntity,
+          entitiesList: entitiesFilter
+        }
       }
     },
     {
@@ -277,11 +329,36 @@
     doc_num = 0;
   }
 
+  $: if ($referencesList.entities_wiki?.sources) {
+    entitiesFilter = $referencesList.entities_wiki.sources as ReferenceSourceItem[];
+    entity_num = entitiesFilter.length;
+
+    const selectedEntityKey = entitySelectionKey(get(selectEntity));
+    const selectedStillPresent = selectedEntityKey
+      ? entitiesFilter.some((entity) => entitySelectionKey(entity) === selectedEntityKey)
+      : false;
+
+    if (entity_num > 0 && !selectedStillPresent) {
+      selectEntity.set(entitiesFilter[0]);
+    }
+
+    if (entity_num === 0) {
+      selectEntity.set(null);
+    }
+  } else {
+    entitiesFilter = [];
+    entity_num = 0;
+    selectEntity.set(null);
+  }
+
   $: expand = tabs.some(tab => tab.drawer && tab.rail.selected && (expand || !tab.drawer.selected) );
 
   const switchTab = (tab: Tab) => {
     if (tab.rail.active) {
       $activeTabValue = tab.rail.value;
+      if (tab.drawer) {
+        expand = true;
+      }
     }
   };
 </script>
