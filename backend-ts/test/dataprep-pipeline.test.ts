@@ -158,6 +158,9 @@ test("runDataprepForCorpus builds retrieval and knowledge artifacts from prepare
 
   const techWikiIndex = JSON.parse(readFileSync(techResult.wiki.indexPath, "utf8")) as Array<Record<string, unknown>>;
   assert.ok(techWikiIndex.some((entry) => String(entry.path).endsWith(".md")));
+  assert.ok(techWikiIndex.some((entry) => entry.entity_type === "part"));
+  assert.ok(techWikiIndex.some((entry) => typeof entry.short_description === "string" && entry.short_description.length > 0));
+  assert.ok(techWikiIndex.some((entry) => Array.isArray(entry.supporting_docs) && entry.supporting_docs.length > 0));
   const firstWikiPath = path.join(techResult.wiki.root, String(techWikiIndex[0]?.path ?? ""));
   assert.match(readFileSync(firstWikiPath, "utf8"), /Technical documents/u);
 
@@ -215,6 +218,8 @@ test("runKnowledgeDataprepForCorpus builds ontology and wiki without embeddings"
   assert.ok(result.wiki.pageCount >= 1);
   const wikiIndex = JSON.parse(readFileSync(result.wiki.indexPath, "utf8")) as Array<Record<string, unknown>>;
   assert.equal(String(wikiIndex[0]?.title ?? ""), "Rh Windshield Frame");
+  assert.equal(String(wikiIndex[0]?.entity_type ?? ""), "part");
+  assert.match(String(wikiIndex[0]?.short_description ?? ""), /ATA[- ]56|unspecified/u);
 });
 
 test("runKnowledgeDataprepForCorpus truncates oversized wiki slugs deterministically", async () => {
