@@ -985,8 +985,19 @@
     }
   }
 
+  function normalizeTaskRole(role: unknown) {
+    const normalizedRole = typeof role === "string" ? role : String(role ?? "");
+    return TASK_IDS.includes(normalizedRole as (typeof TASK_IDS)[number])
+      ? normalizedRole
+      : null;
+  }
+
   function getCurrentTaskRole() {
-    return $createdItem?.currentTask ?? "000";
+    return normalizeTaskRole($createdItem?.currentTask) ?? "000";
+  }
+
+  function getIntroTaskRole() {
+    return normalizeTaskRole($createdItem?.currentTask);
   }
 
   function normalizeReportDescription(text: string) {
@@ -1096,38 +1107,52 @@
     }
   }
 
-  function getIntroQuickActions(taskRole: string): IntroQuickAction[] {
-    if (taskRole === "100") {
-      return [
-        {
-          label: "Propose analysis summary",
-          prompt:
-            "Propose a concise task 100 analysis summary based on the current non-conformity context.",
-        },
-        {
-          label: "Translate to French",
-          prompt:
-            "Translate the current task content to French and preserve the technical terminology.",
-        },
-      ];
+  function getIntroQuickActions(taskRole: string | null): IntroQuickAction[] {
+    switch (taskRole) {
+      case "000":
+        return [
+          {
+            label: "Propose task description",
+            prompt:
+              "Propose a concise and precise task description based on the current non-conformity context.",
+          },
+          {
+            label: "Random non conformity description",
+            run: () => fillRandomReportDescription({ launchAssistant: true }),
+          },
+          {
+            label: "Translate to French",
+            prompt:
+              "Translate the current task content to French and preserve the technical terminology.",
+          },
+        ];
+      case "100":
+        return [
+          {
+            label: "Propose analysis summary",
+            prompt:
+              "Propose a concise task 100 analysis summary based on the current non-conformity context.",
+          },
+          {
+            label: "Translate to French",
+            prompt:
+              "Translate the current task content to French and preserve the technical terminology.",
+          },
+        ];
+      default:
+        return [
+          {
+            label: "Propose task response",
+            prompt:
+              "Propose a concise response for the current non-conformity workflow task based on the available context.",
+          },
+          {
+            label: "Translate to French",
+            prompt:
+              "Translate the current task content to French and preserve the technical terminology.",
+          },
+        ];
     }
-
-    return [
-      {
-        label: "Propose task description",
-        prompt:
-          "Propose a concise and precise task description based on the current non-conformity context.",
-      },
-      {
-        label: "Random non conformity description",
-        run: () => fillRandomReportDescription({ launchAssistant: true }),
-      },
-      {
-        label: "Translate to French",
-        prompt:
-          "Translate the current task content to French and preserve the technical terminology.",
-      },
-    ];
   }
 
   async function triggerIntroQuickAction(action: IntroQuickAction) {
@@ -1959,7 +1984,7 @@
           sources, and suggested updates.
         </p>
         <div class="chat-intro__actions">
-          {#each getIntroQuickActions(getCurrentTaskRole()) as action}
+          {#each getIntroQuickActions(getIntroTaskRole()) as action}
             <button
               type="button"
               class="chat-intro__action"
