@@ -942,9 +942,20 @@
     return $createdItem?.currentTask ?? "000";
   }
 
+  function normalizeReportDescription(text: string) {
+    return text
+      .replace(/\r\n/g, "\n")
+      .replace(/[ \t]*•[ \t]*/g, "\n- ")
+      .replace(/(Détails Techniques\s*:)\n-/g, "$1\n\n-")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
   function getRandomNonConformityDescription() {
     const index = Math.floor(Math.random() * randomNonConformityDescriptions.length);
-    return randomNonConformityDescriptions[index] ?? randomNonConformityDescriptions[0];
+    return normalizeReportDescription(
+      randomNonConformityDescriptions[index] ?? randomNonConformityDescriptions[0],
+    );
   }
 
   function sleep(ms: number) {
@@ -1016,10 +1027,26 @@
       cursor = nextCursor;
       await sleep(getTypingDelayMs(text.slice(cursor - chunkLength, cursor)));
     }
+
+    return typingRun === reportDescriptionTypingRun;
   }
 
-  async function fillRandomReportDescription() {
-    await typeReportDescription(getRandomNonConformityDescription());
+  async function fillRandomReportDescription(options: { launchAssistant?: boolean; revealReport?: boolean } = {}) {
+    if (options.revealReport) {
+      $showChatbot = false;
+      await tick();
+    }
+
+    const completed = await typeReportDescription(getRandomNonConformityDescription());
+
+    if (completed && options.launchAssistant) {
+      $showChatbot = true;
+      await tick();
+      await submitUserMessage({
+        role: "000",
+        text: "Propose a concise and precise task description based on the current non-conformity report description.",
+      });
+    }
   }
 
   function getIntroQuickActions(taskRole: string): IntroQuickAction[] {
@@ -1046,7 +1073,7 @@
       },
       {
         label: "Random non conformity description",
-        run: fillRandomReportDescription,
+        run: () => fillRandomReportDescription({ launchAssistant: true }),
       },
       {
         label: "Translate to French",
@@ -1088,11 +1115,10 @@
     demoModeOpenedChat = false;
     clearDemoModeTimer();
 
-    if (shouldCloseChatAfterStart) {
-      $showChatbot = false;
-    }
-
-    await fillRandomReportDescription();
+    await fillRandomReportDescription({
+      launchAssistant: true,
+      revealReport: shouldCloseChatAfterStart,
+    });
   }
 
   async function consumeLegacySseResponse(
@@ -2143,7 +2169,7 @@
         <h3 id="demo-mode-title">Start with a random non-conformity?</h3>
         <p>
           Fill the report description with one of the sample problem descriptions,
-          using a simulated typing flow. No chat message is sent.
+          then launch the assistant once the simulated typing is complete.
         </p>
         <div class="demo-mode-modal__actions">
           <button type="button" class="demo-mode-modal__secondary" on:click={dismissDemoMode}>
@@ -2322,19 +2348,19 @@
   }
 
   .demo-mode-modal__backdrop {
-    position: absolute;
+    position: fixed;
     inset: 0;
-    z-index: 20;
+    z-index: 1200;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1rem;
-    background: rgba(15, 23, 42, 0.18);
-    backdrop-filter: blur(3px);
+    padding: clamp(1rem, 4vw, 3rem);
+    background: rgba(15, 23, 42, 0.32);
+    backdrop-filter: blur(5px);
   }
 
   .demo-mode-modal {
-    max-width: 22rem;
+    width: min(92vw, 34rem);
     border: 1px solid rgba(148, 163, 184, 0.28);
     border-radius: 1rem;
     background: rgba(255, 255, 255, 0.96);
