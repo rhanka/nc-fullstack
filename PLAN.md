@@ -91,17 +91,20 @@
 - [x] L5.2m Refaire le rendu des sources en citations compactes et dépliables. Recette: plus de longue liste brute de fichiers; les références deviennent compactes, groupées et actionnables. `TEST` + `UAT`
 - [ ] L5.2n Réaligner l'identité visuelle du widget fermé et du favicon sur les assets produit. Recette: bubble fermée plus proche de `top-ai-ideas`; favicon issu de `../sentech-forge`. `TEST` + `UAT`
 - [x] L5.2o Retirer le dump `NC update` du chat et le remplacer par un lien compact vers la task amendée. Recette: le chat n'affiche plus les champs du canevas; il propose seulement un accès court à l'objet amendé (`000`, `100`, etc.) dans l'application. `TEST` + `UAT`
+- [x] L5.2p Ajouter une quick action `Random non conformity description` sur l'accueil vierge du chat. Recette: le bouton tire au hasard une des 4 descriptions `Description du Problème` de `api/test/scenarios.csv` et l'envoie au chat. `TEST` + `UAT`
+- [x] L5.2q Ajouter un mode demo propose apres 15 secondes sur chat vierge. Recette: si le chat task `000` reste vide et inactif, un modal propose de demarrer avec une random non conformity; aucune generation ne part sans confirmation utilisateur. `TEST` + `UAT`
 - [ ] L5.3 Nettoyer la dette de transition côté UI et backend. Recette: plus de double chemin critique non justifié. `AUTO`
 - Note: l'UAT de portage Python -> TS est considérée comme passée en prod pour les aspects fonctionnels de base du chat. Les items encore ouverts du lot 5 portent désormais surtout sur le design UI, le polissage ergonomique et le nettoyage final.
 - Checklist UAT `L5.2` à exécuter sur un cas `000` réaliste:
   1. Ouvrir le widget en mode flottant, vérifier la présence des quick actions de session vide, puis vérifier que rien n'est auto-envoyé.
-  2. Vérifier que le composeur expose `Model` et `Reasoning effort`, avec défaut `GPT-5.4 Nano` + `Auto`.
-  3. Envoyer un prompt `000` depuis le chat et vérifier la transition visible `submitted -> streaming -> ready`, sans bulle parasite de type `Drafting the response...`.
-  4. Pendant la génération, vérifier que le runtime affiche au moins les étapes `Request prepared`, `Technical documents retrieved`, `Similar non-conformities retrieved` et, quand disponible, `Entities retrieved`.
-  5. Pendant la génération, vérifier qu'un résumé de reasoning est visible et dépliable, puis qu'il reste cohérent une fois la réponse terminée.
-  6. Vérifier que le texte assistant apparaît avant la fin de génération et que les mises à jour du rapport sont poussées dans l'application sans dump brut dans le chat.
-  7. Ouvrir `Sources`, vérifier le rendu compact par groupes, puis ouvrir au moins une source `tech docs`, une source `similar NC` et, si présente, une source `Entities`.
-  8. Vérifier que `Updated report` ou `Updated task` renvoie bien vers l'objet amendé dans l'application.
+  2. Si le chat reste vide pendant 15 secondes sur `000`, vérifier que le modal demo apparaît, que `Not now` le ferme, et que `Start demo` envoie une description aléatoire.
+  3. Vérifier que le composeur expose `Model` et `Reasoning effort`, avec défaut `GPT-5.4 Nano` + `Auto`.
+  4. Envoyer un prompt `000` depuis le chat et vérifier la transition visible `submitted -> streaming -> ready`, sans bulle parasite de type `Drafting the response...`.
+  5. Pendant la génération, vérifier que le runtime affiche au moins les étapes `Request prepared`, `Technical documents retrieved`, `Similar non-conformities retrieved` et, quand disponible, `Entities retrieved`.
+  6. Pendant la génération, vérifier qu'un résumé de reasoning est visible et dépliable, puis qu'il reste cohérent une fois la réponse terminée.
+  7. Vérifier que le texte assistant apparaît avant la fin de génération et que les mises à jour du rapport sont poussées dans l'application sans dump brut dans le chat.
+  8. Ouvrir `Sources`, vérifier le rendu compact par groupes, puis ouvrir au moins une source `tech docs`, une source `similar NC` et, si présente, une source `Entities`.
+  9. Vérifier que `Updated report` ou `Updated task` renvoie bien vers l'objet amendé dans l'application.
 - Checklist UAT `L5.2` à exécuter sur un cas `100` réel:
   1. Refaire la même séquence avec `currentTask = 100`.
   2. Vérifier que les quick actions et le texte produit sont adaptés à l'analyse plutôt qu'à la seule observation factuelle.

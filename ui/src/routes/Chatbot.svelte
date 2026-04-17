@@ -192,6 +192,9 @@
   let lastOptimisticUpdateSignature = "";
   let modelSelection: ChatModelSelection = "gpt-5.4-nano";
   let complexitySelection: ChatComplexitySelection = "auto";
+  let demoModeModalOpen = false;
+  let demoModePrompted = false;
+  let demoModeTimer: number | null = null;
 
   $: dynamicWidth =
     windowInnerWidth !== undefined && windowInnerWidth <= 768
@@ -202,11 +205,46 @@
       ? `calc(100dvh - ${expand ? 21.5 : 11.5}rem)`
       : height;
 
+  function clearDemoModeTimer() {
+    if (demoModeTimer !== null) {
+      window.clearTimeout(demoModeTimer);
+      demoModeTimer = null;
+    }
+  }
+
+  function isDemoModeCandidate() {
+    return (
+      $showChatbot &&
+      getCurrentTaskRole() === "000" &&
+      chatMessages.length === 0 &&
+      composerInput.trim().length === 0 &&
+      chatStatus === "ready"
+    );
+  }
+
   afterUpdate(() => {
     if (messageViewport) {
       messageViewport.scrollTop = messageViewport.scrollHeight;
     }
   });
+
+  $: if (typeof window !== "undefined") {
+    const shouldScheduleDemoMode = isDemoModeCandidate() && !demoModePrompted && !demoModeModalOpen;
+
+    if (shouldScheduleDemoMode && demoModeTimer === null) {
+      demoModeTimer = window.setTimeout(() => {
+        demoModeTimer = null;
+        if (isDemoModeCandidate() && !demoModePrompted) {
+          demoModePrompted = true;
+          demoModeModalOpen = true;
+        }
+      }, 15000);
+    }
+
+    if (!shouldScheduleDemoMode && demoModeTimer !== null) {
+      clearDemoModeTimer();
+    }
+  }
 
   onMount(() => {
     windowInnerWidth = window.innerWidth;
@@ -222,6 +260,7 @@
 
     return () => {
       streamAbortController?.abort();
+      clearDemoModeTimer();
       if ($chatElementRef === controller) {
         chatElementRef.set(null);
       }
@@ -941,6 +980,19 @@
   async function triggerIntroQuickAction(action: IntroQuickAction) {
     const prompt = typeof action.prompt === "function" ? action.prompt() : action.prompt;
     await submitUserMessage({ text: prompt });
+  }
+
+  function dismissDemoMode() {
+    demoModePrompted = true;
+    demoModeModalOpen = false;
+    clearDemoModeTimer();
+  }
+
+  async function startDemoMode() {
+    demoModePrompted = true;
+    demoModeModalOpen = false;
+    clearDemoModeTimer();
+    await submitUserMessage({ text: getRandomNonConformityDescription() });
   }
 
   async function consumeLegacySseResponse(
@@ -1978,6 +2030,32 @@
     </div>
   {/if}
 
+  {#if demoModeModalOpen}
+    <div class="demo-mode-modal__backdrop" role="presentation">
+      <div
+        class="demo-mode-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="demo-mode-title"
+        tabindex="-1"
+      >
+        <p class="demo-mode-modal__eyebrow">Demo mode</p>
+        <h3 id="demo-mode-title">Start with a random non-conformity?</h3>
+        <p>
+          Use one of the sample problem descriptions to exercise the retrieval,
+          reasoning, sources and report update flow.
+        </p>
+        <div class="demo-mode-modal__actions">
+          <button type="button" class="demo-mode-modal__secondary" on:click={dismissDemoMode}>
+            Not now
+          </button>
+          <button type="button" class="demo-mode-modal__primary" on:click={startDemoMode}>
+            Start demo
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <form class="chat-composer" on:submit={handleComposerSubmit}>
     <div class={`chat-composer__surface ${composerIsMultiline ? "chat-composer__surface--multiline" : ""}`}>
@@ -2141,6 +2219,79 @@
     font: inherit;
     font-size: 0.84rem;
     cursor: pointer;
+  }
+
+  .demo-mode-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(3px);
+  }
+
+  .demo-mode-modal {
+    max-width: 22rem;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+    padding: 1rem;
+    color: #101828;
+  }
+
+  .demo-mode-modal__eyebrow {
+    margin: 0 0 0.25rem;
+    color: #2563eb;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .demo-mode-modal h3 {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.3;
+  }
+
+  .demo-mode-modal p {
+    margin: 0.55rem 0 0;
+    color: #475467;
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+
+  .demo-mode-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+  }
+
+  .demo-mode-modal__secondary,
+  .demo-mode-modal__primary {
+    border-radius: 999px;
+    padding: 0.45rem 0.75rem;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .demo-mode-modal__secondary {
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: #fff;
+    color: #344054;
+  }
+
+  .demo-mode-modal__primary {
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    background: #2563eb;
+    color: #fff;
   }
 
   .chat-composer__primary {
