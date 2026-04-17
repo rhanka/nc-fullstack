@@ -31,6 +31,7 @@
     activeTabValue,
     createdItem,
     selectDoc,
+    selectEntity,
     taskLabel,
     updateCreatedItem,
   } from "./store";
@@ -88,6 +89,19 @@
     prompt: string;
   };
 
+  type EntitySourceItem = ReferenceSourceItem & {
+    readonly slug?: unknown;
+    readonly title?: unknown;
+    readonly path?: unknown;
+    readonly ata_codes?: unknown;
+    readonly zones?: unknown;
+    readonly aliases?: unknown;
+    readonly part_numbers?: unknown;
+    readonly supporting_docs?: unknown;
+    readonly primary_doc?: unknown;
+    readonly wiki_rank?: unknown;
+    readonly wiki_score?: unknown;
+  };
   type StructuredAssistantPayload = LegacyFinalPayload & {
     reasoningSummary?: string;
   };
@@ -322,7 +336,7 @@
     payload: StructuredAssistantPayload,
     taskRole?: string,
   ) {
-    chatMessages = chatMessages.map((message) => {
+    chatMessages = chatMessages.map((message): ChatMessage => {
       if (message.id !== messageId) {
         return message;
       }
@@ -334,7 +348,7 @@
       return {
         ...message,
         parts: [...preservedParts, ...buildAssistantParts(payload, taskRole)],
-      };
+      } as unknown as ChatMessage;
     });
   }
 
@@ -343,7 +357,7 @@
   }
 
   function replaceAssistantText(messageId: string, text: string) {
-    chatMessages = chatMessages.map((message) => {
+    chatMessages = chatMessages.map((message): ChatMessage => {
       if (message.id !== messageId) {
         return message;
       }
@@ -356,12 +370,12 @@
         ...message,
         content: text,
         parts: text ? [{ type: "text", text }, ...structuredParts] : structuredParts,
-      };
+      } as unknown as ChatMessage;
     });
   }
 
   function setAssistantReasoningSummary(messageId: string, summary: string | undefined) {
-    chatMessages = chatMessages.map((message) => {
+    chatMessages = chatMessages.map((message): ChatMessage => {
       if (message.id !== messageId) {
         return message;
       }
@@ -375,7 +389,7 @@
         parts: summary
           ? [...preservedParts, { type: "reasoning_summary", summary }]
           : preservedParts,
-      };
+      } as unknown as ChatMessage;
     });
 
     updateAssistantRuntime(messageId, (runtime) => ({
@@ -546,7 +560,7 @@
   }
 
   function getRuntimeBadges(runtime: AssistantRuntime): string[] {
-    const badges = [runtime.resolvedModel ?? runtime.requestedModel];
+    const badges: string[] = [runtime.resolvedModel ?? runtime.requestedModel];
     const complexityLabel =
       humanizeComplexitySelection(runtime.resolvedComplexity ?? runtime.requestedComplexity);
     if (complexityLabel) {
@@ -616,7 +630,7 @@
 
     if (techDocsCount || nonConformitiesCount || entitiesWikiCount) {
       fragments.push(
-        `Built a targeted retrieval query, reviewed ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"}, ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"} and ${entitiesWikiCount} entity/wiki reference${entitiesWikiCount === 1 ? "" : "s"}.`,
+        `Built a targeted retrieval query, reviewed ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"}, ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"} and ${entitiesWikiCount} entity reference${entitiesWikiCount === 1 ? "" : "s"}.`,
       );
     }
 
@@ -778,7 +792,7 @@
     const nonConformitiesCount = hints.nonConformitiesCount ?? 0;
     const entitiesWikiCount = hints.entitiesWikiCount ?? 0;
     if (techDocsCount || nonConformitiesCount || entitiesWikiCount) {
-      return `Drafting the task ${taskRole} response after reviewing ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"}, ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"} and ${entitiesWikiCount} entity/wiki reference${entitiesWikiCount === 1 ? "" : "s"}.`;
+      return `Drafting the task ${taskRole} response after reviewing ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"}, ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"} and ${entitiesWikiCount} entity reference${entitiesWikiCount === 1 ? "" : "s"}.`;
     }
 
     return `Drafting the final task ${taskRole} response.`;
@@ -845,7 +859,7 @@
         };
       case "wiki_search":
         return {
-          title: "Searching entities and wiki",
+          title: "Searching entities",
           detail: "Resolving ATA, part and zone context.",
         };
       default:
@@ -868,7 +882,7 @@
         return "Search similar non-conformities";
       case "search_entities_wiki":
       case "wiki_search":
-        return "Search entities and wiki";
+        return "Search entities";
       default:
         return fallbackMetadata === "final" ? "Generate final answer" : "Working";
     }
@@ -1153,7 +1167,7 @@
             : metadata === "nc_search"
               ? "Similar non-conformities retrieved"
               : metadata === "wiki_search"
-                ? "Entities and wiki retrieved"
+                ? "Entities retrieved"
               : "Step completed";
 
       upsertAssistantRuntimeStep(assistantMessageId, {
@@ -1190,7 +1204,7 @@
         setAssistantRuntimeState(
           assistantMessageId,
           "streaming",
-          "Entities and wiki retrieved",
+          "Entities retrieved",
           summarizeLegacyResult(metadata, payload.text) ?? "Relevant entity pages found.",
         );
       }
@@ -1447,7 +1461,7 @@
       },
       {
         key: "entities_wiki" as const,
-        label: "Entities / wiki",
+        label: "Entities",
         items: (part.sources?.entities_wiki?.sources ?? []) as ReferenceSourceItem[],
       },
     ].filter((group) => group.items.length > 0);
@@ -1455,6 +1469,111 @@
 
   function getSourceCount(part: SourcesPart) {
     return getSourceGroups(part).reduce((total, group) => total + group.items.length, 0);
+  }
+
+  function textValue(value: unknown): string | null {
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  }
+
+  function numberValue(value: unknown): number | null {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+
+  function textArray(value: unknown): string[] {
+    if (Array.isArray(value)) {
+      return value
+        .map((entry) => textValue(entry))
+        .filter((entry): entry is string => Boolean(entry));
+    }
+    const single = textValue(value);
+    return single ? [single] : [];
+  }
+
+  function compactList(values: string[], limit = 3) {
+    if (values.length <= limit) {
+      return values.join(", ");
+    }
+    return values.slice(0, limit).join(", ") + " +" + String(values.length - limit) + " more";
+  }
+
+  function asEntityItem(item: ReferenceSourceItem): EntitySourceItem {
+    return item as EntitySourceItem;
+  }
+
+  function getEntityTitle(item: ReferenceSourceItem) {
+    const entity = asEntityItem(item);
+    return (
+      textValue(entity.title) ??
+      textValue(entity.doc) ??
+      textValue(entity.chunk_id) ??
+      "Untitled entity"
+    );
+  }
+
+  function getEntityRankLabel(item: ReferenceSourceItem) {
+    const rank = numberValue(asEntityItem(item).wiki_rank);
+    return rank ? "#" + String(rank) : null;
+  }
+
+  function getEntityPrimaryDoc(item: ReferenceSourceItem) {
+    return textValue(asEntityItem(item).primary_doc);
+  }
+
+  function getEntitySupportingDocs(item: ReferenceSourceItem) {
+    return textArray(asEntityItem(item).supporting_docs);
+  }
+
+  function getEntityMetadataLine(item: ReferenceSourceItem) {
+    const entity = asEntityItem(item);
+    const ataCodes = textArray(entity.ata_codes);
+    const zones = textArray(entity.zones);
+    const segments = [
+      ...ataCodes.slice(0, 2),
+      ...zones.slice(0, 2).map((zone) => "Zone " + zone),
+    ];
+    return segments.join(" / ");
+  }
+
+  function getEntityAliasLine(item: ReferenceSourceItem) {
+    return compactList(textArray(asEntityItem(item).aliases), 2);
+  }
+
+  function getEntityPartNumberLine(item: ReferenceSourceItem) {
+    return compactList(textArray(asEntityItem(item).part_numbers), 3);
+  }
+
+  function getEntityDocSummary(item: ReferenceSourceItem) {
+    const primaryDoc = getEntityPrimaryDoc(item);
+    const supportingDocs = getEntitySupportingDocs(item);
+    const segments: string[] = [];
+    if (primaryDoc) {
+      segments.push("1 primary doc");
+    }
+    if (supportingDocs.length > 0) {
+      segments.push(String(supportingDocs.length) + " supporting doc" + (supportingDocs.length === 1 ? "" : "s"));
+    }
+    return segments.join(" / ");
+  }
+
+  function openDocumentByName(doc: string | null) {
+    if (!doc) {
+      return;
+    }
+    selectDoc.set({ doc });
+    activeTabValue.set(2);
+  }
+
+  function openEntityDrawer(item: ReferenceSourceItem) {
+    selectEntity.set(asEntityItem(item));
+    activeTabValue.set(4);
+    expand = true;
   }
 
   function getSourceMeta(item: ReferenceSourceItem) {
@@ -1478,16 +1597,7 @@
     }
 
     if (groupKey === "entities_wiki") {
-      const primaryDoc =
-        typeof item.primary_doc === "string" && item.primary_doc.trim()
-          ? item.primary_doc
-          : typeof item.doc === "string" && item.doc.trim()
-            ? item.doc
-            : null;
-      if (primaryDoc) {
-        selectDoc.set({ doc: primaryDoc });
-        activeTabValue.set(2);
-      }
+      openEntityDrawer(item);
       return;
     }
 
@@ -1744,21 +1854,74 @@
                           <span class="chat-sources__count">{sourceGroup.items.length}</span>
                         </summary>
 
-                        <div class="chat-sources__chips">
-                          {#each sourceGroup.items as item}
-                            <button
-                              type="button"
-                              class="chat-source-chip"
-                              title={typeof item.content === "string" ? item.content : item.doc ?? ""}
-                              on:click={() => openSource(sourceGroup.key, item)}
-                            >
-                              <span class="chat-source-chip__doc">{item.doc}</span>
-                              {#if getSourceMeta(item)}
-                                <span class="chat-source-chip__meta">{getSourceMeta(item)}</span>
-                              {/if}
-                            </button>
-                          {/each}
-                        </div>
+                        {#if sourceGroup.key === "entities_wiki"}
+                          <div class="chat-entity-cards">
+                            {#each sourceGroup.items as item}
+                              <article class="chat-entity-card">
+                                <button
+                                  type="button"
+                                  class="chat-entity-card__main"
+                                  title={typeof item.content === "string" ? item.content : getEntityTitle(item)}
+                                  on:click={() => openEntityDrawer(item)}
+                                >
+                                  <span class="chat-entity-card__header">
+                                    <strong>{getEntityTitle(item)}</strong>
+                                    {#if getEntityRankLabel(item)}
+                                      <span class="chat-entity-card__rank">{getEntityRankLabel(item)}</span>
+                                    {/if}
+                                  </span>
+                                  <span class="chat-entity-card__kind">Entity / part</span>
+                                  {#if getEntityMetadataLine(item)}
+                                    <span class="chat-entity-card__line">{getEntityMetadataLine(item)}</span>
+                                  {/if}
+                                  {#if getEntityAliasLine(item)}
+                                    <span class="chat-entity-card__line">Alias: {getEntityAliasLine(item)}</span>
+                                  {/if}
+                                  {#if getEntityPartNumberLine(item)}
+                                    <span class="chat-entity-card__line">Part numbers: {getEntityPartNumberLine(item)}</span>
+                                  {/if}
+                                  {#if getEntityDocSummary(item)}
+                                    <span class="chat-entity-card__line chat-entity-card__docs">{getEntityDocSummary(item)}</span>
+                                  {/if}
+                                </button>
+                                <div class="chat-entity-card__actions">
+                                  <button
+                                    type="button"
+                                    class="chat-entity-card__action"
+                                    on:click={() => openEntityDrawer(item)}
+                                  >
+                                    Open entity
+                                  </button>
+                                  {#if getEntityPrimaryDoc(item)}
+                                    <button
+                                      type="button"
+                                      class="chat-entity-card__action"
+                                      on:click={() => openDocumentByName(getEntityPrimaryDoc(item))}
+                                    >
+                                      Open primary document
+                                    </button>
+                                  {/if}
+                                </div>
+                              </article>
+                            {/each}
+                          </div>
+                        {:else}
+                          <div class="chat-sources__chips">
+                            {#each sourceGroup.items as item}
+                              <button
+                                type="button"
+                                class="chat-source-chip"
+                                title={typeof item.content === "string" ? item.content : item.doc ?? ""}
+                                on:click={() => openSource(sourceGroup.key, item)}
+                              >
+                                <span class="chat-source-chip__doc">{item.doc}</span>
+                                {#if getSourceMeta(item)}
+                                  <span class="chat-source-chip__meta">{getSourceMeta(item)}</span>
+                                {/if}
+                              </button>
+                            {/each}
+                          </div>
+                        {/if}
                       </details>
                     {/each}
                   </div>
@@ -1797,6 +1960,7 @@
       {chatError.message}
     </div>
   {/if}
+
 
   <form class="chat-composer" on:submit={handleComposerSubmit}>
     <div class={`chat-composer__surface ${composerIsMultiline ? "chat-composer__surface--multiline" : ""}`}>
@@ -1863,6 +2027,7 @@
 
 <style>
   .chat-shell {
+    position: relative;
     display: flex;
     flex-direction: column;
     background: #ffffff;
@@ -2362,6 +2527,83 @@
   .chat-source-chip__meta {
     font-size: 0.65rem;
     color: #667085;
+  }
+
+  .chat-entity-cards {
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 0.55rem;
+  }
+
+  .chat-entity-card {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 0.85rem;
+    background: #fff;
+    padding: 0.6rem;
+  }
+
+  .chat-entity-card__main {
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: #1f2937;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .chat-entity-card__header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.55rem;
+    align-items: flex-start;
+  }
+
+  .chat-entity-card__header strong {
+    font-size: 0.76rem;
+    line-height: 1.25;
+  }
+
+  .chat-entity-card__rank,
+  .chat-entity-card__kind {
+    color: #667085;
+    font-size: 0.64rem;
+  }
+
+  .chat-entity-card__kind,
+  .chat-entity-card__line {
+    display: block;
+    margin-top: 0.18rem;
+  }
+
+  .chat-entity-card__line {
+    color: #475467;
+    font-size: 0.68rem;
+    line-height: 1.35;
+  }
+
+  .chat-entity-card__docs {
+    color: #1d4ed8;
+  }
+
+  .chat-entity-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.55rem;
+  }
+
+  .chat-entity-card__action {
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: #f8fafc;
+    color: #1d4ed8;
+    border-radius: 999px;
+    padding: 0.28rem 0.55rem;
+    font: inherit;
+    font-size: 0.66rem;
+    font-weight: 600;
+    cursor: pointer;
   }
 
   .chat-update-link {

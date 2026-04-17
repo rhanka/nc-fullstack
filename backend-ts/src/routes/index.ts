@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { routeAiRequest } from "./ai-route.ts";
 import { routeDocRequest } from "./doc-route.ts";
 import { routeNcRequest } from "./nc-route.ts";
+import { routeWikiRequest } from "./wiki-route.ts";
 import { resolvePingRoute } from "./ping-route.ts";
 import type { RouteResult } from "./route-result.ts";
 import type { AiRuntime } from "../services/ai-orchestrator.ts";
@@ -109,6 +110,9 @@ export async function routeRequest(
     return;
   }
   if (await routeNcRequest(request, response, options.dataService)) {
+    return;
+  }
+  if (await routeWikiRequest(request, response)) {
     return;
   }
   if (await routeDocRequest(request, response, options.dataService)) {

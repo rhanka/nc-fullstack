@@ -340,6 +340,7 @@ Seuil de réouverture:
 - prototype runtime branché:
   - troisième groupe de sources `entities/wiki`
   - ouverture vers le document technique primaire quand il existe
+- surface UI detaillee et UAT associes specifies dans `SPEC_EVOL_WIKI_UI.md`
 
 ### `L6.5`
 
