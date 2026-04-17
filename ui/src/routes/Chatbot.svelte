@@ -86,7 +86,7 @@
 
   type IntroQuickAction = {
     label: string;
-    prompt: string;
+    prompt: string | (() => string);
   };
 
   type EntitySourceItem = ReferenceSourceItem & {
@@ -138,6 +138,13 @@
       error?: string;
     };
   };
+
+  const randomNonConformityDescriptions = [
+      "Description du Problème :\nLors du contrôle de qualité du numéro d’avion MSN 0070, une non-conformité a été identifiée concernant le perçage d'une série de rivets sur le revêtement extérieur, sous la glace du pare-brise droit. Un désaffleurement a été mesuré entre -0,20 mm et -0,25 mm, dépassant les tolérances spécifiées dans les normes d'assemblage.\nDétails Techniques :\n•       Localisation : Zone en dessous du pare-brise droit\n•       Mesure de Désaffleurement : -0,20 mm à -0,25 mm\n•       Norme Acceptable : Tolérance maximale de -0,10 mm selon la spécification interne (Réf. SP-2023-078)",
+      "Description du Problème :\nLors des tests de débit effectués sur le réservoir principal de l'aile gauche du numéro d’avion 0070, une non-conformité a été identifiée : un débit faible a été mesuré au niveau de la crépine d’aspiration. Ce problème pourrait compromettre l'alimentation en carburant et nécessite une investigation approfondie pour évaluer les causes et les impacts.\nDétails Techniques :\n•       Localisation : Réservoir principal aile gauche.\n•       Problème identifié : Débit faible de la crépine d'aspiration.\n•       Norme Acceptable : Débit minimum requis selon la spécification interne (Réf. SP-2023-101).",
+      "Description du Problème :\nLors de l'inspection des systèmes de décharge électrostatique du numéro d’avion 0070, une non-conformité a été détectée concernant la conductivité des fils de décharge électrostatique entre le tuyau et la structure au niveau du réservoir secondaire de l’aile droite. Les tests ont révélé des valeurs de conductivité supérieures aux tolérances spécifiées, ce qui pourrait compromettre l'efficacité du système.\nDétails Techniques :\n•       Localisation : Réservoir secondaire aile droite.\n•       Problème identifié : Conductivité des fils de décharge électrostatique non conforme.\n•       Norme Acceptable : Conductivité requise selon la spécification interne (Réf. SP-2023-115).",
+      "Description du Problème :\nLors d’un contrôle qualité sur le numéro d’avion 0070, une non-conformité a été identifiée : une rayure de 10 cm de long et 0,1 cm de profondeur a été observée sur une structure en aluminium dans la zone C2-2. Ce défaut soulève des préoccupations concernant le risque potentiel de corrosion, nécessitant la validation d’un expert pour évaluer l'impact sur l'intégrité structurelle.\nDétails Techniques :\n•       Localisation : Zone C2-2, structure en aluminium.\n•       Dimensions de la Rayure : 10 cm de long, 0,1 cm de profondeur.\n•       Norme Acceptable : Aucun défaut de surface n'est toléré selon les spécifications (Réf. SP-2023-092)."
+  ];
 
   const aiUrl = `${getApiBaseUrl()}/ai`;
   const runtimeStageOrder = [
@@ -892,6 +899,11 @@
     return $createdItem?.currentTask ?? "000";
   }
 
+  function getRandomNonConformityDescription() {
+    const index = Math.floor(Math.random() * randomNonConformityDescriptions.length);
+    return randomNonConformityDescriptions[index] ?? randomNonConformityDescriptions[0];
+  }
+
   function getIntroQuickActions(taskRole: string): IntroQuickAction[] {
     if (taskRole === "100") {
       return [
@@ -915,6 +927,10 @@
           "Propose a concise and precise task description based on the current non-conformity context.",
       },
       {
+        label: "Random non conformity description",
+        prompt: getRandomNonConformityDescription,
+      },
+      {
         label: "Translate to French",
         prompt:
           "Translate the current task content to French and preserve the technical terminology.",
@@ -922,7 +938,8 @@
     ];
   }
 
-  async function triggerIntroQuickAction(prompt: string) {
+  async function triggerIntroQuickAction(action: IntroQuickAction) {
+    const prompt = typeof action.prompt === "function" ? action.prompt() : action.prompt;
     await submitUserMessage({ text: prompt });
   }
 
@@ -1721,7 +1738,7 @@
             <button
               type="button"
               class="chat-intro__action"
-              on:click={() => triggerIntroQuickAction(action.prompt)}
+              on:click={() => triggerIntroQuickAction(action)}
             >
               {action.label}
             </button>
