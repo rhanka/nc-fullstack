@@ -242,6 +242,18 @@ Ce canal expose:
 Ce canal ne remplace pas `tech docs`.
 Il sert à expliquer et structurer ce que le moteur trouve.
 
+### Rôle dans la synthèse du rapport 100
+
+Le rapport `100` doit recevoir les entités au même niveau contextuel que les documents techniques et les NC similaires.
+
+Contrat attendu:
+
+- le runtime fournit `search_entities_wiki` au prompt de génération `100`
+- chaque entité fournit au minimum titre canonique, type, description courte, ATA, zones, alias, part numbers, document primaire et documents de support
+- le prompt `100` utilise ce contexte pour approfondir l'analyse, choisir les ATA connexes et éviter une lecture isolée des chunks
+- les entités ne sont pas des preuves réglementaires autonomes; la justification finale reste ancrée sur les documents techniques de support
+- si le canal est vide ou peu pertinent, le modèle ne doit pas inventer de pièce, zone ou ATA
+
 ### Rôle dans le rewrite
 
 Le rewrite peut s'appuyer sur:

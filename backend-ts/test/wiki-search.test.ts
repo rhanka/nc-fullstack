@@ -25,6 +25,9 @@ test("searchWikiIndex ranks matching part pages and exposes primary supporting d
       aliases: ["cockpit window frame"],
       part_numbers: ["D5312345600000"],
       supporting_docs: ["tech-window.md"],
+      supporting_chunks: ["tech-window 0"],
+      short_description: "Canonical windshield frame entity used for fastener flushness analysis.",
+      entity_type: "part",
     },
     {
       slug: "cargo-door",
@@ -37,14 +40,17 @@ test("searchWikiIndex ranks matching part pages and exposes primary supporting d
     },
   ]);
 
-  const result = searchWikiIndex("ATA 56 windshield frame flushness", {
+  const result = searchWikiIndex("ATA 56 windshield frame flushness fastener", {
     config: { indexPath },
   });
 
   assert.equal(result.debug.indexReady, true);
   assert.equal(result.results[0]?.title, "Windshield frame");
   assert.equal(result.results[0]?.primary_doc, "tech-window.md");
-  assert.match(result.results[0]?.content ?? "", /ATA 56/u);
+  assert.equal(result.results[0]?.entity_type, "part");
+  assert.match(result.results[0]?.content ?? "", /Canonical windshield frame entity/u);
+  assert.match(result.results[0]?.content ?? "", /ATA: ATA 56/u);
+  assert.match(result.results[0]?.content ?? "", /Supporting doc: tech-window.md/u);
 });
 
 test("searchWikiIndex returns empty results when the index does not exist", () => {

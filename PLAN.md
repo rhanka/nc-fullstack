@@ -144,6 +144,7 @@
 - [x] L6F.4b Implémenter `dataprep-prepare-tech-docs`. Recette: génération de `a220_tech_docs_content_canonical.csv.gz` + audit JSON, lignes conservées recopiées sans re-sérialisation, lignes sans page servie exclues du corpus canonique. `TEST`
 - [x] L6F.4c Brancher le RAG TS sur le CSV canonique. Recette: `dataprep`, `dataprep-tech-docs`, `dataprep-knowledge*` et `api-prepare-data-ci` consomment le canonique sans filtre runtime. `TEST`
 - [x] L6F.4d Rebuilder les artefacts tech docs depuis le CSV canonique. Recette: `vector-export / lexical / ontology / wiki` régénérés et audit local montrant zéro source technique non servable dans les artefacts. `TEST`
+- [x] L6F.5 Injecter les entites knowledge dans la synthese du rapport `100`. Recette: `search_entities_wiki` est consomme par le prompt `100`, contient un resume exploitable, et un test prouve que le contexte entites atteint la generation d'analyse. `TEST`
 
 ## Lot 6.4 - Smoke tests UAT couche connaissance
 

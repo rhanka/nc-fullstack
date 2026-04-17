@@ -38,7 +38,7 @@ function createPrompt(system: string, user: string, jsonMode: boolean): PromptTe
   } as PromptTemplate;
 }
 
-function createDependencies() {
+function createDependencies(dependencyOptions: { readonly finalSystemPrompts?: string[] } = {}) {
   const llmRuntime: LlmRuntime = {
     async invoke(options) {
       const system = options.messages[0]?.content ?? "";
@@ -53,6 +53,7 @@ function createDependencies() {
         };
       }
 
+      dependencyOptions.finalSystemPrompts?.push(system);
       return {
         providerId: "openai",
         model: options.model,
@@ -155,7 +156,9 @@ function createDependencies() {
             supporting_docs: ["tech-window.md"],
             doc: "Windshield frame",
             chunk_id: "windshield-frame",
-            content: "ATA 56 · RH windshield frame · cockpit window frame",
+            content: "Canonical windshield frame entity used for fastener flushness analysis. · ATA: ATA 56 · Zone: RH windshield frame · Alias: cockpit window frame · Supporting doc: tech-window.md",
+            short_description: "Canonical windshield frame entity used for fastener flushness analysis.",
+            entity_type: "part",
             wiki_rank: 1,
             wiki_score: 6,
             primary_doc: "tech-window.md",
@@ -188,6 +191,11 @@ function createDependencies() {
       "final for {{description}} / {{search_docs}} / {{search_nc}}",
       true,
     ),
+    "100": createPrompt(
+      "FINAL-PROMPT-100 {{search_entities_wiki}}",
+      "analysis for {{description}} / {{search_docs}} / {{search_nc}} / {{search_entities_wiki}}",
+      true,
+    ),
   };
 
   const memoryStore = new LightweightMemoryStore(
@@ -203,13 +211,13 @@ function createDependencies() {
   };
 }
 
-function buildRequest(): AiRuntimeRequest {
+function buildRequest(role = "000"): AiRuntimeRequest {
   return {
     body: {
       provider: "openai",
       messages: [
         {
-          role: "000",
+          role,
           text: "Rewrite the report using the most relevant references.",
           description: "Right windshield frame rivet flushness out of tolerance.",
           history: [],
@@ -235,6 +243,19 @@ test("NativeAiOrchestrator.compute returns a source-v1 payload without Python ru
     "ATA-56-2024-0001",
   );
   assert.equal(result.payload.sources.entities_wiki?.sources?.[0]?.doc, "Windshield frame");
+});
+
+
+test("NativeAiOrchestrator.compute injects entity context into task 100 analysis prompt", async () => {
+  const finalSystemPrompts: string[] = [];
+  const orchestrator = new NativeAiOrchestrator(createDependencies({ finalSystemPrompts }));
+
+  await orchestrator.compute(buildRequest("100"));
+
+  const finalPrompt = finalSystemPrompts.find((prompt) => prompt.includes("FINAL-PROMPT-100")) ?? "";
+  assert.match(finalPrompt, /Windshield frame/u);
+  assert.match(finalPrompt, /Canonical windshield frame entity/u);
+  assert.match(finalPrompt, /Supporting doc: tech-window\.md/u);
 });
 
 test("NativeAiOrchestrator.openStream emits legacy SSE blocks without Python runtime", async () => {

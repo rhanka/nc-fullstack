@@ -20,6 +20,9 @@ export interface WikiIndexEntry {
   readonly aliases?: readonly string[];
   readonly part_numbers?: readonly string[];
   readonly supporting_docs?: readonly string[];
+  readonly supporting_chunks?: readonly string[];
+  readonly short_description?: string;
+  readonly entity_type?: string;
 }
 
 export interface WikiSearchResult extends WikiIndexEntry {
@@ -60,8 +63,10 @@ function buildEntrySearchText(entry: WikiIndexEntry): {
     metadataTokens: fieldTokens([
       ...(entry.ata_codes ?? []),
       ...(entry.zones ?? []),
+      entry.short_description ?? "",
       ...(entry.part_numbers ?? []),
       ...(entry.supporting_docs ?? []),
+      ...(entry.supporting_chunks ?? []),
     ]),
   };
 }
@@ -107,10 +112,14 @@ export function searchWikiIndex(
       doc: candidate.entry.title,
       chunk_id: candidate.entry.slug,
       content: [
-        ...(candidate.entry.ata_codes ?? []),
-        ...(candidate.entry.zones ?? []),
-        ...(candidate.entry.aliases ?? []),
-      ].join(" · "),
+        candidate.entry.short_description ?? "",
+        ...(candidate.entry.ata_codes ?? []).map((value) => `ATA: ${value}`),
+        ...(candidate.entry.zones ?? []).map((value) => `Zone: ${value}`),
+        ...(candidate.entry.aliases ?? []).map((value) => `Alias: ${value}`),
+        ...(candidate.entry.part_numbers ?? []).map((value) => `Part number: ${value}`),
+        ...(candidate.entry.supporting_docs ?? []).slice(0, 5).map((value) => `Supporting doc: ${value}`),
+      ].filter(Boolean).join(" · "),
+      entity_type: candidate.entry.entity_type ?? "part",
       wiki_rank: indexPosition + 1,
       wiki_score: candidate.score,
       primary_doc: candidate.entry.supporting_docs?.[0] ?? null,

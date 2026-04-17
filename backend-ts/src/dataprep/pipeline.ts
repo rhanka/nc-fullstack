@@ -860,11 +860,14 @@ export function buildWikiArtifacts(
       slug,
       title,
       path: `parts/${slug}.md`,
+      entity_type: "part",
+      short_description: shortDescription,
       ata_codes: ataCodes,
       zones,
       aliases,
       part_numbers: partNumbers,
       supporting_docs: docs,
+      supporting_chunks: Array.isArray(part.supporting_chunks) ? part.supporting_chunks.map(String) : [],
     });
     pageCount += 1;
   }
