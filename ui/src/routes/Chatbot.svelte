@@ -215,9 +215,56 @@
     }
   }
 
+  function isBlankOrPlaceholder(value: unknown, placeholder: string) {
+    if (value === undefined || value === null) {
+      return true;
+    }
+
+    if (typeof value !== "string") {
+      return false;
+    }
+
+    const normalizedValue = value.trim();
+    return normalizedValue === "" || normalizedValue === placeholder;
+  }
+
+  function isDemoReportPristine() {
+    const history = $createdItem?.analysis_history ?? {};
+    const hasLaterTaskContent = TASK_IDS
+      .filter((task) => task !== "000")
+      .some((task) => (history[task] ?? []).length > 0);
+
+    if (hasLaterTaskContent) {
+      return false;
+    }
+
+    const steps = history["000"] ?? [];
+    if (steps.length === 0) {
+      return true;
+    }
+
+    if (steps.length > 1) {
+      return false;
+    }
+
+    const step = steps[0] ?? {};
+    return (
+      isBlankOrPlaceholder(step.label, "<Label for non-conformity report>") &&
+      isBlankOrPlaceholder(
+        step.description,
+        "Please provide a concise and precise description for this task",
+      ) &&
+      !step.validated &&
+      !step.feedback &&
+      !step.undo &&
+      !step.redo
+    );
+  }
+
   function isDemoModeCandidate() {
     return (
       getCurrentTaskRole() === "000" &&
+      isDemoReportPristine() &&
       chatMessages.length === 0 &&
       composerInput.trim().length === 0 &&
       chatStatus === "ready"
