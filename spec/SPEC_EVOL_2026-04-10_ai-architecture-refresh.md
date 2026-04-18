@@ -3,7 +3,7 @@
 - Date: 2026-04-10
 - Status: proposal
 - Related intent: `SPEC_INTENT_2026-04-10_ai-architecture-refresh.md`
-- Last updated: 2026-04-11
+- Last updated: 2026-04-14
 
 ## Objectif
 
@@ -17,6 +17,27 @@ Définir une trajectoire réaliste sur quatre axes:
 Note:
 
 - la décision détaillée de remplacement de la vector DB et son plan d'exécution sont désormais cadrés dans `SPEC_EVOL_VECTOR_DB.md`
+- la formalisation détaillée de l'ontologie et du `LLM Wiki` est désormais cadrée dans `SPEC_EVOL_LLM_WIKI.md`
+- la formalisation détaillée du dataprep TS est désormais cadrée dans `SPEC_EVOL_DATAPREP_TS.md`
+
+## Mise à jour de décision du 2026-04-14
+
+Clarification importante par rapport aux itérations précédentes:
+
+- le backend prod tourne bien en TypeScript
+- le moteur retrieval runtime actif est `export_exact`, pas `lancedb`
+- l'intégration `lancedb` a été retirée du runtime et du build
+- le dataprep n'est pas encore migré en TypeScript; c'est désormais une dette explicite
+- la prochaine couche "knowledge" ne doit pas supposer `graphify` par défaut
+
+Conséquence:
+
+- la trajectoire active n'est plus "aller plus loin dans LanceDB"
+- la trajectoire active est:
+  - garder un seul moteur runtime simple autour de `vector-export + SQLite FTS5 + RRF`
+  - migrer le dataprep en TypeScript
+  - décider la valeur d'un `LLM Wiki` sur le même corpus
+  - traiter `graphify` comme option différée, pas comme prérequis
 
 ## Etat actuel observé
 
@@ -560,6 +581,117 @@ Causes probables de la baisse de pertinence, par ordre de priorité:
 6. absence de métriques de qualité
 7. injection trop brute des sources dans le prompt final
 
+### Axe 3 bis - Couche connaissance, ontologie et LLM Wiki
+
+Le point à clarifier n'est pas "est-ce qu'on veut encore un outil de plus".
+Le point à clarifier est "quelle structure de connaissance manque aujourd'hui entre les chunks bruts et la réponse finale".
+
+#### Valeur potentielle d'un `LLM Wiki` sur ce projet
+
+L'intérêt d'un `LLM Wiki` sur le même dataset que le RAG n'est pas de dupliquer les documents source.
+L'intérêt est d'introduire une couche intermédiaire plus stable et plus sémantique entre:
+
+- les chunks techniques / OCR / NC
+- la requête utilisateur
+- la synthèse finale
+
+Sur `nc-fullstack`, cette couche peut apporter quatre gains concrets:
+
+1. **normalisation métier**
+   - aujourd'hui, une même réalité peut apparaître sous plusieurs formes:
+     - `ATA 52`
+     - `door`
+     - `RH door`
+     - `frame 20/21`
+     - `delamination`
+   - un wiki et une ontologie permettent de relier ces alias à un concept canonique
+
+2. **retrieval plus précis**
+   - le rewrite et le ranking peuvent s'appuyer sur des concepts explicites, pas seulement sur les mots du prompt
+   - cela aide surtout sur:
+     - synonymes terrain
+     - variantes de pièces
+     - mélanges entre système, zone, symptôme et action
+
+3. **synthèse plus riche**
+   - la réponse peut citer non seulement des chunks, mais aussi la structure métier qui relie:
+     - pièce
+     - système
+     - défaut
+     - action corrective
+     - sources probantes
+
+4. **curation progressive**
+   - un wiki donne un support stable pour enrichir ou corriger la connaissance plus tard
+   - ce support peut rester simple: markdown compilé + liens + métadonnées
+
+#### Pourquoi l'ontologie semble plus utile que `graphify` à ce stade
+
+L'utilité immédiate n'est probablement pas un graphe "joli" ou un clustering automatique.
+L'utilité immédiate, c'est une ontologie métier minimale qui dise explicitement:
+
+- de quel système ATA on parle
+- de quelle pièce ou sous-ensemble on parle
+- dans quelle zone
+- pour quel symptôme observé
+- pour quel mode de défaut
+- avec quelles actions de maintenance ou de correction
+- sur quelles sources on s'appuie
+
+Autrement dit:
+
+- l'ontologie répond à un besoin métier direct
+- `graphify` ne devient utile que s'il aide réellement à:
+  - extraire cette structure
+  - explorer les liens
+  - auditer les trous ou communautés de concepts
+
+Donc, à ce stade:
+
+- **oui** à une ontologie minimale orientée A220 / ATA / pièces / zones
+- **oui** à un `LLM Wiki` si cette ontologie peut améliorer retrieval et synthèse
+- **non pas encore** à un engagement ferme sur `graphify`
+
+#### Recommandation active
+
+La recommandation active n'est plus "vector DB plus smart".
+La recommandation active devient:
+
+1. corpus canonique unique
+2. dataprep TypeScript
+3. retrieval hybride sobre:
+   - `vector-export`
+   - `SQLite FTS5`
+   - `RRF`
+4. ontologie minimale métier
+5. `LLM Wiki` compilé sur le même dataset
+6. décision séparée et différée sur `graphify`
+
+#### Vue retrieval cible pendant l'analyse `000` puis `001`
+
+Lors de la recherche, la couche connaissance ne doit pas vivre "à côté" du RAG.
+Elle doit être visible comme un troisième canal de récupération, au même niveau que:
+
+- `tech docs`
+- `similar NC`
+- `entities/wiki`
+
+La vue `entities/wiki` doit servir à exposer:
+
+- entités canoniques:
+  - `ATA`
+  - `pièce / sous-ensemble`
+  - `zone`
+- articles wiki compilés à partir du même corpus
+- liens vers les documents techniques qui supportent ces articles
+
+Conséquence UX et produit:
+
+- pendant les étapes `000` puis `001`, l'application doit pouvoir montrer non seulement des chunks docs / NC, mais aussi les entités et articles wiki pertinents
+- cette vue n'a pas besoin d'être lourde; un panneau ou groupe compact dépliable suffit
+- les NC historiques étant fictives à ce stade, elles ne doivent pas être le centre de gravité de cette couche connaissance
+- les NC sont plutôt traitées comme occurrences / preuves secondaires rattachées aux concepts métier et aux documents
+
 ### Axe 4 - Backend, API, TypeScript
 
 Recommandation pragmatique:
@@ -603,10 +735,13 @@ Conséquence frontend:
 - Oui au couple `gpt-5.4-nano` + `gpt-5.4 xhigh`, piloté par un router central.
 - Oui au remplacement de `deep-chat`, via `@ai-sdk/svelte` pour l'UI du chat uniquement, avec fallback possible par export / adaptation du shell de `../top-ai-ideas-fullstack/ui`.
 - Non à tout pivot backend vers Vercel; le backend reasoning reste séparé et piloté via OpenAI côté serveur.
-- Oui à un RAG "LLM Wiki v2 light": hybride + mémoire légère d'abord.
+- Oui à une base RAG sobre `vector-export + SQLite FTS5 + RRF`, sur laquelle un `LLM Wiki` pourra être ajouté.
+- Oui à une ontologie minimale métier si elle améliore le rewrite, le retrieval et la synthèse.
+- Non à un engagement immédiat sur `graphify`; décision différée jusqu'à preuve d'utilité au-delà de l'ontologie et du wiki.
 - Oui à une migration backend TypeScript, mais conduite de manière incrémentale et contract-first.
 - Oui à une montée en TypeScript du frontend sur la zone chat et les contrats partagés.
 - Oui à une projection forte de l'API et à plus de tests pendant la bascule structurelle.
+- Non au maintien durable de deux moteurs retrieval runtime concurrents sans justification explicite.
 
 ## Arbitrages utilisateur intégrés le 2026-04-11
 
@@ -623,6 +758,52 @@ Conséquence frontend:
 10. Le chat devra exposer en bas un sélecteur `modèle + niveau de réflexion`; valeur par défaut visée: `gpt-5.4-nano` + `auto`.
 11. `auto` s'applique au niveau de réflexion / effort de reasoning; le choix du modèle final reste manuel et observable côté utilisateur.
 
+## Session QA - arbitrages actés le 2026-04-14
+
+Arbitrages utilisateur désormais retenus avant `L6.3+`:
+
+1. **Audience du wiki**
+   - le wiki doit être navigable par un humain
+   - il ne doit pas être conçu comme un artefact "LLM only"
+
+2. **Périmètre de l'ontologie**
+   - l'ontologie minimale cible couvre:
+     - `ATA`
+     - `pièce / sous-ensemble`
+     - `zone`
+   - les autres dimensions pourront venir plus tard si elles prouvent leur utilité
+
+3. **Statut des NC dans la couche connaissance**
+   - une NC n'est pas un concept de premier rang
+   - une NC est une occurrence / preuve rattachée à des concepts et à des sources
+
+4. **Unité canonique du wiki**
+   - la page canonique visée est la page par `pièce / sous-ensemble`
+
+5. **Gestion des alias métier**
+   - la capture explicite des variantes est requise:
+     - variantes de désignation
+     - références pièce
+     - zones et abréviations
+     - alias métier utiles
+
+6. **Critère de succès principal**
+   - le wiki doit améliorer la contribution à l'analyse et à la résolution de problème
+
+7. **Position de `graphify`**
+   - l'utilité de `graphify` n'est pas démontrée à ce stade
+   - `graphify` n'est pas retenu pour cette phase
+   - la trajectoire active reste:
+     - une ontologie minimale
+     - un wiki compilé
+     - des liens explicites vers les docs
+   - une réouverture n'est recevable qu'en présence d'un besoin concret d'audit ou d'exploration que l'ontologie + wiki ne couvrent pas
+
+8. **Poids des NC historiques**
+   - les NC historiques étant fictives à ce stade, elles ne doivent pas piloter le design de la couche connaissance
+   - elles servent surtout comme occurrences secondaires et comme support d'évaluation limitée
+
 ## Questions ciblées pour la prochaine itération
 
-Aucun arbitrage produit bloquant restant à ce stade. La prochaine itération peut attaquer le lot 0.
+La prochaine itération ne doit pas démarrer directement par `graphify`.
+La prochaine exécution doit démarrer par `L6.3`, c'est-à-dire la migration du dataprep vers TypeScript à partir du cadre défini dans `SPEC_EVOL_LLM_WIKI.md`.

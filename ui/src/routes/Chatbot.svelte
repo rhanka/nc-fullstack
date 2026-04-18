@@ -31,6 +31,7 @@
     activeTabValue,
     createdItem,
     selectDoc,
+    selectEntity,
     taskLabel,
     updateCreatedItem,
   } from "./store";
@@ -85,9 +86,23 @@
 
   type IntroQuickAction = {
     label: string;
-    prompt: string;
+    prompt?: string | (() => string);
+    run?: () => void | Promise<void>;
   };
 
+  type EntitySourceItem = ReferenceSourceItem & {
+    readonly slug?: unknown;
+    readonly title?: unknown;
+    readonly path?: unknown;
+    readonly ata_codes?: unknown;
+    readonly zones?: unknown;
+    readonly aliases?: unknown;
+    readonly part_numbers?: unknown;
+    readonly supporting_docs?: unknown;
+    readonly primary_doc?: unknown;
+    readonly wiki_rank?: unknown;
+    readonly wiki_score?: unknown;
+  };
   type StructuredAssistantPayload = LegacyFinalPayload & {
     reasoningSummary?: string;
   };
@@ -125,8 +140,27 @@
     };
   };
 
+  const randomNonConformityDescriptions = [
+      "Description du Problème :\nLors du contrôle de qualité du numéro d’avion MSN 0070, une non-conformité a été identifiée concernant le perçage d'une série de rivets sur le revêtement extérieur, sous la glace du pare-brise droit. Un désaffleurement a été mesuré entre -0,20 mm et -0,25 mm, dépassant les tolérances spécifiées dans les normes d'assemblage.\nDétails Techniques :\n•       Localisation : Zone en dessous du pare-brise droit\n•       Mesure de Désaffleurement : -0,20 mm à -0,25 mm\n•       Norme Acceptable : Tolérance maximale de -0,10 mm selon la spécification interne (Réf. SP-2023-078)",
+      "Description du Problème :\nLors des tests de débit effectués sur le réservoir principal de l'aile gauche du numéro d’avion 0070, une non-conformité a été identifiée : un débit faible a été mesuré au niveau de la crépine d’aspiration. Ce problème pourrait compromettre l'alimentation en carburant et nécessite une investigation approfondie pour évaluer les causes et les impacts.\nDétails Techniques :\n•       Localisation : Réservoir principal aile gauche.\n•       Problème identifié : Débit faible de la crépine d'aspiration.\n•       Norme Acceptable : Débit minimum requis selon la spécification interne (Réf. SP-2023-101).",
+      "Description du Problème :\nLors de l'inspection des systèmes de décharge électrostatique du numéro d’avion 0070, une non-conformité a été détectée concernant la conductivité des fils de décharge électrostatique entre le tuyau et la structure au niveau du réservoir secondaire de l’aile droite. Les tests ont révélé des valeurs de conductivité supérieures aux tolérances spécifiées, ce qui pourrait compromettre l'efficacité du système.\nDétails Techniques :\n•       Localisation : Réservoir secondaire aile droite.\n•       Problème identifié : Conductivité des fils de décharge électrostatique non conforme.\n•       Norme Acceptable : Conductivité requise selon la spécification interne (Réf. SP-2023-115).",
+      "Description du Problème :\nLors d’un contrôle qualité sur le numéro d’avion 0070, une non-conformité a été identifiée : une rayure de 10 cm de long et 0,1 cm de profondeur a été observée sur une structure en aluminium dans la zone C2-2. Ce défaut soulève des préoccupations concernant le risque potentiel de corrosion, nécessitant la validation d’un expert pour évaluer l'impact sur l'intégrité structurelle.\nDétails Techniques :\n•       Localisation : Zone C2-2, structure en aluminium.\n•       Dimensions de la Rayure : 10 cm de long, 0,1 cm de profondeur.\n•       Norme Acceptable : Aucun défaut de surface n'est toléré selon les spécifications (Réf. SP-2023-092)."
+  ];
+
   const aiUrl = `${getApiBaseUrl()}/ai`;
-  const runtimeStageOrder = ["query", "doc_search", "nc_search", "000", "100", "200", "300", "400", "500", "final"];
+  const runtimeStageOrder = [
+    "query",
+    "doc_search",
+    "nc_search",
+    "wiki_search",
+    "000",
+    "100",
+    "200",
+    "300",
+    "400",
+    "500",
+    "final",
+  ];
   const modelOptions: Array<{ value: ChatModelSelection; label: string }> = [
     { value: "gpt-5.4-nano", label: "GPT-5.4 Nano" },
     { value: "gpt-5.4", label: "GPT-5.4" },
@@ -159,6 +193,11 @@
   let lastOptimisticUpdateSignature = "";
   let modelSelection: ChatModelSelection = "gpt-5.4-nano";
   let complexitySelection: ChatComplexitySelection = "auto";
+  let demoModeModalOpen = false;
+  let demoModePrompted = false;
+  let demoModeTimer: number | null = null;
+  let demoModeOpenedChat = false;
+  let reportDescriptionTypingRun = 0;
 
   $: dynamicWidth =
     windowInnerWidth !== undefined && windowInnerWidth <= 768
@@ -169,11 +208,94 @@
       ? `calc(100dvh - ${expand ? 21.5 : 11.5}rem)`
       : height;
 
+  function clearDemoModeTimer() {
+    if (demoModeTimer !== null) {
+      window.clearTimeout(demoModeTimer);
+      demoModeTimer = null;
+    }
+  }
+
+  function isBlankOrPlaceholder(value: unknown, placeholder: string) {
+    if (value === undefined || value === null) {
+      return true;
+    }
+
+    if (typeof value !== "string") {
+      return false;
+    }
+
+    const normalizedValue = value.trim();
+    return normalizedValue === "" || normalizedValue === placeholder;
+  }
+
+  function isDemoReportPristine() {
+    const history = $createdItem?.analysis_history ?? {};
+    const hasLaterTaskContent = TASK_IDS
+      .filter((task) => task !== "000")
+      .some((task) => (history[task] ?? []).length > 0);
+
+    if (hasLaterTaskContent) {
+      return false;
+    }
+
+    const steps = history["000"] ?? [];
+    if (steps.length === 0) {
+      return true;
+    }
+
+    if (steps.length > 1) {
+      return false;
+    }
+
+    const step = steps[0] ?? {};
+    return (
+      isBlankOrPlaceholder(step.label, "<Label for non-conformity report>") &&
+      isBlankOrPlaceholder(
+        step.description,
+        "Please provide a concise and precise description for this task",
+      ) &&
+      !step.validated &&
+      !step.feedback &&
+      !step.undo &&
+      !step.redo
+    );
+  }
+
+  function isDemoModeCandidate() {
+    return (
+      getCurrentTaskRole() === "000" &&
+      isDemoReportPristine() &&
+      chatMessages.length === 0 &&
+      composerInput.trim().length === 0 &&
+      chatStatus === "ready"
+    );
+  }
+
   afterUpdate(() => {
     if (messageViewport) {
       messageViewport.scrollTop = messageViewport.scrollHeight;
     }
   });
+
+  $: if (typeof window !== "undefined") {
+    const shouldScheduleDemoMode = isDemoModeCandidate() && !demoModePrompted && !demoModeModalOpen;
+
+    if (shouldScheduleDemoMode && demoModeTimer === null) {
+      demoModeTimer = window.setTimeout(() => {
+        demoModeTimer = null;
+        if (isDemoModeCandidate() && !demoModePrompted) {
+          demoModeOpenedChat = !$showChatbot;
+          $showChatbot = true;
+          demoModePrompted = true;
+          demoModeModalOpen = true;
+        }
+      }, 15000);
+    }
+
+    if (!shouldScheduleDemoMode && demoModeTimer !== null) {
+      clearDemoModeTimer();
+    }
+  }
 
   onMount(() => {
     windowInnerWidth = window.innerWidth;
@@ -189,6 +311,7 @@
 
     return () => {
       streamAbortController?.abort();
+      clearDemoModeTimer();
       if ($chatElementRef === controller) {
         chatElementRef.set(null);
       }
@@ -310,7 +433,7 @@
     payload: StructuredAssistantPayload,
     taskRole?: string,
   ) {
-    chatMessages = chatMessages.map((message) => {
+    chatMessages = chatMessages.map((message): ChatMessage => {
       if (message.id !== messageId) {
         return message;
       }
@@ -322,7 +445,7 @@
       return {
         ...message,
         parts: [...preservedParts, ...buildAssistantParts(payload, taskRole)],
-      };
+      } as unknown as ChatMessage;
     });
   }
 
@@ -331,7 +454,7 @@
   }
 
   function replaceAssistantText(messageId: string, text: string) {
-    chatMessages = chatMessages.map((message) => {
+    chatMessages = chatMessages.map((message): ChatMessage => {
       if (message.id !== messageId) {
         return message;
       }
@@ -344,12 +467,12 @@
         ...message,
         content: text,
         parts: text ? [{ type: "text", text }, ...structuredParts] : structuredParts,
-      };
+      } as unknown as ChatMessage;
     });
   }
 
   function setAssistantReasoningSummary(messageId: string, summary: string | undefined) {
-    chatMessages = chatMessages.map((message) => {
+    chatMessages = chatMessages.map((message): ChatMessage => {
       if (message.id !== messageId) {
         return message;
       }
@@ -363,7 +486,7 @@
         parts: summary
           ? [...preservedParts, { type: "reasoning_summary", summary }]
           : preservedParts,
-      };
+      } as unknown as ChatMessage;
     });
 
     updateAssistantRuntime(messageId, (runtime) => ({
@@ -534,7 +657,7 @@
   }
 
   function getRuntimeBadges(runtime: AssistantRuntime): string[] {
-    const badges = [runtime.resolvedModel ?? runtime.requestedModel];
+    const badges: string[] = [runtime.resolvedModel ?? runtime.requestedModel];
     const complexityLabel =
       humanizeComplexitySelection(runtime.resolvedComplexity ?? runtime.requestedComplexity);
     if (complexityLabel) {
@@ -581,7 +704,11 @@
       return result;
     }
 
-    if (metadata === "doc_search" || metadata === "nc_search") {
+    if (
+      metadata === "doc_search" ||
+      metadata === "nc_search" ||
+      metadata === "wiki_search"
+    ) {
       const count = countSources(result);
       return `${count} source${count > 1 ? "s" : ""}`;
     }
@@ -595,11 +722,12 @@
   ) {
     const techDocsCount = countSources(payload.sources?.tech_docs);
     const nonConformitiesCount = countSources(payload.sources?.non_conformities);
+    const entitiesWikiCount = countSources(payload.sources?.entities_wiki);
     const fragments: string[] = [];
 
-    if (techDocsCount || nonConformitiesCount) {
+    if (techDocsCount || nonConformitiesCount || entitiesWikiCount) {
       fragments.push(
-        `Built a targeted retrieval query, reviewed ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"} and ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"}.`,
+        `Built a targeted retrieval query, reviewed ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"}, ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"} and ${entitiesWikiCount} entity reference${entitiesWikiCount === 1 ? "" : "s"}.`,
       );
     }
 
@@ -743,6 +871,7 @@
     hints: {
       techDocsCount?: number;
       nonConformitiesCount?: number;
+      entitiesWikiCount?: number;
       usingProvidedSources?: boolean;
     } = {},
   ): string {
@@ -758,8 +887,9 @@
 
     const techDocsCount = hints.techDocsCount ?? 0;
     const nonConformitiesCount = hints.nonConformitiesCount ?? 0;
-    if (techDocsCount || nonConformitiesCount) {
-      return `Drafting the task ${taskRole} response after reviewing ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"} and ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"}.`;
+    const entitiesWikiCount = hints.entitiesWikiCount ?? 0;
+    if (techDocsCount || nonConformitiesCount || entitiesWikiCount) {
+      return `Drafting the task ${taskRole} response after reviewing ${techDocsCount} technical document${techDocsCount === 1 ? "" : "s"}, ${nonConformitiesCount} similar non-conformit${nonConformitiesCount === 1 ? "y" : "ies"} and ${entitiesWikiCount} entity reference${entitiesWikiCount === 1 ? "" : "s"}.`;
     }
 
     return `Drafting the final task ${taskRole} response.`;
@@ -824,6 +954,11 @@
           title: "Searching similar non-conformities",
           detail: "Collecting comparable cases.",
         };
+      case "wiki_search":
+        return {
+          title: "Searching entities",
+          detail: "Resolving ATA, part and zone context.",
+        };
       default:
         return {
           title: "Generating answer",
@@ -842,47 +977,220 @@
       case "search_non_conformities":
       case "nc_search":
         return "Search similar non-conformities";
+      case "search_entities_wiki":
+      case "wiki_search":
+        return "Search entities";
       default:
         return fallbackMetadata === "final" ? "Generate final answer" : "Working";
     }
   }
 
-  function getCurrentTaskRole() {
-    return $createdItem?.currentTask ?? "000";
+  function normalizeTaskRole(role: unknown) {
+    const normalizedRole = typeof role === "string" ? role : String(role ?? "");
+    return TASK_IDS.includes(normalizedRole as (typeof TASK_IDS)[number])
+      ? normalizedRole
+      : null;
   }
 
-  function getIntroQuickActions(taskRole: string): IntroQuickAction[] {
-    if (taskRole === "100") {
-      return [
-        {
-          label: "Propose analysis summary",
-          prompt:
-            "Propose a concise task 100 analysis summary based on the current non-conformity context.",
-        },
-        {
-          label: "Translate to French",
-          prompt:
-            "Translate the current task content to French and preserve the technical terminology.",
-        },
-      ];
+  function getCurrentTaskRole() {
+    return normalizeTaskRole($createdItem?.currentTask) ?? "000";
+  }
+
+  function getIntroTaskRole() {
+    return normalizeTaskRole($createdItem?.currentTask);
+  }
+
+  function normalizeReportDescription(text: string) {
+    return text
+      .replace(/\r\n/g, "\n")
+      .replace(/[ \t]*•[ \t]*/g, "\n- ")
+      .replace(/(Détails Techniques\s*:)\n-/g, "$1\n\n-")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  function getRandomNonConformityDescription() {
+    const index = Math.floor(Math.random() * randomNonConformityDescriptions.length);
+    return normalizeReportDescription(
+      randomNonConformityDescriptions[index] ?? randomNonConformityDescriptions[0],
+    );
+  }
+
+  function sleep(ms: number) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  function getTypingChunkLength(text: string, position: number) {
+    const nextChar = text[position];
+
+    if (!nextChar || nextChar === "\n" || /[.,;:!?]/.test(nextChar)) {
+      return 1;
     }
 
-    return [
-      {
-        label: "Propose task description",
-        prompt:
-          "Propose a concise and precise task description based on the current non-conformity context.",
-      },
-      {
-        label: "Translate to French",
-        prompt:
-          "Translate the current task content to French and preserve the technical terminology.",
-      },
-    ];
+    const remaining = text.length - position;
+    const burst = Math.random() < 0.25 ? 3 : Math.random() < 0.7 ? 2 : 1;
+    return Math.min(remaining, burst);
   }
 
-  async function triggerIntroQuickAction(prompt: string) {
+  function getTypingDelayMs(chunk: string) {
+    const lastChar = chunk[chunk.length - 1] ?? "";
+
+    if (lastChar === "\n") {
+      return 140 + Math.random() * 120;
+    }
+
+    if (/[.!?]/.test(lastChar)) {
+      return 160 + Math.random() * 180;
+    }
+
+    if (/[,;:]/.test(lastChar)) {
+      return 90 + Math.random() * 120;
+    }
+
+    return 28 + Math.random() * 54;
+  }
+
+  function setReportDescription(text: string) {
+    createdItem.update((current) => {
+      const next = cloneData(current) ?? current;
+      const taskRole = "000";
+      const history = next.analysis_history ?? {};
+      const steps = history[taskRole] ?? [];
+      const currentStep = steps[0] ?? {};
+
+      steps[0] = {
+        ...currentStep,
+        description: text,
+      };
+      history[taskRole] = steps;
+      next.analysis_history = history;
+      next.currentTask = taskRole;
+
+      return next;
+    });
+  }
+
+  async function typeReportDescription(text: string) {
+    const typingRun = ++reportDescriptionTypingRun;
+    let cursor = 0;
+
+    setReportDescription("");
+
+    while (cursor < text.length && typingRun === reportDescriptionTypingRun) {
+      const chunkLength = getTypingChunkLength(text, cursor);
+      const nextCursor = cursor + chunkLength;
+      const nextText = text.slice(0, nextCursor);
+
+      setReportDescription(nextText);
+      cursor = nextCursor;
+      await sleep(getTypingDelayMs(text.slice(cursor - chunkLength, cursor)));
+    }
+
+    return typingRun === reportDescriptionTypingRun;
+  }
+
+  async function fillRandomReportDescription(options: { launchAssistant?: boolean; revealReport?: boolean } = {}) {
+    if (options.revealReport) {
+      $showChatbot = false;
+      await tick();
+    }
+
+    const completed = await typeReportDescription(getRandomNonConformityDescription());
+
+    if (completed && options.launchAssistant) {
+      $showChatbot = true;
+      await tick();
+      await submitUserMessage({
+        role: "000",
+        text: "Propose a concise and precise task description based on the current non-conformity report description.",
+      });
+    }
+  }
+
+  function getIntroQuickActions(taskRole: string | null): IntroQuickAction[] {
+    switch (taskRole) {
+      case "000":
+        return [
+          {
+            label: "Propose task description",
+            prompt:
+              "Propose a concise and precise task description based on the current non-conformity context.",
+          },
+          {
+            label: "Random non conformity description",
+            run: () => fillRandomReportDescription({ launchAssistant: true }),
+          },
+          {
+            label: "Translate to French",
+            prompt:
+              "Translate the current task content to French and preserve the technical terminology.",
+          },
+        ];
+      case "100":
+        return [
+          {
+            label: "Propose analysis summary",
+            prompt:
+              "Propose a concise task 100 analysis summary based on the current non-conformity context.",
+          },
+          {
+            label: "Translate to French",
+            prompt:
+              "Translate the current task content to French and preserve the technical terminology.",
+          },
+        ];
+      default:
+        return [
+          {
+            label: "Propose task response",
+            prompt:
+              "Propose a concise response for the current non-conformity workflow task based on the available context.",
+          },
+          {
+            label: "Translate to French",
+            prompt:
+              "Translate the current task content to French and preserve the technical terminology.",
+          },
+        ];
+    }
+  }
+
+  async function triggerIntroQuickAction(action: IntroQuickAction) {
+    if (action.run) {
+      await action.run();
+      return;
+    }
+
+    const prompt = typeof action.prompt === "function" ? action.prompt() : action.prompt;
+    if (!prompt) {
+      return;
+    }
+
     await submitUserMessage({ text: prompt });
+  }
+
+  function dismissDemoMode() {
+    demoModePrompted = true;
+    demoModeModalOpen = false;
+    clearDemoModeTimer();
+    if (demoModeOpenedChat) {
+      $showChatbot = false;
+      demoModeOpenedChat = false;
+    }
+  }
+
+  async function startDemoMode() {
+    const shouldCloseChatAfterStart = demoModeOpenedChat;
+
+    demoModePrompted = true;
+    demoModeModalOpen = false;
+    demoModeOpenedChat = false;
+    clearDemoModeTimer();
+
+    await fillRandomReportDescription({
+      launchAssistant: true,
+      revealReport: shouldCloseChatAfterStart,
+    });
   }
 
   async function consumeLegacySseResponse(
@@ -1108,6 +1416,7 @@
               usingProvidedSources,
               techDocsCount: countSources(normalizedPayload.sources?.tech_docs),
               nonConformitiesCount: countSources(normalizedPayload.sources?.non_conformities),
+              entitiesWikiCount: countSources(normalizedPayload.sources?.entities_wiki),
             }),
         };
         appendAssistantRuntimeReasoning(
@@ -1124,6 +1433,8 @@
             ? "Technical documents retrieved"
             : metadata === "nc_search"
               ? "Similar non-conformities retrieved"
+              : metadata === "wiki_search"
+                ? "Entities retrieved"
               : "Step completed";
 
       upsertAssistantRuntimeStep(assistantMessageId, {
@@ -1153,6 +1464,15 @@
           "streaming",
           "Similar non-conformities retrieved",
           summarizeLegacyResult(metadata, payload.text) ?? "Relevant prior cases found.",
+        );
+      }
+
+      if (metadata === "wiki_search") {
+        setAssistantRuntimeState(
+          assistantMessageId,
+          "streaming",
+          "Entities retrieved",
+          summarizeLegacyResult(metadata, payload.text) ?? "Relevant entity pages found.",
         );
       }
     };
@@ -1406,11 +1726,121 @@
         label: "Similar non-conformities",
         items: (part.sources?.non_conformities?.sources ?? []) as ReferenceSourceItem[],
       },
+      {
+        key: "entities_wiki" as const,
+        label: "Entities",
+        items: (part.sources?.entities_wiki?.sources ?? []) as ReferenceSourceItem[],
+      },
     ].filter((group) => group.items.length > 0);
   }
 
   function getSourceCount(part: SourcesPart) {
     return getSourceGroups(part).reduce((total, group) => total + group.items.length, 0);
+  }
+
+  function textValue(value: unknown): string | null {
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  }
+
+  function numberValue(value: unknown): number | null {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+
+  function textArray(value: unknown): string[] {
+    if (Array.isArray(value)) {
+      return value
+        .map((entry) => textValue(entry))
+        .filter((entry): entry is string => Boolean(entry));
+    }
+    const single = textValue(value);
+    return single ? [single] : [];
+  }
+
+  function compactList(values: string[], limit = 3) {
+    if (values.length <= limit) {
+      return values.join(", ");
+    }
+    return values.slice(0, limit).join(", ") + " +" + String(values.length - limit) + " more";
+  }
+
+  function asEntityItem(item: ReferenceSourceItem): EntitySourceItem {
+    return item as EntitySourceItem;
+  }
+
+  function getEntityTitle(item: ReferenceSourceItem) {
+    const entity = asEntityItem(item);
+    return (
+      textValue(entity.title) ??
+      textValue(entity.doc) ??
+      textValue(entity.chunk_id) ??
+      "Untitled entity"
+    );
+  }
+
+  function getEntityRankLabel(item: ReferenceSourceItem) {
+    const rank = numberValue(asEntityItem(item).wiki_rank);
+    return rank ? "#" + String(rank) : null;
+  }
+
+  function getEntityPrimaryDoc(item: ReferenceSourceItem) {
+    return textValue(asEntityItem(item).primary_doc);
+  }
+
+  function getEntitySupportingDocs(item: ReferenceSourceItem) {
+    return textArray(asEntityItem(item).supporting_docs);
+  }
+
+  function getEntityMetadataLine(item: ReferenceSourceItem) {
+    const entity = asEntityItem(item);
+    const ataCodes = textArray(entity.ata_codes);
+    const zones = textArray(entity.zones);
+    const segments = [
+      ...ataCodes.slice(0, 2),
+      ...zones.slice(0, 2).map((zone) => "Zone " + zone),
+    ];
+    return segments.join(" / ");
+  }
+
+  function getEntityAliasLine(item: ReferenceSourceItem) {
+    return compactList(textArray(asEntityItem(item).aliases), 2);
+  }
+
+  function getEntityPartNumberLine(item: ReferenceSourceItem) {
+    return compactList(textArray(asEntityItem(item).part_numbers), 3);
+  }
+
+  function getEntityDocSummary(item: ReferenceSourceItem) {
+    const primaryDoc = getEntityPrimaryDoc(item);
+    const supportingDocs = getEntitySupportingDocs(item);
+    const segments: string[] = [];
+    if (primaryDoc) {
+      segments.push("1 primary doc");
+    }
+    if (supportingDocs.length > 0) {
+      segments.push(String(supportingDocs.length) + " supporting doc" + (supportingDocs.length === 1 ? "" : "s"));
+    }
+    return segments.join(" / ");
+  }
+
+  function openDocumentByName(doc: string | null) {
+    if (!doc) {
+      return;
+    }
+    selectDoc.set({ doc });
+    activeTabValue.set(2);
+  }
+
+  function openEntityDrawer(item: ReferenceSourceItem) {
+    selectEntity.set(asEntityItem(item));
+    activeTabValue.set(4);
+    expand = true;
   }
 
   function getSourceMeta(item: ReferenceSourceItem) {
@@ -1423,10 +1853,18 @@
     return undefined;
   }
 
-  function openSource(groupKey: "tech_docs" | "non_conformities", item: ReferenceSourceItem) {
+  function openSource(
+    groupKey: "tech_docs" | "non_conformities" | "entities_wiki",
+    item: ReferenceSourceItem,
+  ) {
     if (groupKey === "tech_docs" && typeof item.doc === "string" && item.doc.trim()) {
       selectDoc.set({ doc: item.doc });
       activeTabValue.set(2);
+      return;
+    }
+
+    if (groupKey === "entities_wiki") {
+      openEntityDrawer(item);
       return;
     }
 
@@ -1546,11 +1984,11 @@
           sources, and suggested updates.
         </p>
         <div class="chat-intro__actions">
-          {#each getIntroQuickActions(getCurrentTaskRole()) as action}
+          {#each getIntroQuickActions(getIntroTaskRole()) as action}
             <button
               type="button"
               class="chat-intro__action"
-              on:click={() => triggerIntroQuickAction(action.prompt)}
+              on:click={() => triggerIntroQuickAction(action)}
             >
               {action.label}
             </button>
@@ -1683,21 +2121,74 @@
                           <span class="chat-sources__count">{sourceGroup.items.length}</span>
                         </summary>
 
-                        <div class="chat-sources__chips">
-                          {#each sourceGroup.items as item}
-                            <button
-                              type="button"
-                              class="chat-source-chip"
-                              title={typeof item.content === "string" ? item.content : item.doc ?? ""}
-                              on:click={() => openSource(sourceGroup.key, item)}
-                            >
-                              <span class="chat-source-chip__doc">{item.doc}</span>
-                              {#if getSourceMeta(item)}
-                                <span class="chat-source-chip__meta">{getSourceMeta(item)}</span>
-                              {/if}
-                            </button>
-                          {/each}
-                        </div>
+                        {#if sourceGroup.key === "entities_wiki"}
+                          <div class="chat-entity-cards">
+                            {#each sourceGroup.items as item}
+                              <article class="chat-entity-card">
+                                <button
+                                  type="button"
+                                  class="chat-entity-card__main"
+                                  title={typeof item.content === "string" ? item.content : getEntityTitle(item)}
+                                  on:click={() => openEntityDrawer(item)}
+                                >
+                                  <span class="chat-entity-card__header">
+                                    <strong>{getEntityTitle(item)}</strong>
+                                    {#if getEntityRankLabel(item)}
+                                      <span class="chat-entity-card__rank">{getEntityRankLabel(item)}</span>
+                                    {/if}
+                                  </span>
+                                  <span class="chat-entity-card__kind">Entity / part</span>
+                                  {#if getEntityMetadataLine(item)}
+                                    <span class="chat-entity-card__line">{getEntityMetadataLine(item)}</span>
+                                  {/if}
+                                  {#if getEntityAliasLine(item)}
+                                    <span class="chat-entity-card__line">Alias: {getEntityAliasLine(item)}</span>
+                                  {/if}
+                                  {#if getEntityPartNumberLine(item)}
+                                    <span class="chat-entity-card__line">Part numbers: {getEntityPartNumberLine(item)}</span>
+                                  {/if}
+                                  {#if getEntityDocSummary(item)}
+                                    <span class="chat-entity-card__line chat-entity-card__docs">{getEntityDocSummary(item)}</span>
+                                  {/if}
+                                </button>
+                                <div class="chat-entity-card__actions">
+                                  <button
+                                    type="button"
+                                    class="chat-entity-card__action"
+                                    on:click={() => openEntityDrawer(item)}
+                                  >
+                                    Open entity
+                                  </button>
+                                  {#if getEntityPrimaryDoc(item)}
+                                    <button
+                                      type="button"
+                                      class="chat-entity-card__action"
+                                      on:click={() => openDocumentByName(getEntityPrimaryDoc(item))}
+                                    >
+                                      Open primary document
+                                    </button>
+                                  {/if}
+                                </div>
+                              </article>
+                            {/each}
+                          </div>
+                        {:else}
+                          <div class="chat-sources__chips">
+                            {#each sourceGroup.items as item}
+                              <button
+                                type="button"
+                                class="chat-source-chip"
+                                title={typeof item.content === "string" ? item.content : item.doc ?? ""}
+                                on:click={() => openSource(sourceGroup.key, item)}
+                              >
+                                <span class="chat-source-chip__doc">{item.doc}</span>
+                                {#if getSourceMeta(item)}
+                                  <span class="chat-source-chip__meta">{getSourceMeta(item)}</span>
+                                {/if}
+                              </button>
+                            {/each}
+                          </div>
+                        {/if}
                       </details>
                     {/each}
                   </div>
@@ -1734,6 +2225,33 @@
   {#if chatError}
     <div class="chat-shell__error">
       {chatError.message}
+    </div>
+  {/if}
+
+  {#if demoModeModalOpen}
+    <div class="demo-mode-modal__backdrop" role="presentation">
+      <div
+        class="demo-mode-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="demo-mode-title"
+        tabindex="-1"
+      >
+        <p class="demo-mode-modal__eyebrow">Demo mode</p>
+        <h3 id="demo-mode-title">Start with a random non-conformity?</h3>
+        <p>
+          Fill the report description with one of the sample problem descriptions,
+          then launch the assistant once the simulated typing is complete.
+        </p>
+        <div class="demo-mode-modal__actions">
+          <button type="button" class="demo-mode-modal__secondary" on:click={dismissDemoMode}>
+            Not now
+          </button>
+          <button type="button" class="demo-mode-modal__primary" on:click={startDemoMode}>
+            Start demo
+          </button>
+        </div>
+      </div>
     </div>
   {/if}
 
@@ -1802,6 +2320,7 @@
 
 <style>
   .chat-shell {
+    position: relative;
     display: flex;
     flex-direction: column;
     background: #ffffff;
@@ -1898,6 +2417,79 @@
     font: inherit;
     font-size: 0.84rem;
     cursor: pointer;
+  }
+
+  .demo-mode-modal__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(1rem, 4vw, 3rem);
+    background: rgba(15, 23, 42, 0.32);
+    backdrop-filter: blur(5px);
+  }
+
+  .demo-mode-modal {
+    width: min(92vw, 34rem);
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+    padding: 1rem;
+    color: #101828;
+  }
+
+  .demo-mode-modal__eyebrow {
+    margin: 0 0 0.25rem;
+    color: #2563eb;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .demo-mode-modal h3 {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.3;
+  }
+
+  .demo-mode-modal p {
+    margin: 0.55rem 0 0;
+    color: #475467;
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+
+  .demo-mode-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+  }
+
+  .demo-mode-modal__secondary,
+  .demo-mode-modal__primary {
+    border-radius: 999px;
+    padding: 0.45rem 0.75rem;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .demo-mode-modal__secondary {
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: #fff;
+    color: #344054;
+  }
+
+  .demo-mode-modal__primary {
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    background: #2563eb;
+    color: #fff;
   }
 
   .chat-composer__primary {
@@ -2301,6 +2893,83 @@
   .chat-source-chip__meta {
     font-size: 0.65rem;
     color: #667085;
+  }
+
+  .chat-entity-cards {
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 0.55rem;
+  }
+
+  .chat-entity-card {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 0.85rem;
+    background: #fff;
+    padding: 0.6rem;
+  }
+
+  .chat-entity-card__main {
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: #1f2937;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .chat-entity-card__header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.55rem;
+    align-items: flex-start;
+  }
+
+  .chat-entity-card__header strong {
+    font-size: 0.76rem;
+    line-height: 1.25;
+  }
+
+  .chat-entity-card__rank,
+  .chat-entity-card__kind {
+    color: #667085;
+    font-size: 0.64rem;
+  }
+
+  .chat-entity-card__kind,
+  .chat-entity-card__line {
+    display: block;
+    margin-top: 0.18rem;
+  }
+
+  .chat-entity-card__line {
+    color: #475467;
+    font-size: 0.68rem;
+    line-height: 1.35;
+  }
+
+  .chat-entity-card__docs {
+    color: #1d4ed8;
+  }
+
+  .chat-entity-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.55rem;
+  }
+
+  .chat-entity-card__action {
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: #f8fafc;
+    color: #1d4ed8;
+    border-radius: 999px;
+    padding: 0.28rem 0.55rem;
+    font: inherit;
+    font-size: 0.66rem;
+    font-weight: 600;
+    cursor: pointer;
   }
 
   .chat-update-link {

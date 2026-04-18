@@ -31,6 +31,7 @@ export type AiSourceGroup = {
 export type AiSourceGroups = {
   readonly tech_docs?: AiSourceGroup;
   readonly non_conformities?: AiSourceGroup;
+  readonly entities_wiki?: AiSourceGroup;
   readonly [key: string]: unknown;
 };
 

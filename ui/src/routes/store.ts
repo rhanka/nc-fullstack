@@ -1,6 +1,7 @@
 import { get, writable, type Writable } from 'svelte/store';
 
 import { chatElementRef } from '../lib/chat/stores';
+import type { ReferenceSourceItem } from '../lib/chat/contracts';
 import { resetReferenceSources } from '../lib/chat/stores';
 
 export const TASK_IDS = ['000', '100', '200', '300', '400', '500'] as const;
@@ -58,6 +59,7 @@ export type SelectedDoc = {
 } | null;
 
 export type SelectedItem = NonConformityRecord | null;
+export type SelectedEntity = ReferenceSourceItem | null;
 
 function createLocalStorageStore<T>(key: string, initialValue: T, clean = false): Writable<T> {
   const storedValue =
@@ -144,6 +146,7 @@ export const filteredNonConformities = writable<NonConformityRecord[]>([]);
 
 export const selectDoc = writable<SelectedDoc>(null);
 export const selectItem = writable<SelectedItem>(null);
+export const selectEntity = writable<SelectedEntity>(null);
 export const activeTabValue = writable<number>(1);
 
 createdItem.subscribe((value) => {
