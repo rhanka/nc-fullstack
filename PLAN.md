@@ -1,12 +1,13 @@
 # PLAN
 
-- Status date: 2026-04-11
+- Status date: 2026-04-18
 - Specs actives:
   - `spec/SPEC_INTENT_2026-04-10_ai-architecture-refresh.md`
   - `spec/SPEC_EVOL_2026-04-10_ai-architecture-refresh.md`
   - `spec/SPEC_EVOL_VECTOR_DB.md`
   - `spec/SPEC_EVOL_LLM_WIKI.md`
   - `spec/SPEC_EVOL_DATAPREP_TS.md`
+  - `spec/SPEC_EVOL_OCR_MISTRAL_PACKAGE.md`
 - Tags:
   - `AUTO`: validation statique ou déterministe
   - `TEST`: validation par tests, benchmarks ou evals
@@ -94,6 +95,7 @@
 - [x] L5.2p Ajouter une quick action `Random non conformity description` sur l'accueil vierge du chat. Recette: le bouton tire au hasard une des 4 descriptions `Description du Problème` de `api/test/scenarios.csv`, remplit la description du rapport `000` en pseudo streaming de saisie avec listes Markdown lisibles, puis lance l'assistant une fois la saisie terminée. `TEST` + `UAT`
 - [x] L5.2q Ajouter un mode demo propose apres 15 secondes sur chat et rapport `000` vierges. Recette: si le chat task `000` et le rapport restent vides et inactifs, meme widget ferme, un modal plein écran propose de remplir la description du rapport `000` avec une random non conformity; après confirmation, la saisie simulée se termine avant le lancement assistant. `TEST` + `UAT`
 - [x] L5.2r Corriger les quick actions par rôle. Recette: task `000` affiche la proposition de description + random NC; task `100` n'affiche jamais `Propose task description` ni random NC, même après changement de tâche ou réouverture du chat. `TEST` + `UAT`
+- [x] L5.2s Préserver les paragraphes Markdown des descriptions demo avant `Détails techniques`. Recette: les descriptions random NC gardent un saut de ligne visible avant le titre `Détails techniques` et avant la liste de détails, sans triple saut de ligne. `TEST` + `UAT`
 - [ ] L5.3 Nettoyer la dette de transition côté UI et backend. Recette: plus de double chemin critique non justifié. `AUTO`
 - Note: l'UAT de portage Python -> TS est considérée comme passée en prod pour les aspects fonctionnels de base du chat. Les items encore ouverts du lot 5 portent désormais surtout sur le design UI, le polissage ergonomique et le nettoyage final.
 - Checklist UAT `L5.2` à exécuter sur un cas `000` réaliste:
@@ -121,6 +123,9 @@
 - [x] L6.5 Décider explicitement si `graphify` apporte une valeur additionnelle après ontologie + wiki; sinon le différer sans ambiguïté. Recette: note de décision versionnée, sans intégration implicite. `AUTO` + `UAT`
 - [x] L6.6 Superséder la cible LanceDB et supprimer l'intégration `lancedb` devenue inutile du runtime, du build et de la documentation si aucun besoin concret ne justifie son maintien. Recette: plus de dépendance `@lancedb/lancedb`, plus de copies `api/data/*/lancedb/`, plus de chemin moteur `lancedb`, et spec réalignée sur un seul moteur runtime. `TEST`
 - [x] L6.7 Intégrer la préparation `ontology/wiki` au CI/CD de l'image API. Recette: `api-image-check` et `api-build` téléchargent les données minimales depuis Scaleway, régénèrent les artefacts knowledge via dataprep, excluent les fichiers horodatés du hash d'image, et embarquent `ontology/`, `wiki/` et `knowledge-manifest.json` dans le container. `TEST`
+- [x] L6.7a Faire construire l'image API par la PR CI, sans push registry. Recette: le workflow `PR CI` exécute `make api-build` après les tests backend pour valider Dockerfile + données minimales avant merge. `TEST`
+- [x] L6.8 Étudier le remplacement du codage OCR amont par le package npm `mistral-ocr`. Recette: spec dédiée décrivant l'état actuel, les contrats RAG à préserver, les adaptateurs nécessaires et les critères de migration progressive. `AUTO`
+- [ ] L6.9 Implémenter le dataprep OCR TS avec `mistral-ocr`. Recette: commande `dataprep:ocr-tech-docs`, génération `ocr/` + CSV préparé compatible, audit déterministe pages/OCR/CSV, puis rebuild complet RAG/wiki. `TEST`
 
 ## Lot 6.2 - UAT couche connaissance
 
