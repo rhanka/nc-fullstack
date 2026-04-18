@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci
+.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci
 
 # ----------------------------
 # Helpers
@@ -34,6 +34,9 @@ export DC_OPTS         ?= --build --force-recreate
 
 version:
 	@echo ui:$(UI_VERSION)-api:$(API_VERSION)
+
+api-version:
+	@echo $(API_VERSION)
 
 dev:
 	@echo "▶ Starting API and UI in dev mode with Docker..."
