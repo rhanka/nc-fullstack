@@ -1004,7 +1004,8 @@
     return text
       .replace(/\r\n/g, "\n")
       .replace(/[ \t]*•[ \t]*/g, "\n- ")
-      .replace(/(Détails Techniques\s*:)\n-/g, "$1\n\n-")
+      .replace(/\n(?=Détails\s+techniques?\s*:)/gi, "\n\n")
+      .replace(/(Détails\s+techniques?\s*:)\n-/gi, "$1\n\n-")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
   }
