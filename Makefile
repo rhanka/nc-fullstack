@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down up-ts ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help check-db create-tech-docs-db create-nc-db create-db api-build api-build-ts api-install-ts api-image-publish api-image-publish-ts api-test-ts api-smoke-ts api-contracts-ts api-review-routing-ts check-ts deploy-api deploy-api-ts deploy-api-python-container rollback-api-python
+.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci
 
 # ----------------------------
 # Helpers
@@ -11,9 +11,7 @@
 # ----------------------------
 export UI_DIR          ?= ui
 export API_IMAGE_NAME  ?= nc-chatbot-api
-export API_VERSION     ?= $(shell echo "api/src api/requirements.txt api/Dockerfile" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
-export API_TS_IMAGE_NAME ?= nc-chatbot-api-ts
-export API_TS_VERSION ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/Dockerfile shared api/src api/requirements.txt" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION     ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/package-lock.json backend-ts/Dockerfile shared api/src api/requirements.txt api/data/${TECH_DOCS_DIR}/ontology api/data/${TECH_DOCS_DIR}/wiki api/data/${NC_DIR}/ontology api/data/${NC_DIR}/wiki" | tr ' ' '\n' | xargs -I '{}' sh -c 'test -e "$$1" && find "$$1" -type f || true' sh '{}' | egrep -v '(__pycache__|/ontology/index\.json)' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_CPU_LIMIT   ?= 250
 export API_MEM_LIMIT   ?= 512
 export UI_VERSION      ?= $(shell echo "ui/src ui/static ui/package.json ui/Dockerfile ui/vite.config.ts ui/svelte.config.js ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
@@ -35,7 +33,7 @@ export DC_OPTS         ?= --build --force-recreate
 # ----------------------------
 
 version:
-	@echo ui:$(UI_VERSION)-api-ts:$(API_TS_VERSION)
+	@echo ui:$(UI_VERSION)-api:$(API_VERSION)
 
 dev:
 	@echo "▶ Starting API and UI in dev mode with Docker..."
@@ -47,10 +45,6 @@ dev-stop:
 
 up:
 	@echo "▶ Running API and UI in production mode with Docker..."
-	docker compose -f docker-compose.yml up ${DC_OPTS} -d
-
-up-ts:
-	@echo "▶ Running TS API and UI in production mode with Docker..."
 	docker compose -f docker-compose.yml up ${DC_OPTS} -d
 
 down:
@@ -84,50 +78,75 @@ ui-check: ui-install
 # Containerisation
 # ----------------------------
 
-api-build: dataprep-download-minimal
-	@echo "▶ Building Docker image for TS API: $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)"
+api-prepare-data-ci: dataprep-knowledge-ci
+	@echo "✔️ API data artifacts ready for CI image build."
+
+api-build: api-prepare-data-ci
+	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
 	docker compose build api
 
-api-build-ts: dataprep-download-minimal
-	@$(MAKE) api-build
-
-api-install-ts:
-	@echo "▶ Installing TS backend dependencies..."
+api-install:
+	@echo "▶ Installing backend dependencies..."
 	cd backend-ts && npm ci
 
-api-test-ts: api-install-ts
-	@echo "▶ Running TS backend tests..."
+api-test: api-install
+	@echo "▶ Running backend tests..."
 	cd backend-ts && npm run test
 
-api-smoke-ts: api-install-ts
-	@echo "▶ Running TS backend smoke test..."
+api-smoke: api-install
+	@echo "▶ Running backend smoke test..."
 	cd backend-ts && npm run smoke
 
-api-contracts-ts: api-install-ts
-	@echo "▶ Checking TS backend contracts..."
+api-contracts: api-install
+	@echo "▶ Checking backend contracts..."
 	cd backend-ts && npm run contracts:check
 
-api-review-routing-ts: api-install-ts
-	@echo "▶ Reviewing TS backend routing decisions..."
+api-review-routing: api-install
+	@echo "▶ Reviewing backend routing decisions..."
 	cd backend-ts && npm run review:routing
 
-check-ts: ui-build api-test-ts api-contracts-ts
-	@echo "✔️ TS UI build and backend checks completed."
+dataprep-prepare-tech-docs: api-install
+	@echo "▶ Preparing canonical tech docs CSV..."
+	cd backend-ts && npm run dataprep:prepare-tech-docs
+
+dataprep: api-install
+	@echo "▶ Running dataprep for all corpora..."
+	cd backend-ts && npm run dataprep
+
+dataprep-tech-docs: api-install
+	@echo "▶ Running dataprep for tech docs..."
+	cd backend-ts && npm run dataprep:tech-docs
+
+dataprep-nc: api-install
+	@echo "▶ Running dataprep for non-conformities..."
+	cd backend-ts && npm run dataprep:nc
+
+dataprep-knowledge: api-install
+	@echo "▶ Running knowledge-only dataprep for all corpora..."
+	cd backend-ts && npm run dataprep:knowledge
+
+dataprep-knowledge-tech-docs: api-install
+	@echo "▶ Running knowledge-only dataprep for tech docs..."
+	cd backend-ts && npm run dataprep:knowledge:tech-docs
+
+dataprep-knowledge-ci: dataprep-download-minimal api-install
+	@echo "▶ Preparing knowledge artifacts for API image..."
+	cd backend-ts && npm run dataprep:knowledge
+
+check: ui-build api-test api-contracts
+	@echo "✔️ UI build and backend checks completed."
 
 docker-login:
 	@echo "▶ Logging in to registry"
 	@echo "$(DOCKER_PASSWORD)" | docker login $(REGISTRY) -u $(DOCKER_USERNAME) --password-stdin
 
-api-image-check: docker-login
-	@echo "▶ Checking if TS image $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION) exists"
-	docker manifest inspect $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION) does not exist" && exit 1)
+api-image-check: api-prepare-data-ci docker-login
+	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
+	docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
 
 api-image-publish: docker-login
-	@echo "▶ Pushing TS API image to registry"
-	docker push $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)
-
-api-image-publish-ts: docker-login
-	@$(MAKE) api-image-publish
+	@echo "▶ Pushing API image to registry"
+	docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
 
 build: ui-build api-build
 
@@ -153,22 +172,10 @@ check-scw:
 # ----------------------------
 
 deploy-api-container: check-scw
-	@echo "▶️ Updating container $(API_IMAGE_NAME) to TS image $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)..."
-	API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
-	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)" > .deploy_output.log
-	@echo "✅ TS deployment initiated."
-
-deploy-api-ts-container: check-scw
-	@echo "▶️ Updating container $(API_IMAGE_NAME) to TS image $(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)..."
-	API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
-	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_TS_IMAGE_NAME):$(API_TS_VERSION)" > .deploy_output.log
-	@echo "✅ TS cutover deployment initiated."
-
-deploy-api-python-container: check-scw
-	@echo "▶️ Rolling back container $(API_IMAGE_NAME) to legacy Python image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)..."
+	@echo "▶️ Updating container $(API_IMAGE_NAME) to image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)..."
 	API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
 	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" > .deploy_output.log
-	@echo "✅ Legacy Python rollback deployment initiated."
+	@echo "✅ API deployment initiated."
 
 wait-for-container: check-scw
 	@printf "⌛ Waiting for container to become ready.."
@@ -181,10 +188,6 @@ wait-for-container: check-scw
 	printf "\n✅ New container is ready.\n"
 
 deploy-api: deploy-api-container wait-for-container
-
-deploy-api-ts: deploy-api
-
-rollback-api-python: deploy-api-python-container wait-for-container
 
 # ----------------------------
 # Data upload to Scaleway
@@ -237,14 +240,12 @@ dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
 
 dataprep-download-nc-data: check-s5cmd
 	@echo "▶ Downloading non-conformities data from Scaleway..."
-	@sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb || true &&\
-	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_NC}/* 'api/data/${NC_DIR}/'
 
 dataprep-download-tech-docs: check-s5cmd
 	@echo "▶ Downloading technical documentation from Scaleway..."
-	@sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb || true &&\
-	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_DOCS}/* 'api/data/${TECH_DOCS_DIR}/'
 
 dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
@@ -252,42 +253,47 @@ dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 
 dataprep-download-minimal: check-s5cmd
 	@echo "▶ Downloading minimal data from Scaleway..."
-	@sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb || mkdir -p api/data/${TECH_DOCS_DIR}/vectordb &&\
+	@mkdir -p 'api/data/${TECH_DOCS_DIR}/managed_dataset/' &&\
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_DOCS}/vectordb/* 'api/data/${TECH_DOCS_DIR}/vectordb/'
+		sync s3://${S3_BUCKET_DOCS}/managed_dataset/* 'api/data/${TECH_DOCS_DIR}/managed_dataset/'
+	@mkdir -p 'api/data/${TECH_DOCS_DIR}/vector-export/' &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_DOCS}/vector-export/* 'api/data/${TECH_DOCS_DIR}/vector-export/' 2>/dev/null || true
 	@mkdir -p 'api/data/${TECH_DOCS_DIR}/lexical/' &&\
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_DOCS}/lexical/* 'api/data/${TECH_DOCS_DIR}/lexical/'
+		sync s3://${S3_BUCKET_DOCS}/lexical/* 'api/data/${TECH_DOCS_DIR}/lexical/' 2>/dev/null || true
+	@mkdir -p 'api/data/${TECH_DOCS_DIR}/ontology/' &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_DOCS}/ontology/* 'api/data/${TECH_DOCS_DIR}/ontology/' 2>/dev/null || true
+	@mkdir -p 'api/data/${TECH_DOCS_DIR}/wiki/' &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_DOCS}/wiki/* 'api/data/${TECH_DOCS_DIR}/wiki/' 2>/dev/null || true
+	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		cp s3://${S3_BUCKET_DOCS}/knowledge-manifest.json 'api/data/${TECH_DOCS_DIR}/knowledge-manifest.json' 2>/dev/null || true
 	@mkdir -p 'api/data/${TECH_DOCS_DIR}/pages/' &&\
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_DOCS}/pages/* 'api/data/${TECH_DOCS_DIR}/pages/'
-	@sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb || mkdir -p api/data/${NC_DIR}/vectordb &&\
+	@mkdir -p 'api/data/${NC_DIR}/managed_dataset/' && \
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_NC}/vectordb/* 'api/data/${NC_DIR}/vectordb/'
+		sync s3://${S3_BUCKET_NC}/managed_dataset/* 'api/data/${NC_DIR}/managed_dataset/'
+	@mkdir -p 'api/data/${NC_DIR}/vector-export/' &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_NC}/vector-export/* 'api/data/${NC_DIR}/vector-export/' 2>/dev/null || true
 	@mkdir -p 'api/data/${NC_DIR}/lexical/' && \
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_NC}/lexical/* 'api/data/${NC_DIR}/lexical/'
+		sync s3://${S3_BUCKET_NC}/lexical/* 'api/data/${NC_DIR}/lexical/' 2>/dev/null || true
+	@mkdir -p 'api/data/${NC_DIR}/ontology/' && \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_NC}/ontology/* 'api/data/${NC_DIR}/ontology/' 2>/dev/null || true
+	@mkdir -p 'api/data/${NC_DIR}/wiki/' && \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_NC}/wiki/* 'api/data/${NC_DIR}/wiki/' 2>/dev/null || true
+	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		cp s3://${S3_BUCKET_NC}/knowledge-manifest.json 'api/data/${NC_DIR}/knowledge-manifest.json' 2>/dev/null || true
 	@mkdir -p 'api/data/${NC_DIR}/json/' && \
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_NC}/json/* 'api/data/${NC_DIR}/json/'
 	@echo "✔️  Minimal data download completed."
-
-# ==============================================================================
-# Data
-# ==============================================================================
-
-create-tech-docs-db:
-	@echo "Creating tech docs ChromaDB from source CSV..."
-	@docker-compose -f docker-compose.dataprep.yml run --rm dataprep python create_tech_docs_db.py && \
-	sudo chown -R $(USER):$(USER) api/data/${TECH_DOCS_DIR}/vectordb
-
-create-nc-db:
-	@echo "Creating non-conformities ChromaDB from source CSV..."
-	@docker-compose -f docker-compose.dataprep.yml run --rm dataprep python create_nc_db.py && \
-	sudo chown -R $(USER):$(USER) api/data/${NC_DIR}/vectordb
-
-create-db: create-tech-docs-db create-nc-db
-	@echo "All databases created."
 
 .PHONY: deps env config clean
 clean:
@@ -309,19 +315,7 @@ help:
 	@echo "  down          Stop and remove containers, networks"
 	@echo "  logs          Follow log output"
 	@echo "  shell         Access the api container shell"
-	@echo "  dataprep-nc-csv-to-json  Extract JSON data from the source CSV"
+	@echo "  dataprep-prepare-tech-docs  Build canonical tech docs CSV"
+	@echo "  dataprep      Rebuild retrieval and knowledge artifacts"
+	@echo "  dataprep-knowledge  Rebuild ontology and wiki artifacts"
 	@echo "  clean         Remove build artifacts"
-	@echo "  check-db      Check the health of ChromaDB databases"
-	@echo "  create-tech-docs-db  Create the tech docs ChromaDB"
-	@echo "  create-nc-db       Create the non-conformities ChromaDB"
-	@echo "  create-db          Create all databases"
-
-# ==============================================================================
-# Utils
-# ==============================================================================
-
-check-db:
-	@echo "Rebuilding dataprep service to ensure dependencies are up to date..."
-	@docker-compose -f docker-compose.dataprep.yml build --no-cache dataprep
-	@echo "Running ChromaDB health check..."
-	@docker-compose -f docker-compose.dataprep.yml run --rm dataprep python check_chroma_health.py

@@ -5,6 +5,8 @@
   - `spec/SPEC_INTENT_2026-04-10_ai-architecture-refresh.md`
   - `spec/SPEC_EVOL_2026-04-10_ai-architecture-refresh.md`
   - `spec/SPEC_EVOL_VECTOR_DB.md`
+  - `spec/SPEC_EVOL_LLM_WIKI.md`
+  - `spec/SPEC_EVOL_DATAPREP_TS.md`
 - Tags:
   - `AUTO`: validation statique ou déterministe
   - `TEST`: validation par tests, benchmarks ou evals
@@ -68,40 +70,102 @@
 - [x] L4B.3 Ajouter l'ingestion LanceDB OSS locale par corpus dans le même container que l'API TS. Recette: artefacts `api/data/*/lancedb/` générés repo-localement ou au build. `TEST`
 - [x] L4B.4 Brancher le runtime `/ai` sur LanceDB pour le vectoriel + BM25 / FTS + hybrid search, avec fallback temporaire `export_exact`. Recette: tests backend verts et runtime status explicite. `TEST`
 - [x] L4B.5 Comparer `lancedb` vs `export_exact` sur le mini-corpus retrieval et choisir le défaut runtime. Recette: benchmark versionné et décision de cutover documentée. `TEST`
+- Note: ce lot documente une exploration déjà exécutée. La direction active suivante n'est plus "pousser LanceDB", mais décider si cette intégration doit être supprimée pour revenir à un seul moteur runtime.
 
 ## Lot 5 - Cutover et nettoyage
 
 - [x] L5.1 Décommissionner les chemins Python devenus obsolètes une fois la parité TS atteinte. Recette: inventaire supprimé sans rupture de contrat. `TEST`
-- [ ] L5.2 Lancer l'UAT utilisateur de fin de chantier sur le système unifié. Recette: validation utilisateur finale avant nettoyage complet. `UAT`
-- [ ] L5.2a Rétablir un état visible de requête dès le clic côté chat. Recette: transition explicite `idle -> submitted -> generating -> done/error` visible dans le widget sans ambiguïté utilisateur. `TEST` + `UAT`
-- [ ] L5.2b Rétablir le streaming du texte assistant dans le chat. Recette: la bulle assistant se remplit progressivement au lieu d'attendre uniquement la finalisation JSON. `TEST` + `UAT`
-- [ ] L5.2c Rétablir le streaming optimiste des mises à jour du rapport / UI métier. Recette: les updates JSON partielles réapparaissent pendant la génération, pas seulement après finalisation. `TEST` + `UAT`
-- [ ] L5.2d Rétablir l'affichage du reasoning visible dans l'UI. Recette: résumé collapsible présent et alimenté par le runtime, avec état cohérent pendant et après génération. `TEST` + `UAT`
-- [ ] L5.2e Remplacer la fausse bulle assistant de transition par un shell runtime type `ChatGPT / Claude / top-ai-ideas`. Recette: aucun message parasite du type `Drafting the response...`; l'état courant vit dans un bloc runtime distinct de la réponse finale. `TEST` + `UAT`
-- [ ] L5.2f Rétablir un sélecteur de modèle visible dans le composeur. Recette: l'utilisateur choisit explicitement `gpt-5.4-nano` ou `gpt-5.4` avant envoi, avec défaut `gpt-5.4-nano`, et le choix est observable dans la requête. `TEST` + `UAT`
-- [ ] L5.2g Rétablir un sélecteur visible du niveau de réflexion / complexité. Recette: l'utilisateur choisit `auto` ou un niveau explicite dans le composeur, et ce choix pilote bien le runtime sans détour par un CTA générique. `TEST` + `UAT`
-- [ ] L5.2h Rendre les étapes `query`, `doc_search`, `nc_search` et `final` comme étapes runtime / tool calls de premier rang. Recette: chaque étape est visible pendant l'exécution, avec statut, détail et résultat compact, sans passer par du texte ad hoc dans la bulle assistant. `TEST` + `UAT`
+- [x] L5.2 Lancer l'UAT utilisateur de fin de chantier sur le système unifié. Recette: validation utilisateur finale avant nettoyage complet. `UAT`
+- [x] L5.2a Rétablir un état visible de requête dès le clic côté chat. Recette: transition explicite `idle -> submitted -> generating -> done/error` visible dans le widget sans ambiguïté utilisateur. `TEST` + `UAT`
+- [x] L5.2b Rétablir le streaming du texte assistant dans le chat. Recette: la bulle assistant se remplit progressivement au lieu d'attendre uniquement la finalisation JSON. `TEST` + `UAT`
+- [x] L5.2c Rétablir le streaming optimiste des mises à jour du rapport / UI métier. Recette: les updates JSON partielles réapparaissent pendant la génération, pas seulement après finalisation. `TEST` + `UAT`
+- [x] L5.2d Rétablir l'affichage du reasoning visible dans l'UI. Recette: résumé collapsible présent et alimenté par le runtime, avec état cohérent pendant et après génération. `TEST` + `UAT`
+- [x] L5.2e Remplacer la fausse bulle assistant de transition par un shell runtime type `ChatGPT / Claude / top-ai-ideas`. Recette: aucun message parasite du type `Drafting the response...`; l'état courant vit dans un bloc runtime distinct de la réponse finale. `TEST` + `UAT`
+- [x] L5.2f Rétablir un sélecteur de modèle visible dans le composeur. Recette: l'utilisateur choisit explicitement `gpt-5.4-nano` ou `gpt-5.4` avant envoi, avec défaut `gpt-5.4-nano`, et le choix est observable dans la requête. `TEST` + `UAT`
+- [x] L5.2g Rétablir un sélecteur visible du niveau de réflexion / complexité. Recette: l'utilisateur choisit `auto` ou un niveau explicite dans le composeur, et ce choix pilote bien le runtime sans détour par un CTA générique. `TEST` + `UAT`
+- [x] L5.2h Rendre les étapes `query`, `doc_search`, `nc_search` et `final` comme étapes runtime / tool calls de premier rang. Recette: chaque étape est visible pendant l'exécution, avec statut, détail et résultat compact, sans passer par du texte ad hoc dans la bulle assistant. `TEST` + `UAT`
 - [ ] L5.2i Aligner l'ergonomie générale du chat sur le comportement `../top-ai-ideas-fullstack` et un shell moderne type ChatGPT. Recette: runtime inline compact, détails repliables, reasoning streamé, outils streamés et composeur orienté conversation plutôt qu'action métier figée. `TEST` + `UAT`
 - [ ] L5.2j Aligner visuellement le composeur sur `../top-ai-ideas-fullstack`, avec contrôles plus petits et disposition adaptative mono-ligne puis multi-ligne. Recette: modèle + effort restent lisibles, compacts et s'empilent proprement quand l'espace manque. `TEST` + `UAT`
-- [ ] L5.2k Réintroduire les quick actions d'accueil dans la session vide sans les remettre dans la barre de saisie. Recette: les actions type `Propose task description` restent disponibles dans l'écran vide; l'ouverture du chat n'auto-envoie rien. `TEST` + `UAT`
+- [x] L5.2k Réintroduire les quick actions d'accueil dans la session vide sans les remettre dans la barre de saisie. Recette: les actions type `Propose task description` restent disponibles dans l'écran vide; l'ouverture du chat n'auto-envoie rien. `TEST` + `UAT`
 - [ ] L5.2l Réduire l'encombrement du runtime panel pour converger vers `StreamMessage.svelte`. Recette: runtime plus compact, détails repliés par défaut, lecture plus proche de `top-ai-ideas`. `TEST` + `UAT`
-- [ ] L5.2m Refaire le rendu des sources en citations compactes et dépliables. Recette: plus de longue liste brute de fichiers; les références deviennent compactes, groupées et actionnables. `TEST` + `UAT`
+- [x] L5.2m Refaire le rendu des sources en citations compactes et dépliables. Recette: plus de longue liste brute de fichiers; les références deviennent compactes, groupées et actionnables. `TEST` + `UAT`
 - [ ] L5.2n Réaligner l'identité visuelle du widget fermé et du favicon sur les assets produit. Recette: bubble fermée plus proche de `top-ai-ideas`; favicon issu de `../sentech-forge`. `TEST` + `UAT`
-- [ ] L5.2o Retirer le dump `NC update` du chat et le remplacer par un lien compact vers la task amendée. Recette: le chat n'affiche plus les champs du canevas; il propose seulement un accès court à l'objet amendé (`000`, `100`, etc.) dans l'application. `TEST` + `UAT`
+- [x] L5.2o Retirer le dump `NC update` du chat et le remplacer par un lien compact vers la task amendée. Recette: le chat n'affiche plus les champs du canevas; il propose seulement un accès court à l'objet amendé (`000`, `100`, etc.) dans l'application. `TEST` + `UAT`
+- [x] L5.2p Ajouter une quick action `Random non conformity description` sur l'accueil vierge du chat. Recette: le bouton tire au hasard une des 4 descriptions `Description du Problème` de `api/test/scenarios.csv`, remplit la description du rapport `000` en pseudo streaming de saisie avec listes Markdown lisibles, puis lance l'assistant une fois la saisie terminée. `TEST` + `UAT`
+- [x] L5.2q Ajouter un mode demo propose apres 15 secondes sur chat et rapport `000` vierges. Recette: si le chat task `000` et le rapport restent vides et inactifs, meme widget ferme, un modal plein écran propose de remplir la description du rapport `000` avec une random non conformity; après confirmation, la saisie simulée se termine avant le lancement assistant. `TEST` + `UAT`
+- [x] L5.2r Corriger les quick actions par rôle. Recette: task `000` affiche la proposition de description + random NC; task `100` n'affiche jamais `Propose task description` ni random NC, même après changement de tâche ou réouverture du chat. `TEST` + `UAT`
 - [ ] L5.3 Nettoyer la dette de transition côté UI et backend. Recette: plus de double chemin critique non justifié. `AUTO`
-- Note: les updates finales après finalisation sont déjà présentes; les bugs ouverts portent désormais sur la qualité du shell runtime, la sélection modèle / reasoning et le rendu outillage / reasoning pendant l'exécution.
+- Note: l'UAT de portage Python -> TS est considérée comme passée en prod pour les aspects fonctionnels de base du chat. Les items encore ouverts du lot 5 portent désormais surtout sur le design UI, le polissage ergonomique et le nettoyage final.
+- Checklist UAT `L5.2` à exécuter sur un cas `000` réaliste:
+  1. Ouvrir le widget en mode flottant, vérifier la présence des quick actions de session vide, puis vérifier que rien n'est auto-envoyé.
+  2. Si le chat et le rapport `000` restent vierges pendant 15 secondes, widget ferme inclus, vérifier que le modal demo plein écran apparaît, que `Not now` le ferme, et que `Start demo` remplit la description du rapport en pseudo streaming, avec retours ligne sur les listes, puis lance l'assistant après la fin de saisie; vérifier aussi qu'il ne s'affiche pas si la description ou le label du rapport est déjà renseigné.
+  3. Passer sur la task `100`, ouvrir un chat vide et vérifier que les quick actions affichent `Propose analysis summary` / traduction, sans `Propose task description` ni random NC.
+  4. Vérifier que le composeur expose `Model` et `Reasoning effort`, avec défaut `GPT-5.4 Nano` + `Auto`.
+  5. Envoyer un prompt `000` depuis le chat et vérifier la transition visible `submitted -> streaming -> ready`, sans bulle parasite de type `Drafting the response...`.
+  6. Pendant la génération, vérifier que le runtime affiche au moins les étapes `Request prepared`, `Technical documents retrieved`, `Similar non-conformities retrieved` et, quand disponible, `Entities retrieved`.
+  7. Pendant la génération, vérifier qu'un résumé de reasoning est visible et dépliable, puis qu'il reste cohérent une fois la réponse terminée.
+  8. Vérifier que le texte assistant apparaît avant la fin de génération et que les mises à jour du rapport sont poussées dans l'application sans dump brut dans le chat.
+  9. Ouvrir `Sources`, vérifier le rendu compact par groupes, puis ouvrir au moins une source `tech docs`, une source `similar NC` et, si présente, une source `Entities`.
+  10. Vérifier que `Updated report` ou `Updated task` renvoie bien vers l'objet amendé dans l'application.
+- Checklist UAT `L5.2` à exécuter sur un cas `100` réel:
+  1. Refaire la même séquence avec `currentTask = 100`.
+  2. Vérifier que les quick actions et le texte produit sont adaptés à l'analyse plutôt qu'à la seule observation factuelle.
+  3. Vérifier que le niveau de reasoning visible et les étapes runtime restent lisibles avec une réponse plus longue.
+
+## Lot 6 - Couche connaissance, dataprep TS et LLM Wiki
+
+- [x] L6.1 Mener une session de QA produit / technique pour préciser l'utilité attendue de `LLM Wiki` sur le même dataset que le RAG. Recette: questions/réponses versionnées dans la spec active, avec arbitrages explicites sur audience, artefacts, cycle de mise à jour et critères de valeur. `UAT`
+- [x] L6.2 Définir une ontologie minimale A220 utile au retrieval et à la synthèse. Recette: taxonomie versionnée couvrant au minimum `ATA / système / pièce / zone`, avec gestion des alias et variantes métier. `AUTO`
+- [x] L6.3 Migrer le dataprep en TypeScript autour d'un corpus manifest canonique unique. Recette: pipeline TS produisant `vector-export`, `lexical/fts.sqlite3` et manifestes sans dépendance Python dans la chaîne backend. `TEST`
+- [x] L6.4 Prototyper un `LLM Wiki` humain-navigable sur le même dataset que le RAG, branché sur `vector-export + SQLite FTS5 + RRF`. Recette: pages compilées par pièce / sous-ensemble, liens utiles vers les docs, et troisième vue `Entities` au même niveau que `tech docs` et `NC` pendant la recherche. `TEST`
+- [x] L6.5 Décider explicitement si `graphify` apporte une valeur additionnelle après ontologie + wiki; sinon le différer sans ambiguïté. Recette: note de décision versionnée, sans intégration implicite. `AUTO` + `UAT`
+- [x] L6.6 Superséder la cible LanceDB et supprimer l'intégration `lancedb` devenue inutile du runtime, du build et de la documentation si aucun besoin concret ne justifie son maintien. Recette: plus de dépendance `@lancedb/lancedb`, plus de copies `api/data/*/lancedb/`, plus de chemin moteur `lancedb`, et spec réalignée sur un seul moteur runtime. `TEST`
+- [x] L6.7 Intégrer la préparation `ontology/wiki` au CI/CD de l'image API. Recette: `api-image-check` et `api-build` téléchargent les données minimales depuis Scaleway, régénèrent les artefacts knowledge via dataprep, excluent les fichiers horodatés du hash d'image, et embarquent `ontology/`, `wiki/` et `knowledge-manifest.json` dans le container. `TEST`
+
+## Lot 6.2 - UAT couche connaissance
+
+- [ ] L6U.1 Verifier en UAT la presence visible du canal `Entities` au meme niveau que `tech docs` et `similar NC`. Recette: sur un cas `000` et un cas `100`, le runtime affiche une etape `Entities retrieved` et le bloc `Sources` contient un groupe distinct `Entities`. `UAT`
+- [ ] L6U.2 Verifier en UAT le rendu des cartes `Entities`. Recette: au moins une carte affiche un titre canonique, un type metier (`ATA`, `part`, `zone` ou `entity`), un resume/extrait et un compteur ou lien de documents support quand disponible. `UAT`
+- [ ] L6U.3 Verifier en UAT la navigation chat -> rail/drawer `Entities`. Recette: depuis une carte `Sources > Entities`, basculer sur l'onglet rail `Entities`, voir le drawer gauche et lire la fiche dans le paneau principal. `UAT`
+- [ ] L6U.4 Verifier en UAT la pertinence des liens `entity -> doc technique primaire`. Recette: au moins 3 parcours reels ou l'ouverture depuis `Entities` aide reellement l'analyse et ouvre le viewer `/doc` sans 404. `UAT`
+- [ ] L6U.5 Verifier en UAT que les fiches `part / sous-ensemble / zone` ameliorent la resolution de probleme, et pas seulement la navigation. Recette: retour utilisateur explicite sur au moins 2 cas, avec jugement `utile / neutre / inutile`. `UAT`
+- [ ] L6U.6 Verifier en UAT la coherence `sources RAG -> /doc`: toutes les sources `tech docs` affichees doivent ouvrir une page servie, sans filtrage runtime qui reduise artificiellement le top-k. Recette: sur un cas `000` et un cas `100`, ouvrir les sources techniques retournees; aucun 404 et aucune disparition de sources attendues. `UAT`
+- Gate: cette UAT ne demarre qu'apres un full rebuild TS des artefacts `vector-export / lexical / ontology / wiki` sur le corpus canonique, afin d'eviter une validation sur un etat hybride.
+
+## Lot 6.3 - Fix post-UAT couche connaissance
+
+- [x] L6F.1 Corriger les écarts de retrieval ou de rendu révélés par l'UAT `Lot 6.2`. Recette: liste de fixes fermée, sans dérive de périmètre vers un graphe généraliste. `TEST`
+- [x] L6F.2 Ajuster l'ontologie minimale `ATA / part / zone / alias` si l'UAT révèle des trous bloquants. Recette: spec et artefacts réalignés, IDs stables préservés. `TEST`
+- [x] L6F.3 Implementer la spec UI `Entities`. Recette: rendu compact dans `Sources`, action `Open entity`, bascule vers l'onglet rail `Entities`, drawer gauche liste des entites, action `Open primary document`. `TEST`
+- [x] L6F.3a Ajouter une fiche entite lisible hors du chat. Recette: onglet rail `Entities` + drawer gauche + paneau principal permettant de lire les notes d'entite et d'ouvrir ses documents support. `TEST`
+- [ ] L6F.3b Ajouter les tests UI du canal `Entities`. Recette: couverture des cartes completes, champs partiels, bascule rail/drawer, ouverture document primaire, et non-regression des sources `tech docs` / `similar NC`. `TEST`
+- [x] L6F.4 Corriger la cohérence corpus/RAG si l'UAT révèle des sources techniques non servies par `/doc`. Recette: audit reproductible `managed_dataset / pages / vector-export / lexical / wiki`, correction à la source des données ou de la préparation, puis rebuild complet sans filtre runtime masquant le top-k. `TEST`
+- [x] L6F.4a Spécifier la préparation canonique du CSV tech docs avant indexation. Recette: spec dédiée décrivant entrée amont, sortie canonique, audit et garantie de diff caractère par caractère sur les lignes conservées. `AUTO`
+- [x] L6F.4b Implémenter `dataprep-prepare-tech-docs`. Recette: génération de `a220_tech_docs_content_canonical.csv.gz` + audit JSON, lignes conservées recopiées sans re-sérialisation, lignes sans page servie exclues du corpus canonique. `TEST`
+- [x] L6F.4c Brancher le RAG TS sur le CSV canonique. Recette: `dataprep`, `dataprep-tech-docs`, `dataprep-knowledge*` et `api-prepare-data-ci` consomment le canonique sans filtre runtime. `TEST`
+- [x] L6F.4d Rebuilder les artefacts tech docs depuis le CSV canonique. Recette: `vector-export / lexical / ontology / wiki` régénérés et audit local montrant zéro source technique non servable dans les artefacts. `TEST`
+- [x] L6F.5 Injecter les entites knowledge dans la synthese du rapport `100`. Recette: `search_entities_wiki` est consomme par le prompt `100`, contient un resume exploitable, et un test prouve que le contexte entites atteint la generation d'analyse. `TEST`
+
+## Lot 6.4 - Smoke tests UAT couche connaissance
+
+- [ ] L6S.1 Rejouer un smoke test `000` après les fixes post-UAT. Recette: `Entities` present, liens ouvrables, aucune régression chat/réponse/rapport. `TEST` + `UAT`
+- [ ] L6S.2 Rejouer un smoke test `100` après les fixes post-UAT. Recette: même validation sur un cas d'analyse plus riche. `TEST` + `UAT`
+- [x] L6S.3 Vérifier qu'aucune dépendance `graphify` ou `lancedb` n'a été réintroduite pendant les fixes. Recette: grep repo-local propre + checks backend verts. `TEST`
+
+- Note: un bloqueur pré-UAT du lot 6 a été corrigé: si `ontology/` ou `wiki/` manque, le backend TS bootstrap désormais la couche connaissance en mode déterministe sans embeddings, et filtre les faux concepts documentaires génériques (`1. Scope`, `Reference`, etc.).
+- Note: ce bootstrap local sert uniquement à débloquer le runtime et les checks techniques; il ne remplace pas le full rebuild TS attendu avant l'UAT utilisateur du lot 6.
 
 ## Critères de sortie
 
-- [ ] Le choix modèle / reasoning est explicite et observable. `TEST`
-- [ ] Le chat expose un état de progression explicite pendant l'appel. `TEST` + `UAT`
-- [ ] Le streaming du texte assistant dans le chat est rétabli. `TEST` + `UAT`
-- [ ] Le streaming optimiste des updates du rapport / UI est rétabli. `TEST` + `UAT`
-- [ ] Le reasoning visible est présent et cohérent dans l'UI. `TEST` + `UAT`
-- [ ] Le runtime n'utilise plus de fausse bulle assistant de chargement. `TEST` + `UAT`
-- [ ] Le composeur expose le choix modèle + niveau de réflexion. `TEST` + `UAT`
-- [ ] Les étapes retrieval / génération sont rendues comme runtime / tool calls lisibles. `TEST` + `UAT`
+- [x] Le choix modèle / reasoning est explicite et observable. `TEST`
+- [x] Le chat expose un état de progression explicite pendant l'appel. `TEST` + `UAT`
+- [x] Le streaming du texte assistant dans le chat est rétabli. `TEST` + `UAT`
+- [x] Le streaming optimiste des updates du rapport / UI est rétabli. `TEST` + `UAT`
+- [x] Le reasoning visible est présent et cohérent dans l'UI. `TEST` + `UAT`
+- [x] Le runtime n'utilise plus de fausse bulle assistant de chargement. `TEST` + `UAT`
+- [x] Le composeur expose le choix modèle + niveau de réflexion. `TEST` + `UAT`
+- [x] Les étapes retrieval / génération sont rendues comme runtime / tool calls lisibles. `TEST` + `UAT`
 - [ ] Le shell conversationnel est aligné sur `../top-ai-ideas-fullstack` et les UX modernes type ChatGPT / Claude / Gemini. `TEST` + `UAT`
 - [ ] Le chat ne dépend plus d'un parsing ad hoc dans `Chatbot.svelte`. `TEST`
 - [ ] La pertinence retrieval progresse sur benchmark et en revue utilisateur. `TEST` + `UAT`
-- [ ] L'API TS est protégée par contrats et contrôles répétables. `TEST`
+- [x] L'API TS est protégée par contrats et contrôles répétables. `TEST`

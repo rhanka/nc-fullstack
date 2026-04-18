@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { handleDocRoute } from "../src/routes/doc-route.ts";
+import { handleWikiRoute } from "../src/routes/wiki-route.ts";
 import {
   handleNcDetailsRoute,
   handleNcJsonRoute,
@@ -128,4 +129,28 @@ test("handleNcJsonRoute surfaces invalid JSON as a 500", async () => {
   assert.deepEqual(result!.body, {
     detail: "Invalid JSON file",
   });
+});
+
+test("handleWikiRoute serves wiki markdown and rejects invalid paths", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "nc-backend-ts-wiki-route-"));
+  const wikiRoot = path.join(root, "wiki");
+  await mkdir(path.join(wikiRoot, "parts"), { recursive: true });
+  await writeFile(path.join(wikiRoot, "parts", "door.md"), "# Door\n\nWiki body.", "utf8");
+
+  const ok = await handleWikiRoute("/wiki/parts%2Fdoor.md", { wikiRoot });
+  assert.ok(ok);
+  assert.equal(ok!.statusCode, 200);
+  assert.deepEqual(ok!.body, {
+    path: "parts/door.md",
+    markdown: "# Door\n\nWiki body.",
+  });
+
+  const prefixed = await handleWikiRoute("/wiki/wiki%2Fparts%2Fdoor.md", { wikiRoot });
+  assert.equal(prefixed?.statusCode, 200);
+
+  const invalid = await handleWikiRoute("/wiki/..%2Fsecret.md", { wikiRoot });
+  assert.equal(invalid?.statusCode, 400);
+
+  const missing = await handleWikiRoute("/wiki/parts%2Fmissing.md", { wikiRoot });
+  assert.equal(missing?.statusCode, 404);
 });

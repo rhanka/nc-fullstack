@@ -21,6 +21,11 @@ import {
   type RankedRetrievalItem,
   type HybridSearchResult,
 } from "./rrf.ts";
+import {
+  searchWikiIndex,
+  type WikiSearchDebug,
+  type WikiSearchResult,
+} from "../services/wiki-search.ts";
 
 const RRF_K = Number(process.env.RETRIEVAL_RRF_K ?? "60");
 const VECTOR_CANDIDATE_LIMIT = Number(process.env.VECTOR_CANDIDATE_LIMIT ?? "15");
@@ -50,9 +55,11 @@ export interface CorpusSearchResponse {
 export interface HybridRetrievalResponse {
   readonly techDocs: readonly HybridSearchResult[];
   readonly nonConformities: readonly HybridSearchResult[];
+  readonly entitiesWiki: readonly WikiSearchResult[];
   readonly debug: {
     readonly techDocs: CorpusSearchDebug;
     readonly nonConformities: CorpusSearchDebug;
+    readonly entitiesWiki: WikiSearchDebug;
   };
 }
 
@@ -186,16 +193,19 @@ export class HybridRetriever {
   }
 
   async search(query: string): Promise<HybridRetrievalResponse> {
-    const [techDocs, nonConformities] = await Promise.all([
+    const [techDocs, nonConformities, entitiesWiki] = await Promise.all([
       this.searchCorpus("tech_docs", query),
       this.searchCorpus("non_conformities", query),
+      Promise.resolve(searchWikiIndex(query)),
     ]);
     return {
       techDocs: techDocs.results,
       nonConformities: nonConformities.results,
+      entitiesWiki: entitiesWiki.results,
       debug: {
         techDocs: techDocs.debug,
         nonConformities: nonConformities.debug,
+        entitiesWiki: entitiesWiki.debug,
       },
     };
   }

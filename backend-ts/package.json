@@ -11,13 +11,13 @@
     "dev": "node --experimental-strip-types --watch src/server.ts",
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "smoke": "node --experimental-strip-types --test test/smoke.test.ts",
-    "contracts:check": "python contracts/validate_contracts.py",
+    "contracts:check": "node --experimental-strip-types scripts/validate-contracts.ts",
     "review:routing": "node --experimental-strip-types scripts/review-routing-decisions.ts",
-    "benchmark:retrieval": "node --experimental-strip-types scripts/benchmark_retrieval_engines.ts",
-    "vectors:export": "python scripts/export_chroma_vectors.py all",
-    "lancedb:import": "node --experimental-strip-types scripts/import_vector_export_to_lancedb.ts all"
-  },
-  "dependencies": {
-    "@lancedb/lancedb": "^0.27.2"
+    "dataprep:prepare-tech-docs": "node --experimental-strip-types scripts/prepare_tech_docs_dataset.ts",
+    "dataprep": "npm run dataprep:prepare-tech-docs && node --experimental-strip-types scripts/run_dataprep.ts all",
+    "dataprep:tech-docs": "npm run dataprep:prepare-tech-docs && node --experimental-strip-types scripts/run_dataprep.ts tech_docs",
+    "dataprep:nc": "node --experimental-strip-types scripts/run_dataprep.ts non_conformities",
+    "dataprep:knowledge": "npm run dataprep:prepare-tech-docs && node --experimental-strip-types scripts/run_knowledge_dataprep.ts all",
+    "dataprep:knowledge:tech-docs": "npm run dataprep:prepare-tech-docs && node --experimental-strip-types scripts/run_knowledge_dataprep.ts tech_docs"
   }
 }
