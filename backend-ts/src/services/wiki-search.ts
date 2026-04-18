@@ -106,7 +106,7 @@ export function searchWikiIndex(
     }))
     .filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score || left.entry.title.localeCompare(right.entry.title))
-    .slice(0, options.limit ?? 8)
+    .slice(0, options.limit ?? 10)
     .map((candidate, indexPosition) => ({
       ...candidate.entry,
       doc: candidate.entry.title,
