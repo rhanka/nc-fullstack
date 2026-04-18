@@ -19,6 +19,8 @@ jobs:
   build:
     name: Build and Deploy API
     runs-on: ubuntu-latest
+    outputs:
+      api_version: ${{ steps.api_version.outputs.api_version }}
     
     steps:
       - name: Checkout code
@@ -41,11 +43,16 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         continue-on-error: true
 
+      - name: Capture API version
+        id: api_version
+        run: echo "api_version=$(make api-version)" >> "$GITHUB_OUTPUT"
+
       - name: Download data and Build API
         run: make api-build
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          API_VERSION: ${{ steps.api_version.outputs.api_version }}
         if: steps.image-check.outcome == 'failure'
 
       - name: Publish API docker image
@@ -54,6 +61,7 @@ jobs:
           REGISTRY: ${{ secrets.REGISTRY }}
           DOCKER_USERNAME: nologin
           DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+          API_VERSION: ${{ steps.api_version.outputs.api_version }}
         if: steps.image-check.outcome == 'failure'
 
   deploy:
@@ -80,3 +88,4 @@ jobs:
         run: make deploy-api
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
+          API_VERSION: ${{ needs.build.outputs.api_version }}
