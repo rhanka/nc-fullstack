@@ -176,7 +176,7 @@
   $: selectedPrimaryDoc = primaryDocFor(selectedEntity);
   $: selectedSupportingDocs = supportingDocsFor(selectedEntity);
   $: selectedEntityKey = entityKey(selectedEntity);
-  $: relatedEntities = entitiesList.filter((entity) => entityKey(entity) !== selectedEntityKey).slice(0, 8);
+  $: relatedEntities = entitiesList.filter((entity) => entityKey(entity) !== selectedEntityKey).slice(0, 10);
 
   $: if (selectedPath && selectedPath !== articlePath) {
     void loadArticle(selectedPath);
@@ -260,12 +260,6 @@
       </details>
     {/if}
 
-    <details class="entity-detail__card">
-      <summary>Other links</summary>
-      <p class="entity-detail__muted">
-        V0 only exposes entities retrieved for the current answer. Free graph navigation stays out of scope until the ontology links are validated.
-      </p>
-    </details>
   {/if}
 </section>
 

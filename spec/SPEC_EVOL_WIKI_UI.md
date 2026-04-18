@@ -22,7 +22,6 @@ La navigation cible est applicative:
 - le drawer gauche liste les entites retrouvees pour la reponse courante
 - le paneau principal affiche la fiche de l'entite selectionnee
 - les liens vers documents techniques ouvrent le viewer `/doc` existant
-- la navigation libre de noeud en noeud hors contexte retrouve reste hors perimetre V0
 
 ## Intention utilisateur consolidee
 
@@ -143,8 +142,6 @@ Related entities found in this answer
 [Door lining panel]
 [A220 Aircraft Door Diagram]
 
-Other links
-V0 only exposes entities retrieved for the current answer.
 ```
 
 Regles de navigation:
@@ -153,7 +150,6 @@ Regles de navigation:
 - la fiche selectionnee garde un badge `Used in current answer`
 - les documents primaires et supports sont actionnables vers `/doc`
 - les entites liees affichees en V0 sont uniquement celles retrouvees dans la meme reponse
-- les autres liens de graphe restent hors perimetre tant que l'ontologie n'est pas validee
 - si une navigation hors contexte est ajoutee plus tard, elle devra indiquer explicitement qu'elle n'est pas une preuve de la reponse courante
 
 ## Mapping donnees -> UI
@@ -175,7 +171,6 @@ Regles de navigation:
 ## Hors perimetre V0
 
 - Pas de graphe visuel.
-- Pas de navigation libre de noeud en noeud.
 - Pas de drawer interne au chat.
 - Pas de modal de connaissance dans le chat.
 - Pas de libelle produit `wiki` au premier niveau du chat.
