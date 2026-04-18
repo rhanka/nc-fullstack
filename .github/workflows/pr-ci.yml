@@ -32,3 +32,6 @@ jobs:
 
       - name: Run backend smoke test
         run: make api-smoke
+
+      - name: Build API container
+        run: make api-build
