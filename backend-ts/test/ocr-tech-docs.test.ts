@@ -164,7 +164,7 @@ test("buildPreparedTechDocsCsvFromOcrArtifacts emits compatible rows and exclude
 });
 
 
-test("OpenAI contextual caption client never sends extracted image bytes", async () => {
+test("OpenAI image caption client sends OCR-extracted images with markdown context", async () => {
   const originalFetch = globalThis.fetch;
   let capturedBody: Record<string, unknown> | null = null;
   globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
@@ -197,8 +197,7 @@ test("OpenAI contextual caption client never sends extracted image bytes", async
     await client.analyzePage({
       doc: "A220-door_page_0001.pdf",
       markdown: "# Door figure\n\n![img-0.jpeg](img-0.jpeg)\n\nATA 52 context.",
-      extractedImageCount: 1,
-      extractedImageIds: ["img-0.jpeg"],
+      imageDataUrls: ["data:image/png;base64,aGVsbG8="],
     });
   } finally {
     globalThis.fetch = originalFetch;
@@ -206,8 +205,8 @@ test("OpenAI contextual caption client never sends extracted image bytes", async
 
   assert.notEqual(capturedBody, null);
   const serialized = JSON.stringify(capturedBody);
-  assert.doesNotMatch(serialized, /input_image/u);
-  assert.doesNotMatch(serialized, /image_url/u);
-  assert.doesNotMatch(serialized, /data:image/u);
-  assert.match(serialized, /Extracted image count: 1/u);
+  assert.match(serialized, /input_image/u);
+  assert.match(serialized, new RegExp("data:image/png;base64,aGVsbG8="));
+  assert.match(serialized, /OCR markdown context/u);
+  assert.doesNotMatch(serialized, /rendered page image/u);
 });

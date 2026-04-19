@@ -4,7 +4,7 @@
 
 Reduce custom OCR/dataprep code by using the published npm package `mistral-ocr` for PDF to Markdown extraction, while preserving the current RAG dataset contract.
 
-This spec has moved from analysis to implementation. The first implementation provides a TypeScript dataprep command that can rebuild the prepared CSV from existing OCR artefacts, can optionally run live `mistral-ocr` on page PDFs, and can optionally create caption-analysis JSON from OCR Markdown context. LLM providers must never receive extracted image bytes or rendered page images.
+This spec has moved from analysis to implementation. The first implementation provides a TypeScript dataprep command that can rebuild the prepared CSV from existing OCR artefacts, can optionally run live `mistral-ocr` on page PDFs, and can optionally create caption-analysis JSON from OCR-extracted image crops plus immediate OCR Markdown context. LLM providers may receive images extracted by Mistral OCR, but must never receive a rendered image of the full PDF page.
 
 ## Current State
 
@@ -53,34 +53,34 @@ Historical Dataiku output was not OCR-only. It used:
 2. A separate vision chat call, historically `pixtral-12b-2409`, to describe each extracted image.
 3. Enrichment files `__with_img_desc.json` and `__with_img_desc.md`, then RAG chunking over `md_img`.
 
-The replacement pipeline intentionally does not reproduce the vision call with OpenAI or Gemini. `mistral-ocr` remains the only component that handles extracted image bytes. LLM providers may receive only OCR Markdown context, document metadata, extracted image count and extracted image ids/placeholders. They must not receive `image_base64`, `imageBase64`, rendered page images, `data:image/*`, OpenAI `input_image`, or Gemini `inline_data`.
+The replacement pipeline reproduces this vision pass using the images extracted by Mistral OCR, not by rendering the full PDF page. LLM providers may receive OCR-extracted image crops as `data:image/*` / OpenAI `input_image` / Gemini `inline_data`, plus immediate OCR Markdown context, document metadata and image ids/placeholders. They must not receive a rendered image of the full PDF page.
 
-This context-only second pass is still useful for retrieval filtering and conservative enrichment when nearby OCR Markdown already names the figure, table, ATA, part, zone or caption. It must not invent visual details that are only present in the extracted image.
+This second pass is required for retrieval parity. It lets the caption model describe visual technical content in extracted figures while using nearby OCR Markdown as grounding context.
 
 Target model configuration:
 
-- Primary contextual enrichment provider: OpenAI API.
-- Primary contextual enrichment model: `gpt-5.4`.
+- Primary image-caption provider: OpenAI API.
+- Primary image-caption model: `gpt-5.4`.
 - Caption reasoning: `none` by default; `low` only if context classification proves ambiguous.
-- Fallback contextual enrichment provider: Google Gemini API.
-- Fallback contextual enrichment model: `gemini-3.1-pro-preview`.
+- Fallback image-caption provider: Google Gemini API.
+- Fallback image-caption model: `gemini-3.1-pro-preview`.
 - Runtime configuration keys: `IMAGE_CAPTION_PROVIDER`, `IMAGE_CAPTION_MODEL`, `IMAGE_CAPTION_REASONING`, `IMAGE_CAPTION_FALLBACK_PROVIDER`, `IMAGE_CAPTION_FALLBACK_MODEL`.
 
-The prompt receives OCR Markdown/text, extracted image ids/placeholders, extracted image count, document filename and page number. Cover pages, indexes and front matter are page-level concepts; the prompt therefore classifies from OCR context and must use `uncertainties` when the image content itself is not represented in OCR text.
+The prompt receives OCR-extracted image crops, OCR Markdown/text around the image, document filename and page number. Cover pages, indexes and front matter are page-level concepts; if classification requires page-wide context, use OCR Markdown metadata, not a rendered full-page image.
 
 ### Image Caption Prompt
 
 Use this prompt as the baseline for `a220_image_caption_v1`:
 
 ```text
-You are an aerospace technical-document context analyst for Airbus A220 technical documentation.
+You are an aerospace technical-document vision analyst for Airbus A220 technical documentation.
 
-Analyze ONE A220 document page using OCR context only. You may receive:
-- the OCR markdown/text extracted from the page,
-- extracted image ids/placeholders and image count,
+Analyze ONE A220 document image crop extracted by Mistral OCR, with its immediate OCR Markdown context. You may receive:
+- one or more OCR-extracted image crops from the page,
+- the OCR markdown/text extracted from the same page or around the image placeholder,
 - document filename and page number metadata.
 
-You will not receive image bytes or rendered page images. Do not infer visual content that is not grounded in OCR text or nearby captions.
+You will not receive a rendered image of the full PDF page. Ground visual descriptions in the provided extracted image crop and OCR context.
 
 Return JSON only. Do not output markdown outside JSON.
 
@@ -115,11 +115,11 @@ Classification rules:
 - technical_procedure: page containing task steps, inspection/repair/maintenance instructions, or operational process details.
 
 For technical_diagram:
-- Provide a description only when the OCR context exposes the schema, labels, captions or surrounding explanatory text.
-- Identify the system/component/zone, labels, flows, states, callouts, references, warnings, dimensions, units, figure numbers, ATA references, part numbers and relationships only when present in OCR text.
-- Preserve exact visible OCR terms and identifiers.
-- Do not describe spatial relationships such as left/right/top/bottom/forward/aft/upstream/downstream unless they are explicitly present in OCR text.
-- If the extracted image likely contains information not represented in OCR text, include that gap in uncertainties rather than guessing.
+- Provide a deep description of the extracted image crop.
+- Identify the visible system/component/zone, labels, arrows, flows, states, callouts, references, warnings, dimensions, units, figure numbers, ATA references, part numbers, and relationships.
+- Preserve exact visible terms and identifiers from the image and OCR context.
+- Describe spatial relationships using clear terms such as left/right/top/bottom/forward/aft/upstream/downstream only when visible in the extracted crop.
+- If labels are partially unreadable, include them in uncertainties rather than guessing.
 
 For non-content pages:
 - Set is_non_content_page=true.
@@ -171,7 +171,7 @@ Proposed stages:
 1. Read source PDFs from `api/data/a220-tech-docs/full/`.
 2. Split each full PDF into page PDFs in `pages/` if not already present.
 3. Run `mistral-ocr.convertPdf` on either full PDFs or page PDFs.
-4. Analyze OCR Markdown context around extracted image placeholders with the versioned `a220_image_caption_v1` prompt; do not send image bytes to any LLM.
+4. Analyze each Mistral OCR-extracted image crop with the versioned `a220_image_caption_v1` prompt plus immediate OCR Markdown context; do not send rendered full-page PDF images.
 5. Persist raw OCR responses, image-caption JSON, enriched page JSON and enriched Markdown under `ocr/`.
 6. Generate `managed_dataset/a220_tech_docs_content_prepared.csv.gz` from `ocr/` + `pages/`, using `md_img` for indexable technical content and retrieval policy metadata for excluded/downweighted pages.
 7. Reuse the existing canonicalization and TS dataprep unchanged.
@@ -199,7 +199,7 @@ Required adapter functions:
 
 - `convertOcrResponseToPageJson(rootPdf, response)`: maps Mistral pages to the existing page JSON shape.
 - `writePageOcrJson(pageDoc, json)`: writes deterministic files such as `MODULE 4 AIRFRAME_page_0875.json`.
-- `analyzeExtractedImageContextForRag(ocrMarkdown, imageIds, metadata)`: calls the configured contextual enrichment model with `a220_image_caption_v1`, without image bytes.
+- `analyzeExtractedImageForRag(imageDataUrls, ocrMarkdown, metadata)`: calls the configured image-caption model with OCR-extracted image crops plus `a220_image_caption_v1` context; rendered full-page images are forbidden.
 - `applyPageRetrievalPolicy(imageAnalysis)`: returns `index`, `downweight` or `exclude` plus a numeric retrieval weight.
 - `persistImageAnalysisJson(pageDoc, analysis)`: writes deterministic caption-analysis JSON beside OCR artefacts.
 - `buildPageMarkdownWithImageDescriptions(pageJson, analysis)`: injects cleaned technical descriptions as Markdown alt text only for indexable technical pages.
@@ -227,11 +227,11 @@ Implemented adapter functions:
 - `buildPreparedTechDocsCsvFromOcrArtifacts`
 - `runOcrTechDocsDataprep`
 
-Current V1 constraint: contextual enrichment consumes OCR Markdown and extracted image ids/count only. Extracted OCR images remain local artefacts and are never sent to OpenAI or Gemini.
+Current V1 constraint: image captioning consumes Mistral OCR-extracted image crops and OCR Markdown context only. Rendered full-page PDF images are never sent to OpenAI or Gemini.
 
 ## Open Technical Questions
 
-- Whether context-only enrichment is sufficient, or whether historical `__with_img_desc.*` artefacts should remain the source of image descriptions until a non-OpenAI image-caption path is selected.
+- Whether page-wide classification needs additional OCR-text heuristics beyond the extracted image crop plus Markdown context.
 - Whether metadata `ATA / parts / doc_type` should continue to be heuristic-only or receive an optional LLM assist step.
 - Whether downweighted pages should affect ranking directly in vector/BM25, or remain audit-only until a retrieval weighting field is added to the RAG contract.
 
