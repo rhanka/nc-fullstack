@@ -125,6 +125,7 @@
 - [x] L6.7 Intégrer la préparation `ontology/wiki` au CI/CD de l'image API. Recette: `api-image-check` et `api-build` téléchargent les données minimales depuis Scaleway, régénèrent les artefacts knowledge via dataprep, excluent les fichiers horodatés du hash d'image, et embarquent `ontology/`, `wiki/` et `knowledge-manifest.json` dans le container. `TEST`
 - [x] L6.7a Faire construire l'image API par la PR CI, sans push registry. Recette: le workflow `PR CI` exécute `make api-build` après les tests backend pour valider Dockerfile + données minimales avant merge. `TEST`
 - [x] L6.8 Étudier le remplacement du codage OCR amont par le package npm `mistral-ocr`. Recette: spec dédiée décrivant l'état actuel, les contrats RAG à préserver, les adaptateurs nécessaires et les critères de migration progressive. `AUTO`
+- [x] L6.8a Spécifier le prompt de description image et la politique retrieval associée. Recette: prompt `a220_image_caption_v1` versionné, sortie JSON stricte, description profonde des schémas, classification `cover/index/front matter/blank/separation`, et règles `index/downweight/exclude` pour éviter la pollution du rappel. `AUTO`
 - [ ] L6.9 Implémenter le dataprep OCR TS avec `mistral-ocr`. Recette: commande `dataprep:ocr-tech-docs`, génération `ocr/` + CSV préparé compatible, audit déterministe pages/OCR/CSV, puis rebuild complet RAG/wiki. `TEST`
 
 ## Lot 6.2 - UAT couche connaissance
