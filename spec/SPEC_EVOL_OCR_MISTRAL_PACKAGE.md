@@ -61,10 +61,11 @@ Target model configuration:
 
 - Primary image-caption provider: OpenAI API.
 - Primary image-caption model: `gpt-5.4`.
-- Caption reasoning: `none` by default; `low` only if context classification proves ambiguous.
+- Image input detail: `original` for the extracted image crop.
+- Caption reasoning: `none` by default; `low` only for complex diagrams if needed.
 - Fallback image-caption provider: Google Gemini API.
 - Fallback image-caption model: `gemini-3.1-pro-preview`.
-- Runtime configuration keys: `IMAGE_CAPTION_PROVIDER`, `IMAGE_CAPTION_MODEL`, `IMAGE_CAPTION_REASONING`, `IMAGE_CAPTION_FALLBACK_PROVIDER`, `IMAGE_CAPTION_FALLBACK_MODEL`.
+- Runtime configuration keys: `IMAGE_CAPTION_PROVIDER`, `IMAGE_CAPTION_MODEL`, `IMAGE_CAPTION_DETAIL`, `IMAGE_CAPTION_REASONING`, `IMAGE_CAPTION_FALLBACK_PROVIDER`, `IMAGE_CAPTION_FALLBACK_MODEL`.
 
 The prompt receives OCR-extracted image crops, OCR Markdown/text around the image, document filename and page number. Cover pages, indexes and front matter are page-level concepts; if classification requires page-wide context, use OCR Markdown metadata, not a rendered full-page image.
 
