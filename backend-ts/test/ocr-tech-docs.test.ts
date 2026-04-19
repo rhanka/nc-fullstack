@@ -10,6 +10,7 @@ import {
   buildPageMarkdownWithImageDescriptions,
   buildPreparedTechDocsCsvFromOcrArtifacts,
   normalizeImageCaptionAnalysis,
+  OpenAIImageCaptionClient,
   type ImageCaptionAnalysis,
 } from "../src/dataprep/ocr-tech-docs.ts";
 
@@ -160,4 +161,53 @@ test("buildPreparedTechDocsCsvFromOcrArtifacts emits compatible rows and exclude
   const audit = JSON.parse(readFileSync(auditFile, "utf8")) as typeof result;
   assert.equal(audit.rowsWritten, 1);
   assert.equal(audit.pagesExcluded, 1);
+});
+
+
+test("OpenAI contextual caption client never sends extracted image bytes", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> | null = null;
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    capturedBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return new Response(
+      JSON.stringify({
+        id: "resp_context_only",
+        model: "gpt-5.4",
+        output_text: JSON.stringify({
+          schema_version: "a220_image_caption_v1",
+          page_category: "technical_diagram",
+          page_category_confidence: 0.75,
+          retrieval_action: "index",
+          retrieval_weight: 1,
+          short_summary: "Contextual figure description.",
+          technical_description: "Description grounded only in OCR markdown context.",
+        }),
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
+
+  try {
+    const client = new OpenAIImageCaptionClient({
+      apiKey: "test-key",
+      endpoint: "https://example.test/v1",
+      model: "gpt-5.4",
+    });
+
+    await client.analyzePage({
+      doc: "A220-door_page_0001.pdf",
+      markdown: "# Door figure\n\n![img-0.jpeg](img-0.jpeg)\n\nATA 52 context.",
+      extractedImageCount: 1,
+      extractedImageIds: ["img-0.jpeg"],
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.notEqual(capturedBody, null);
+  const serialized = JSON.stringify(capturedBody);
+  assert.doesNotMatch(serialized, /input_image/u);
+  assert.doesNotMatch(serialized, /image_url/u);
+  assert.doesNotMatch(serialized, /data:image/u);
+  assert.match(serialized, /Extracted image count: 1/u);
 });
