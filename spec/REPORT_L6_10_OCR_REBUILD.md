@@ -4,9 +4,9 @@ Date: 2026-04-19
 
 ## Scope
 
-Rebuild local RAG/wiki artefacts from the TypeScript OCR dataprep output, with Mistral OCR as the only component allowed to handle extracted image bytes.
+Rebuild local RAG/wiki artefacts from the TypeScript OCR dataprep output. Mistral OCR extracts page Markdown and image crops. Caption LLMs may receive those OCR-extracted image crops with immediate Markdown context, but must not receive rendered full-page PDF images.
 
-OpenAI/Gemini image calls are disabled for this rebuild. Contextual enrichment, when enabled later, must use OCR Markdown context and metadata only.
+OpenAI/Gemini caption calls were disabled for this rebuild via the default `OCR_TECH_DOCS_CAPTIONS=off`, so no new caption API calls were made.
 
 ## Commands
 
@@ -24,7 +24,7 @@ make check
 | Step | Result |
 | --- | --- |
 | OCR dataprep | 14,008 page PDFs considered; 14,008 OCR JSON read; 0 missing OCR pages |
-| Caption/enrichment calls | 0 caption JSON written; 14,008 skipped by default `OCR_TECH_DOCS_CAPTIONS=off` |
+| Caption/enrichment calls | 0 caption JSON written; 14,008 skipped by default `OCR_TECH_DOCS_CAPTIONS=off`; no image-caption API calls made during this rebuild |
 | Prepared CSV | 14,612 rows written to `managed_dataset/a220_tech_docs_content_prepared.csv.gz` |
 | Canonical CSV | 14,612 rows kept; 0 dropped; 0 malformed; 0 missing page rows; 0 duplicate chunk IDs |
 | Character parity | `keptRowsCharExact=true`; source and canonical SHA both `d8861d5cc18c64a2ba10458e2341f33a8f5ec7721529aecddaddd09bd1c90eb1` |

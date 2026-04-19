@@ -130,8 +130,7 @@ export interface ImageCaptionClient {
 export interface ImageCaptionClientInput {
   readonly doc: string;
   readonly markdown: string;
-  readonly extractedImageCount: number;
-  readonly extractedImageIds: readonly string[];
+  readonly imageDataUrls: readonly string[];
 }
 
 type OcrImage = {
@@ -381,16 +380,26 @@ function extractMarkdown(ocrDocument: OcrDocument, preferAlt: boolean): string {
   return String(page.markdown ?? ocrDocument.markdown ?? "").trim();
 }
 
-function extractImageRefs(ocrDocument: OcrDocument): { readonly count: number; readonly ids: readonly string[] } {
+function extractImageDataUrls(ocrDocument: OcrDocument): string[] {
   const page = extractFirstPage(ocrDocument);
   if (!page?.images) {
-    return { count: 0, ids: [] };
+    return [];
   }
-  const images = page.images.filter((image) => image.imageBase64 || image.image_base64);
-  return {
-    count: images.length,
-    ids: images.map((image) => image.id).filter(Boolean),
-  };
+  return page.images
+    .map((image) => image.imageBase64 ?? image.image_base64 ?? "")
+    .map((value) => normalizeImageDataUrl(value))
+    .filter(Boolean);
+}
+
+function normalizeImageDataUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed.startsWith("data:image/")) {
+    return trimmed;
+  }
+  return "data:image/png;base64," + trimmed;
 }
 
 function readCaptionAnalyses(filePath: string): ImageCaptionAnalysis[] {
@@ -673,9 +682,8 @@ export const A220_IMAGE_CAPTION_PROMPT = [
   "You are preparing an A220 technical documentation page for retrieval augmented generation.",
   "Return JSON only using schema version a220_image_caption_v1.",
   "Classify cover pages, index pages, front matter, blank pages, separation pages and unreadable pages so they do not pollute recall.",
-  "You do not receive image bytes. Use only OCR Markdown, nearby text, image placeholders and metadata.",
-  "If OCR Markdown does not expose the visual content of an extracted image, state uncertainty instead of inventing a visual description.",
-  "For technical diagrams, produce a description only from visible OCR text and contextual Markdown: components, labels, directions, flows, geometry, ATA candidates, part or zone candidates, and any warning or limit present in the text.",
+  "You receive OCR-extracted image crops plus OCR Markdown context; you do not receive a full PDF page render.",
+  "For technical diagrams, produce a deep description of the extracted image: components, labels, directions, flows, geometry, ATA candidates, part or zone candidates, and any warning or limit visible in the image or OCR context.",
   "Do not invent identifiers. Preserve visible ATA, part numbers, zones and figure references exactly when readable.",
   "Required JSON keys: schema_version, page_category, page_category_confidence, is_non_content_page, retrieval_action, retrieval_weight, short_summary, technical_description, visible_text, visible_identifiers, ata_candidates, part_or_zone_candidates, diagram_elements, relationships_or_flows, warnings_or_limits, figure_or_table_refs, uncertainties.",
   "Allowed page_category values: technical_diagram, technical_table, technical_photo, technical_procedure, index_page, cover_page, front_matter, blank_page, separation_page, other_non_technical, unreadable.",
@@ -715,17 +723,20 @@ export class OpenAIImageCaptionClient implements ImageCaptionClient {
   readonly model: string;
   readonly apiKey: string;
   readonly endpoint: string;
+  readonly imageDetail: string;
   readonly reasoning: ImageCaptionReasoning;
 
   constructor(options: {
     readonly apiKey?: string;
     readonly model?: string;
     readonly endpoint?: string;
+    readonly imageDetail?: string;
     readonly reasoning?: ImageCaptionReasoning;
   } = {}) {
     this.apiKey = options.apiKey ?? process.env.OPENAI_API_KEY ?? "";
     this.model = options.model ?? process.env.IMAGE_CAPTION_MODEL ?? "gpt-5.4";
     this.endpoint = options.endpoint ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+    this.imageDetail = options.imageDetail ?? process.env.IMAGE_CAPTION_DETAIL ?? "original";
     this.reasoning = options.reasoning ?? (process.env.IMAGE_CAPTION_REASONING as ImageCaptionReasoning | undefined) ?? "none";
     if (!this.apiKey) {
       throw new Error("OPENAI_API_KEY is required for image captioning");
@@ -740,13 +751,14 @@ export class OpenAIImageCaptionClient implements ImageCaptionClient {
           A220_IMAGE_CAPTION_PROMPT +
           "\n\nDocument page: " +
           input.doc +
-          "\nExtracted image count: " +
-          String(input.extractedImageCount) +
-          "\nExtracted image ids: " +
-          input.extractedImageIds.join(", ") +
-          "\n\nOCR markdown context only, no image bytes are provided:\n" +
+          "\n\nOCR markdown context:\n" +
           input.markdown.slice(0, 8000),
       },
+      ...input.imageDataUrls.map((imageUrl) => ({
+        type: "input_image",
+        image_url: imageUrl,
+        detail: this.imageDetail,
+      })),
     ];
 
     const body: Record<string, unknown> = {
@@ -806,13 +818,18 @@ export class GeminiImageCaptionClient implements ImageCaptionClient {
           A220_IMAGE_CAPTION_PROMPT +
           "\n\nDocument page: " +
           input.doc +
-          "\nExtracted image count: " +
-          String(input.extractedImageCount) +
-          "\nExtracted image ids: " +
-          input.extractedImageIds.join(", ") +
-          "\n\nOCR markdown context only, no image bytes are provided:\n" +
+          "\n\nOCR markdown context:\n" +
           input.markdown.slice(0, 8000),
       },
+      ...input.imageDataUrls.map((imageUrl) => {
+        const match = imageUrl.match(/^data:([^;]+);base64,(.+)$/u);
+        return {
+          inline_data: {
+            mime_type: match?.[1] ?? "image/png",
+            data: match?.[2] ?? imageUrl,
+          },
+        };
+      }),
     ];
     const response = await fetch(
       this.endpoint.replace(/\/$/u, "") + "/models/" + encodeURIComponent(this.model) + ":generateContent?key=" + encodeURIComponent(this.apiKey),
@@ -905,15 +922,10 @@ async function generateImageCaptionArtifacts(
     }
     const ocrDocument = readJsonFile<OcrDocument>(ocrPath);
     const markdown = extractMarkdown(ocrDocument, true);
-    const imageRefs = extractImageRefs(ocrDocument);
+    const imageDataUrls = extractImageDataUrls(ocrDocument);
     const analysis =
-      imageRefs.count > 0
-        ? await client.analyzePage({
-            doc,
-            markdown,
-            extractedImageCount: imageRefs.count,
-            extractedImageIds: imageRefs.ids,
-          })
+      imageDataUrls.length > 0
+        ? await client.analyzePage({ doc, markdown, imageDataUrls })
         : inferDefaultAnalysis(markdown, doc);
     atomicWriteFile(outputPath, JSON.stringify(analysis, null, 2) + "\n");
     captionJsonWritten += 1;
