@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-knowledge-ci
+.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-knowledge-ci
 
 # ----------------------------
 # Helpers
@@ -135,6 +135,10 @@ dataprep-knowledge-tech-docs: api-install
 dataprep-ocr-tech-docs: api-install
 	@echo "▶ Running OCR dataprep for tech docs..."
 	cd backend-ts && npm run dataprep:ocr-tech-docs
+
+dataprep-ocr-caption-benchmark: api-install
+	@echo "▶ Running OCR caption benchmark..."
+	cd backend-ts && npm run dataprep:ocr-caption-benchmark
 
 dataprep-knowledge-ci: dataprep-download-minimal api-install
 	@echo "▶ Preparing knowledge artifacts for API image..."

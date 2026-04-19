@@ -39,6 +39,26 @@ test("applyPageRetrievalPolicy excludes high-confidence cover pages", () => {
   assert.equal(policy.weight, 0);
 });
 
+test("normalizeImageCaptionAnalysis flattens accidental object arrays into readable strings", () => {
+  const analysis = normalizeImageCaptionAnalysis({
+    schema_version: "a220_image_caption_v1",
+    page_category: "technical_diagram",
+    diagram_elements: [
+      { component: "Oil pressure sensor", evidence: ["label OIL PRESS", "analog line"] },
+    ],
+    relationships_or_flows: [
+      { from: "sensor", to: "EEC", signal: "analog" },
+    ],
+  });
+
+  assert.deepEqual(analysis.diagram_elements, [
+    "component: Oil pressure sensor; evidence: label OIL PRESS; analog line",
+  ]);
+  assert.deepEqual(analysis.relationships_or_flows, [
+    "from: sensor; to: EEC; signal: analog",
+  ]);
+});
+
 test("buildPageMarkdownWithImageDescriptions replaces OCR image placeholders with technical captions", () => {
   const markdown = [
     "# Door structure",
@@ -208,5 +228,7 @@ test("OpenAI image caption client sends OCR-extracted images with markdown conte
   assert.match(serialized, /input_image/u);
   assert.match(serialized, new RegExp("data:image/png;base64,aGVsbG8="));
   assert.match(serialized, /OCR markdown context/u);
+  assert.match(serialized, /All array fields must contain plain strings only/u);
+  assert.equal(capturedBody?.max_output_tokens, 6000);
   assert.doesNotMatch(serialized, /rendered page image/u);
 });
