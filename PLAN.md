@@ -126,7 +126,8 @@
 - [x] L6.7a Faire construire l'image API par la PR CI, sans push registry. Recette: le workflow `PR CI` exécute `make api-build` après les tests backend pour valider Dockerfile + données minimales avant merge. `TEST`
 - [x] L6.8 Étudier le remplacement du codage OCR amont par le package npm `mistral-ocr`. Recette: spec dédiée décrivant l'état actuel, les contrats RAG à préserver, les adaptateurs nécessaires et les critères de migration progressive. `AUTO`
 - [x] L6.8a Spécifier le prompt de description image et la politique retrieval associée. Recette: prompt `a220_image_caption_v1` versionné, sortie JSON stricte, description profonde des schémas, classification `cover/index/front matter/blank/separation`, et règles `index/downweight/exclude` pour éviter la pollution du rappel. `AUTO`
-- [ ] L6.9 Implémenter le dataprep OCR TS avec `mistral-ocr`. Recette: commande `dataprep:ocr-tech-docs`, génération `ocr/` + CSV préparé compatible, audit déterministe pages/OCR/CSV, puis rebuild complet RAG/wiki. `TEST`
+- [x] L6.9 Implémenter le dataprep OCR TS avec `mistral-ocr` côté code et runner. Recette: commande `dataprep:ocr-tech-docs`, mode `existing` sans appel réseau, mode `live` optionnel via `mistral-ocr`, génération CSV préparé compatible, artefacts enrichis `__with_img_desc.*` et audit déterministe pages/OCR/CSV couverts par tests. `TEST`
+- [ ] L6.10 Exécuter le rebuild complet RAG/wiki depuis la sortie OCR TS. Recette: génération complète `ocr/` + CSV préparé, `dataprep-prepare-tech-docs`, `dataprep-tech-docs`, `dataprep-knowledge-tech-docs`, audit zéro incohérence source servable, puis smoke UAT `000/100`. `TEST` + `UAT`
 
 ## Lot 6.2 - UAT couche connaissance
 

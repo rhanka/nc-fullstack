@@ -18,6 +18,10 @@
     "dataprep:tech-docs": "npm run dataprep:prepare-tech-docs && node --experimental-strip-types scripts/run_dataprep.ts tech_docs",
     "dataprep:nc": "node --experimental-strip-types scripts/run_dataprep.ts non_conformities",
     "dataprep:knowledge": "npm run dataprep:prepare-tech-docs && node --experimental-strip-types scripts/run_knowledge_dataprep.ts all",
-    "dataprep:knowledge:tech-docs": "npm run dataprep:prepare-tech-docs && node --experimental-strip-types scripts/run_knowledge_dataprep.ts tech_docs"
+    "dataprep:knowledge:tech-docs": "npm run dataprep:prepare-tech-docs && node --experimental-strip-types scripts/run_knowledge_dataprep.ts tech_docs",
+    "dataprep:ocr-tech-docs": "node --experimental-strip-types scripts/run_ocr_tech_docs.ts"
+  },
+  "dependencies": {
+    "mistral-ocr": "^0.1.0"
   }
 }

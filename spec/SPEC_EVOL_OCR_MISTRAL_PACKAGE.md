@@ -4,7 +4,7 @@
 
 Reduce custom OCR/dataprep code by using the published npm package `mistral-ocr` for PDF to Markdown extraction, while preserving the current RAG dataset contract.
 
-This is an analysis/specification step only. No OCR pipeline replacement is implemented in this lot.
+This spec has moved from analysis to implementation. The first implementation provides a TypeScript dataprep command that can rebuild the prepared CSV from existing OCR artefacts, can optionally run live `mistral-ocr` on page PDFs, and can optionally create caption-analysis JSON through the configured vision provider.
 
 ## Current State
 
@@ -204,11 +204,33 @@ Required adapter functions:
 - `inferTechDocMetadata(markdown, docRoot, pageIndex)`: fills `ATA`, `parts`, `doc_type` using the same deterministic heuristics as current dataprep where possible.
 - `auditOcrPreparedDataset()`: counts source PDFs, pages, OCR JSONs, image analyses, enriched Markdown files, CSV rows, excluded pages, downweighted pages, missing page PDFs and duplicate chunk IDs.
 
+## Implemented V1
+
+Implemented command:
+
+- npm script: `npm run dataprep:ocr-tech-docs`
+- make target: `make dataprep-ocr-tech-docs`
+- default mode: `OCR_TECH_DOCS_MODE=existing`, which rebuilds the prepared CSV from existing `ocr/` artefacts without external API calls.
+- live OCR mode: `OCR_TECH_DOCS_MODE=live`, which calls `mistral-ocr.convertPdf` on page PDFs and writes raw OCR JSON under `ocr/`.
+- caption mode: `OCR_TECH_DOCS_CAPTIONS=off|missing|force`; `missing` or `force` writes `*.image-caption.json` using the configured image-caption provider.
+- safe validation knobs: `OCR_TECH_DOCS_LIMIT`, `OCR_TECH_DOCS_OUTPUT_FILE`, `OCR_TECH_DOCS_AUDIT_FILE`, `OCR_TECH_DOCS_FORCE`.
+- when caption JSON exists, enriched artefacts are written as `__with_img_desc.json` and `__with_img_desc.md` before CSV chunking.
+
+Implemented adapter functions:
+
+- `normalizeImageCaptionAnalysis`
+- `applyPageRetrievalPolicy`
+- `buildPageMarkdownWithImageDescriptions`
+- `buildPreparedTechDocsCsvFromOcrArtifacts`
+- `runOcrTechDocsDataprep`
+
+Current V1 caveat: image captioning consumes OCR Markdown and extracted OCR images. A full rendered-page image path can still be added later if the extracted images are insufficient for cover/index/front-matter classification.
+
 ## Open Technical Questions
 
-- Whether to OCR full PDFs once or page PDFs independently.
-- Whether full-PDF OCR preserves page indexes reliably enough for current page-level `/doc` navigation.
+- Whether full rendered-page images are required beyond OCR-extracted images for the caption pass.
 - Whether metadata `ATA / parts / doc_type` should continue to be heuristic-only or receive an optional LLM assist step.
+- Whether downweighted pages should affect ranking directly in vector/BM25, or remain audit-only until a retrieval weighting field is added to the RAG contract.
 
 ## Recommendation
 
