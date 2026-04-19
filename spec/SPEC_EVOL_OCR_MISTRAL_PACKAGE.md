@@ -60,12 +60,13 @@ This second pass is required for retrieval parity. It lets the caption model des
 Target model configuration:
 
 - Primary image-caption provider: OpenAI API.
-- Primary image-caption model: `gpt-5.4`.
+- Current safe default image-caption model: `gpt-5.4`.
+- Benchmark recommendation for the full rebuild: `gpt-5.4-nano` primary with `gpt-5.4` fallback/deep pass.
 - Image input detail: `original` for the extracted image crop.
 - Caption reasoning: `none` by default; `low` only for complex diagrams if needed.
-- Fallback image-caption provider: Google Gemini API.
-- Fallback image-caption model: `gemini-3.1-pro-preview`.
-- Runtime configuration keys: `IMAGE_CAPTION_PROVIDER`, `IMAGE_CAPTION_MODEL`, `IMAGE_CAPTION_DETAIL`, `IMAGE_CAPTION_REASONING`, `IMAGE_CAPTION_FALLBACK_PROVIDER`, `IMAGE_CAPTION_FALLBACK_MODEL`.
+- Fallback image-caption provider: OpenAI API first; Gemini remains a provider option for a later cross-provider fallback.
+- Fallback image-caption model: `gpt-5.4` for critical/low-signal captions, `gemini-3.1-pro-preview` only if explicitly selected.
+- Runtime configuration keys: `IMAGE_CAPTION_PROVIDER`, `IMAGE_CAPTION_MODEL`, `IMAGE_CAPTION_DETAIL`, `IMAGE_CAPTION_REASONING`, `IMAGE_CAPTION_MAX_OUTPUT_TOKENS`, `IMAGE_CAPTION_FALLBACK_PROVIDER`, `IMAGE_CAPTION_FALLBACK_MODEL`.
 
 The prompt receives OCR-extracted image crops, OCR Markdown/text around the image, document filename and page number. Cover pages, indexes and front matter are page-level concepts; if classification requires page-wide context, use OCR Markdown metadata, not a rendered full-page image.
 
@@ -84,6 +85,7 @@ Analyze ONE A220 document image crop extracted by Mistral OCR, with its immediat
 You will not receive a rendered image of the full PDF page. Ground visual descriptions in the provided extracted image crop and OCR context.
 
 Return JSON only. Do not output markdown outside JSON.
+All array fields must contain plain strings only, not nested objects.
 
 Goals:
 1. Classify the page for retrieval filtering.
@@ -128,7 +130,7 @@ For non-content pages:
 - Keep technical_description null.
 - Provide only a short_summary explaining why the page is non-content.
 
-Output JSON must match this schema exactly.
+Output JSON must match this schema exactly. Every array value is a string.
 ```
 
 ### Image Caption Output Schema
@@ -229,6 +231,18 @@ Implemented adapter functions:
 - `runOcrTechDocsDataprep`
 
 Current V1 constraint: image captioning consumes Mistral OCR-extracted image crops and OCR Markdown context only. Rendered full-page PDF images are never sent to OpenAI or Gemini.
+
+## L6.10a Benchmark Decision
+
+See `spec/REPORT_L6_10A_OCR_CAPTION_BENCHMARK.md`.
+
+Decision for the full OCR caption rebuild:
+
+- `gpt-5.4-nano` is good enough as the primary caption model for broad RAG enrichment.
+- `gpt-5.4` is still better for relationship-rich architecture diagrams and should be used as fallback/deep pass, not as the default for every image.
+- The benchmark runner must remain resumable because OCR caption calls can be slow and terminal interruptions should not waste completed calls.
+- `IMAGE_CAPTION_MAX_OUTPUT_TOKENS` defaults to `6000` to avoid truncated JSON on detailed technical diagrams.
+- Caption post-processing must never leave `[object Object]` in retrieval text; accidental nested arrays/objects are flattened into readable strings.
 
 ## Open Technical Questions
 

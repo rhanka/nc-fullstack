@@ -184,13 +184,33 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function stringifyCaptionValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value).trim();
+  }
+  if (Array.isArray(value)) {
+    return value.map(stringifyCaptionValue).filter(Boolean).join("; ");
+  }
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, nested]) => {
+        const nestedText = stringifyCaptionValue(nested);
+        return nestedText ? key + ": " + nestedText : "";
+      })
+      .filter(Boolean)
+      .join("; ");
+  }
+  return String(value).trim();
+}
+
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value
-    .map((entry) => String(entry ?? "").trim())
-    .filter(Boolean);
+  return value.map(stringifyCaptionValue).filter(Boolean);
 }
 
 function isPageCategory(value: string): value is PageCategory {
@@ -686,6 +706,7 @@ export const A220_IMAGE_CAPTION_PROMPT = [
   "For technical diagrams, produce a deep description of the extracted image: components, labels, directions, flows, geometry, ATA candidates, part or zone candidates, and any warning or limit visible in the image or OCR context.",
   "Do not invent identifiers. Preserve visible ATA, part numbers, zones and figure references exactly when readable.",
   "Required JSON keys: schema_version, page_category, page_category_confidence, is_non_content_page, retrieval_action, retrieval_weight, short_summary, technical_description, visible_text, visible_identifiers, ata_candidates, part_or_zone_candidates, diagram_elements, relationships_or_flows, warnings_or_limits, figure_or_table_refs, uncertainties.",
+  "All array fields must contain plain strings only, not nested objects.",
   "Allowed page_category values: technical_diagram, technical_table, technical_photo, technical_procedure, index_page, cover_page, front_matter, blank_page, separation_page, other_non_technical, unreadable.",
   "retrieval_action must be index, downweight or exclude.",
 ].join("\n");
@@ -725,6 +746,7 @@ export class OpenAIImageCaptionClient implements ImageCaptionClient {
   readonly endpoint: string;
   readonly imageDetail: string;
   readonly reasoning: ImageCaptionReasoning;
+  readonly maxOutputTokens: number;
 
   constructor(options: {
     readonly apiKey?: string;
@@ -732,12 +754,14 @@ export class OpenAIImageCaptionClient implements ImageCaptionClient {
     readonly endpoint?: string;
     readonly imageDetail?: string;
     readonly reasoning?: ImageCaptionReasoning;
+    readonly maxOutputTokens?: number;
   } = {}) {
     this.apiKey = options.apiKey ?? process.env.OPENAI_API_KEY ?? "";
     this.model = options.model ?? process.env.IMAGE_CAPTION_MODEL ?? "gpt-5.4";
     this.endpoint = options.endpoint ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
     this.imageDetail = options.imageDetail ?? process.env.IMAGE_CAPTION_DETAIL ?? "original";
     this.reasoning = options.reasoning ?? (process.env.IMAGE_CAPTION_REASONING as ImageCaptionReasoning | undefined) ?? "none";
+    this.maxOutputTokens = options.maxOutputTokens ?? Number.parseInt(process.env.IMAGE_CAPTION_MAX_OUTPUT_TOKENS ?? "6000", 10);
     if (!this.apiKey) {
       throw new Error("OPENAI_API_KEY is required for image captioning");
     }
@@ -774,7 +798,7 @@ export class OpenAIImageCaptionClient implements ImageCaptionClient {
           type: "json_object",
         },
       },
-      max_output_tokens: 2200,
+      max_output_tokens: Number.isFinite(this.maxOutputTokens) && this.maxOutputTokens > 0 ? this.maxOutputTokens : 6000,
     };
     if (this.reasoning !== "none") {
       body.reasoning = { effort: this.reasoning };
