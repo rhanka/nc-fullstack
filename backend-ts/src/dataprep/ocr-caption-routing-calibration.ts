@@ -831,7 +831,7 @@ function renderMarkdownReport(summary: OcrCaptionRoutingCalibrationSummary): str
   return lines.join("\n") + "\n";
 }
 
-function extractResponseText(payload: unknown): string {
+export function extractResponseText(payload: unknown): string {
   const response = (payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>;
   if (typeof response.output_text === "string") {
     return response.output_text;

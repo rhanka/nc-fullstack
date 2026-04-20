@@ -21,7 +21,10 @@
     "dataprep:knowledge:tech-docs": "npm run dataprep:prepare-tech-docs && node --experimental-strip-types scripts/run_knowledge_dataprep.ts tech_docs",
     "dataprep:ocr-tech-docs": "node --experimental-strip-types scripts/run_ocr_tech_docs.ts",
     "dataprep:ocr-caption-benchmark": "node --experimental-strip-types scripts/run_ocr_caption_benchmark.ts",
-    "dataprep:ocr-routing-calibration": "node --experimental-strip-types scripts/run_ocr_caption_routing_calibration.ts"
+    "dataprep:ocr-routing-calibration": "node --experimental-strip-types scripts/run_ocr_caption_routing_calibration.ts",
+    "dataprep:ocr-caption-batch:create": "node --experimental-strip-types scripts/run_ocr_caption_batch_create.ts",
+    "dataprep:ocr-caption-batch:status": "node --experimental-strip-types scripts/run_ocr_caption_batch_status.ts",
+    "dataprep:ocr-caption-batch:import": "node --experimental-strip-types scripts/run_ocr_caption_batch_import.ts"
   },
   "dependencies": {
     "mistral-ocr": "^0.1.0"

@@ -136,20 +136,20 @@ export interface ImageCaptionClientInput {
   readonly imageDataUrls: readonly string[];
 }
 
-type OcrImage = {
+export type OcrImage = {
   readonly id: string;
   readonly imageBase64?: string;
   readonly image_base64?: string;
 };
 
-type OcrPage = {
+export type OcrPage = {
   readonly index?: number;
   readonly markdown?: string;
   readonly markdown_alt?: string;
   readonly images?: readonly OcrImage[];
 };
 
-type OcrDocument = {
+export type OcrDocument = {
   readonly pages?: readonly OcrPage[];
   readonly markdown?: string;
   readonly ocrResponse?: {
@@ -173,7 +173,7 @@ function ensureParentDir(filePath: string): void {
   mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
-function atomicWriteFile(filePath: string, content: string | Uint8Array): void {
+export function atomicWriteFile(filePath: string, content: string | Uint8Array): void {
   ensureParentDir(filePath);
   const tmpPath = filePath + ".tmp-" + String(process.pid);
   writeFileSync(tmpPath, content);
@@ -342,11 +342,11 @@ function jsonNameFromPageDoc(doc: string): string {
   return doc.replace(/\.pdf$/iu, ".json");
 }
 
-function pageBaseFromDoc(doc: string): string {
+export function pageBaseFromDoc(doc: string): string {
   return doc.replace(/\.pdf$/iu, "");
 }
 
-function listPagePdfDocs(pagesDir: string, limit?: number): string[] {
+export function listPagePdfDocs(pagesDir: string, limit?: number): string[] {
   if (!existsSync(pagesDir)) {
     throw new Error("Missing tech docs pages directory: " + pagesDir);
   }
@@ -356,15 +356,15 @@ function listPagePdfDocs(pagesDir: string, limit?: number): string[] {
   return typeof limit === "number" && limit > 0 ? docs.slice(0, limit) : docs;
 }
 
-function readJsonFile<T>(filePath: string): T {
+export function readJsonFile<T>(filePath: string): T {
   return JSON.parse(readFileSync(filePath, "utf8")) as T;
 }
 
-function captionJsonPath(ocrDir: string, pageDoc: string): string {
+export function captionJsonPath(ocrDir: string, pageDoc: string): string {
   return path.join(ocrDir, pageBaseFromDoc(pageDoc) + ".image-caption.json");
 }
 
-function captionAuditJsonPath(ocrDir: string, pageDoc: string): string {
+export function captionAuditJsonPath(ocrDir: string, pageDoc: string): string {
   return path.join(ocrDir, pageBaseFromDoc(pageDoc) + ".image-caption.audit.json");
 }
 
@@ -376,7 +376,7 @@ function enrichedOcrJsonPath(ocrDir: string, pageDoc: string): string {
   return path.join(ocrDir, pageBaseFromDoc(pageDoc) + "__with_img_desc.json");
 }
 
-function findOcrJsonPath(ocrDir: string, pageDoc: string, hasCaptionJson: boolean): string | null {
+export function findOcrJsonPath(ocrDir: string, pageDoc: string, hasCaptionJson: boolean): string | null {
   const rawPath = rawOcrJsonPath(ocrDir, pageDoc);
   const enrichedPath = enrichedOcrJsonPath(ocrDir, pageDoc);
   if (hasCaptionJson && existsSync(rawPath)) {
@@ -396,7 +396,7 @@ function extractFirstPage(ocrDocument: OcrDocument): OcrPage | null {
   return pages[0] ?? null;
 }
 
-function extractMarkdown(ocrDocument: OcrDocument, preferAlt: boolean): string {
+export function extractMarkdown(ocrDocument: OcrDocument, preferAlt: boolean): string {
   const page = extractFirstPage(ocrDocument);
   if (!page) {
     return String(ocrDocument.markdown ?? "").trim();
@@ -407,7 +407,7 @@ function extractMarkdown(ocrDocument: OcrDocument, preferAlt: boolean): string {
   return String(page.markdown ?? ocrDocument.markdown ?? "").trim();
 }
 
-function extractImageDataUrls(ocrDocument: OcrDocument): string[] {
+export function extractImageDataUrls(ocrDocument: OcrDocument): string[] {
   const page = extractFirstPage(ocrDocument);
   if (!page?.images) {
     return [];
