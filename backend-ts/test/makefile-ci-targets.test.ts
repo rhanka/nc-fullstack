@@ -36,3 +36,8 @@ test("CI retrieval ensure uses the prepared dataset without requiring PDF pages"
     "node --experimental-strip-types scripts/run_knowledge_dataprep.ts all",
   );
 });
+
+test("retrieval cache upload publishes the canonical tech-doc dataset", () => {
+  assert.match(makefile, /a220_tech_docs_content_canonical\.csv\.gz/);
+  assert.match(makefile, /a220_tech_docs_content_canonical\.audit\.json/);
+});
