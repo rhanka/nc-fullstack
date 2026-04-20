@@ -61,11 +61,11 @@ Target model configuration:
 
 - Primary image-caption provider: OpenAI API.
 - Current safe default image-caption model: `gpt-5.4`.
-- Benchmark recommendation for the full rebuild: `gpt-5.4-nano` primary with `gpt-5.4` fallback/deep pass.
+- Benchmark recommendation for the next calibration step: `gpt-5.4-nano` primary candidate with `gpt-5.4` deep pass for content types proven useful by replay.
 - Image input detail: `original` for the extracted image crop.
 - Caption reasoning: `none` by default; `low` only for complex diagrams if needed.
 - Fallback image-caption provider: OpenAI API first; Gemini remains a provider option for a later cross-provider fallback.
-- Fallback image-caption model: `gpt-5.4` for critical/low-signal captions, `gemini-3.1-pro-preview` only if explicitly selected.
+- Fallback image-caption model: `gpt-5.4` for technical retry and for content types routed by `routing_profile_v1` after replay calibration, `gemini-3.1-pro-preview` only if explicitly selected.
 - Runtime configuration keys: `IMAGE_CAPTION_PROVIDER`, `IMAGE_CAPTION_MODEL`, `IMAGE_CAPTION_DETAIL`, `IMAGE_CAPTION_REASONING`, `IMAGE_CAPTION_MAX_OUTPUT_TOKENS`, `IMAGE_CAPTION_FALLBACK_PROVIDER`, `IMAGE_CAPTION_FALLBACK_MODEL`.
 
 The prompt receives OCR-extracted image crops, OCR Markdown/text around the image, document filename and page number. Cover pages, indexes and front matter are page-level concepts; if classification requires page-wide context, use OCR Markdown metadata, not a rendered full-page image.
@@ -236,13 +236,31 @@ Current V1 constraint: image captioning consumes Mistral OCR-extracted image cro
 
 See `spec/REPORT_L6_10A_OCR_CAPTION_BENCHMARK.md`.
 
-Decision for the full OCR caption rebuild:
+Decision for the next OCR caption iteration:
 
-- `gpt-5.4-nano` is good enough as the primary caption model for broad RAG enrichment.
-- `gpt-5.4` is still better for relationship-rich architecture diagrams and should be used as fallback/deep pass, not as the default for every image.
+- `gpt-5.4-nano` is good enough as the primary candidate for broad RAG enrichment.
+- Image captions also feed LLM Wiki entity linking and relationship extraction, so routing must consider entity/relation value, not only retrieval text value.
+- The phrase `low-signal caption` is rejected as too vague.
+- The next schema version must add `routing_profile_v1`: a structured content type and evidence block emitted by `gpt-5.4-nano`.
+- `gpt-5.4` should be used for content types calibrated by replay as relationship-rich or wiki-critical, not by a free-form quality judgment.
 - The benchmark runner must remain resumable because OCR caption calls can be slow and terminal interruptions should not waste completed calls.
 - `IMAGE_CAPTION_MAX_OUTPUT_TOKENS` defaults to `6000` to avoid truncated JSON on detailed technical diagrams.
 - Caption post-processing must never leave `[object Object]` in retrieval text; accidental nested arrays/objects are flattened into readable strings.
+
+Candidate `routing_profile_v1` fields:
+
+- `visual_content_type`: one of `cover_page`, `front_matter`, `index_page`, `simple_labeled_component_view`, `cockpit_panel_or_display`, `technical_table`, `system_architecture_diagram`, `flow_diagram`, `wiring_signal_bus_diagram`, `fuel_oil_hydraulic_transfer_diagram`, `component_hierarchy_or_exploded_view`, `other`.
+- `domain`: `fuel`, `power_plant_oil`, `flight_controls`, `hydraulics`, `avionics_electrical`, `airframe`, `doors`, `unknown`, etc.
+- `rag_value`: whether the visual crop adds retrieval keywords beyond OCR Markdown.
+- `wiki_value`: whether the visual crop contains named entities, entity relationships, part/zone/ATA candidates or component hierarchy.
+- `routing_evidence`: short visible evidence strings supporting the profile.
+
+Replay requirement before full rebuild:
+
+1. Generate `a220_image_caption_v2` with `gpt-5.4-nano` on the benchmark sample.
+2. Apply TypeScript routing rules to `routing_profile_v1`.
+3. Compare route decisions against human evaluation of where `gpt-5.4` added useful RAG or Wiki value.
+4. Finalize a routing matrix before applying cascade to the full corpus.
 
 ## Open Technical Questions
 

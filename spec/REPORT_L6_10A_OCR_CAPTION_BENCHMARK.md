@@ -57,17 +57,101 @@ Weaknesses observed on `nano`:
 - It is weaker on multi-hop relationships and signal paths.
 - It may describe many visual details while missing the most useful high-level operational relationship.
 
-## Decision
+## Decision Update
 
-Do not use `gpt-5.4` for every image caption by default. It is too expensive/slow for the whole corpus relative to the marginal gain on simple diagrams.
+The initial wording `low-signal captions` is rejected because it is not operational enough. A cascade cannot depend on an implicit quality judgment from the same model that produced the caption.
 
-Do not use `gpt-5.4-nano` alone either. It is good enough for most pages, but not reliable enough for the highest-value architecture/flow diagrams.
+The revised target is not `nano judges if nano is good`. The revised target is:
 
-Recommended target for the full OCR caption rebuild:
-- Primary: `gpt-5.4-nano`.
-- Fallback/deep pass: `gpt-5.4`.
-- Trigger fallback on model error, invalid JSON/schema, low-signal captions on technical pages, or explicitly critical categories such as fuel, flight controls and power plant architecture pages.
-- Keep `IMAGE_CAPTION_MAX_OUTPUT_TOKENS=6000` for both models.
+1. `gpt-5.4-nano` produces the caption plus a structured `routing_profile_v1`.
+2. `routing_profile_v1` classifies the visual content and exposes evidence useful for both RAG and LLM Wiki.
+3. TypeScript routing rules decide whether the page requires a `gpt-5.4` deep pass.
+4. A replay benchmark calibrates the routing rules before the full rebuild.
+
+The image captions feed two downstream consumers:
+- RAG retrieval text.
+- LLM Wiki entity linking and relation extraction.
+
+Therefore routing must consider whether the image contains entity or relationship value, not just whether its text is useful for search.
+
+## Proposed Routing Profile
+
+`gpt-5.4-nano` should emit a structured routing profile alongside the caption:
+
+```json
+{
+  "visual_content_type": "system_architecture_diagram",
+  "domain": "power_plant_oil",
+  "rag_value": {
+    "needs_visual_caption": true,
+    "retrieval_keywords_visible": true
+  },
+  "wiki_value": {
+    "has_named_entities": true,
+    "has_entity_relationships": true,
+    "has_part_zone_or_ata_candidates": true,
+    "has_component_hierarchy": true
+  },
+  "routing_evidence": [
+    "visible ARINC 429 label",
+    "visible CAN BUS label",
+    "oil sensors connected to EEC",
+    "EICAS display output"
+  ]
+}
+```
+
+The route to `gpt-5.4` is then based on content type and evidence, not on vague caption quality.
+
+## Candidate Routing Matrix
+
+| Content type from `routing_profile_v1` | Default route | Rationale |
+| --- | --- | --- |
+| `cover_page`, `front_matter`, `index_page`, `blank_page`, `separation_page` | no deep pass | Non-content or metadata pages; exclude/downweight for retrieval and wiki. |
+| `simple_labeled_component_view` | `nano` | Usually enough for RAG keywords and simple entity candidates. |
+| `cockpit_panel_or_display` | `nano`, unless entity-rich | Panels can be captioned cheaply unless they expose multiple named controls/states linked by logic. |
+| `technical_table` | `nano` | Markdown/OCR should carry most of the value; deep vision rarely adds enough. |
+| `system_architecture_diagram` | `gpt-5.4` | Usually contains components, interfaces and relationships useful for LLM Wiki. |
+| `flow_diagram` | `gpt-5.4` | Directional relations are the primary value. |
+| `wiring_signal_bus_diagram` | `gpt-5.4` | Signal/bus labels and component interfaces need relationship extraction. |
+| `fuel_oil_hydraulic_transfer_diagram` | `gpt-5.4` | Operational flows and system relations are high-value for troubleshooting. |
+| `component_hierarchy_or_exploded_view` | `gpt-5.4` | Useful for part/subpart hierarchy in LLM Wiki. |
+
+Technical retry remains separate:
+- API error.
+- Invalid JSON.
+- Invalid schema.
+- Required caption blocks missing despite OCR image crops.
+
+## Required Replay Before Full Rebuild
+
+Before applying this cascade to the full corpus, run a replay on the benchmark sample:
+
+1. Generate `a220_image_caption_v2` with `gpt-5.4-nano`.
+2. Apply deterministic TypeScript routing rules to `routing_profile_v1`.
+3. Compare routing decisions against the human evaluation of whether `gpt-5.4` added useful RAG or Wiki value.
+4. Report confusion cases: pages routed to `nano` where `5.4` clearly improved entity/relationship extraction, and pages routed to `5.4` where nano was enough.
+5. Finalize the routing matrix before `L6.10` full rebuild.
+
+The desired output is a ratio, for example:
+
+```text
+nano-only pages: 70%
+5.4 deep-pass pages: 30%
+false nano risk: documented by page/type
+false 5.4 cost: documented by page/type
+```
+
+## Current Recommendation
+
+Do not use `gpt-5.4` for every image caption by default. It is too expensive/slow for the whole corpus relative to the marginal gain on simple pages.
+
+Do not use `gpt-5.4-nano` alone for the final enriched corpus until the routing replay is done. It is good enough for many pages, but the benchmark suggests `gpt-5.4` adds value on relationship-rich architecture/flow diagrams, which are also the most useful pages for LLM Wiki.
+
+Recommended next step:
+- Implement `a220_image_caption_v2` and `routing_profile_v1`.
+- Run replay calibration on the benchmark sample.
+- Only then run the full OCR caption rebuild.
 
 ## Verification
 
