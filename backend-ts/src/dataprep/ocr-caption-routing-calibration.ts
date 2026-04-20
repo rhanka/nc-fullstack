@@ -402,6 +402,66 @@ function inferVisualContentTypeFromV1(analysis: ImageCaptionAnalysis): VisualCon
   return analysis.page_category === "technical_diagram" ? "unclear" : "other";
 }
 
+function inferPageCategoryFromVisualContentType(
+  visualContentType: VisualContentType,
+): ImageCaptionAnalysis["page_category"] {
+  if (visualContentType === "cover_page") {
+    return "cover_page";
+  }
+  if (visualContentType === "front_matter") {
+    return "front_matter";
+  }
+  if (visualContentType === "index_page") {
+    return "index_page";
+  }
+  if (visualContentType === "blank_page") {
+    return "blank_page";
+  }
+  if (visualContentType === "separation_page") {
+    return "separation_page";
+  }
+  if (visualContentType === "technical_table") {
+    return "technical_table";
+  }
+  if (visualContentType === "technical_photo") {
+    return "technical_photo";
+  }
+  if (visualContentType === "technical_procedure") {
+    return "technical_procedure";
+  }
+  return "technical_diagram";
+}
+
+function fallbackSummaryFromRoutingProfile(profile: RoutingProfileV1): string {
+  const readableType = profile.visual_content_type.replace(/_/gu, " ");
+  const terms = profile.rag_signal.retrieval_terms.slice(0, 6).join(", ");
+  if (terms) {
+    return readableType + ": " + terms + ".";
+  }
+  const firstEntity = profile.wiki_signal.entity_candidates[0]?.label;
+  return firstEntity ? readableType + ": " + firstEntity + "." : readableType + ".";
+}
+
+function fallbackDescriptionFromRoutingProfile(profile: RoutingProfileV1, summary: string): string {
+  const lines = [summary];
+  const entities = profile.wiki_signal.entity_candidates
+    .slice(0, 12)
+    .map((entity) => entity.label + " (" + entity.type + (entity.evidence ? ", " + entity.evidence : "") + ")");
+  if (entities.length > 0) {
+    lines.push("Entities: " + entities.join("; ") + ".");
+  }
+  const relationships = profile.wiki_signal.relationship_candidates
+    .slice(0, 12)
+    .map((relation) => relation.source + " " + relation.relation + " " + relation.target);
+  if (relationships.length > 0) {
+    lines.push("Relationships: " + relationships.join("; ") + ".");
+  }
+  if (profile.routing_evidence.length > 0) {
+    lines.push("Evidence: " + profile.routing_evidence.slice(0, 8).join("; ") + ".");
+  }
+  return lines.join(" ");
+}
+
 export function normalizeRoutingProfileV1(value: unknown, baseAnalysis?: ImageCaptionAnalysis): RoutingProfileV1 {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   const rawType = stringifyCaptionValue(input.visual_content_type);
@@ -442,10 +502,33 @@ export function normalizeRoutingProfileV1(value: unknown, baseAnalysis?: ImageCa
 export function normalizeImageCaptionV2(value: unknown): ImageCaptionV2 {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   const base = normalizeImageCaptionAnalysis(input);
+  const profile = normalizeRoutingProfileV1(input.routing_profile_v1, base);
+  const hasExplicitPageCategory = typeof input.page_category === "string" && input.page_category.trim() !== "";
+  const pageCategory = hasExplicitPageCategory
+    ? base.page_category
+    : inferPageCategoryFromVisualContentType(profile.visual_content_type);
+  const pageCategoryConfidence =
+    typeof input.page_category_confidence === "number" || typeof input.page_category_confidence === "string"
+      ? base.page_category_confidence
+      : 0.75;
+  const fallbackSummary = fallbackSummaryFromRoutingProfile(profile);
+  const shortSummary = base.short_summary || fallbackSummary;
   return {
     ...base,
     schema_version: IMAGE_CAPTION_V2_SCHEMA_VERSION,
-    routing_profile_v1: normalizeRoutingProfileV1(input.routing_profile_v1, base),
+    page_category: pageCategory,
+    page_category_confidence: pageCategoryConfidence,
+    is_non_content_page:
+      pageCategory === "cover_page" ||
+      pageCategory === "front_matter" ||
+      pageCategory === "index_page" ||
+      pageCategory === "blank_page" ||
+      pageCategory === "separation_page"
+        ? true
+        : base.is_non_content_page,
+    short_summary: shortSummary,
+    technical_description: base.technical_description || fallbackDescriptionFromRoutingProfile(profile, shortSummary),
+    routing_profile_v1: profile,
   };
 }
 

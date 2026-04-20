@@ -110,6 +110,38 @@ test("normalizeImageCaptionV2 keeps v1 fields and controlled routing profile val
   assert.deepEqual(caption.routing_profile_v1.routing_evidence, ["arrow direction", "label: valve label"]);
 });
 
+test("normalizeImageCaptionV2 derives caption prose and category from routing profile when v1 prose is missing", () => {
+  const caption = normalizeImageCaptionV2({
+    schema_version: "a220_image_caption_v2",
+    routing_profile_v1: {
+      visual_content_type: "flow_diagram",
+      domain_candidates: ["fuel"],
+      rag_signal: {
+        ocr_markdown_sufficient: false,
+        visual_caption_adds_retrieval_terms: true,
+        retrieval_terms: ["AC boost pump", "ejector pump", "collector tank"],
+      },
+      wiki_signal: {
+        has_named_entities: true,
+        has_entity_relationships: true,
+        has_part_zone_or_ata_candidates: true,
+        has_component_hierarchy: false,
+        entity_candidates: [{ label: "AC boost pump", type: "part", evidence: "visible label" }],
+        relationship_candidates: [
+          { source: "AC boost pump", relation: "feeds", target: "collector tank", evidence: "flow arrow" },
+        ],
+      },
+      routing_evidence: ["flow arrows from tank to pump"],
+    },
+  });
+
+  assert.equal(caption.page_category, "technical_diagram");
+  assert.equal(caption.page_category_confidence, 0.75);
+  assert.match(caption.short_summary, /flow diagram/u);
+  assert.match(caption.technical_description, /AC boost pump/u);
+  assert.match(caption.technical_description, /feeds/u);
+});
+
 test("routeImageCaptionV2 routes relationship-heavy diagrams to gpt-5.4 and simple content to nano", () => {
   const deepDiagram = normalizeImageCaptionV2({
     schema_version: "a220_image_caption_v2",
