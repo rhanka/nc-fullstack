@@ -110,12 +110,17 @@ type MutablePartCanonicalizerInput = {
 };
 
 const API_ROOT = fileURLToPath(new URL("../../../api/", import.meta.url));
-const DEFAULT_EMBEDDING_MODEL = process.env.DATAPREP_EMBEDDING_MODEL?.trim() || "text-embedding-3-large";
+export const DEFAULT_EMBEDDING_MODEL = process.env.DATAPREP_EMBEDDING_MODEL?.trim() || "text-embedding-3-large";
+export const RETRIEVAL_ARTIFACT_CACHE_VERSION = "retrieval-artifacts-v1";
 const DEFAULT_PART_CANONICALIZATION_MODEL =
   process.env.DATAPREP_LLM_MODEL?.trim() || "gpt-5.4-nano";
 
 const TECH_DOCS_DIR = process.env.TECH_DOCS_DIR?.trim() || "a220-tech-docs";
 const NC_DIR = process.env.NC_DIR?.trim() || "a220-non-conformities";
+const DATAPREP_CODE_FINGERPRINT_FILES = [
+  fileURLToPath(import.meta.url),
+  fileURLToPath(new URL("./tech-docs-canonical.ts", import.meta.url)),
+];
 
 const ZONE_PATTERNS: readonly [RegExp, string][] = [
   [/\bRH\b/giu, "RH"],
@@ -431,14 +436,37 @@ export function readPreparedRecords(config: DataprepCorpusConfig): PreparedRecor
   return normalized;
 }
 
+export function buildDataprepCodeFingerprint(): string {
+  const hash = createHash("sha256");
+  for (const filePath of DATAPREP_CODE_FINGERPRINT_FILES) {
+    hash.update(path.basename(filePath));
+    hash.update("\n");
+    hash.update(readFileSync(filePath));
+    hash.update("\n");
+  }
+  return hash.digest("hex");
+}
+
+function stableMetadataString(metadata: Readonly<Record<string, unknown>>): string {
+  return JSON.stringify(
+    Object.fromEntries(Object.keys(metadata).sort().map((key) => [key, metadata[key]])),
+  );
+}
+
 export function buildSourceFingerprint(config: DataprepCorpusConfig, records: readonly PreparedRecord[]): string {
   const hash = createHash("sha256");
-  hash.update(config.sourceFile);
+  hash.update(config.corpus);
   hash.update("\n");
   for (const record of records) {
     hash.update(record.doc);
     hash.update("\n");
     hash.update(record.chunk_id);
+    hash.update("\n");
+    hash.update(record.source_path);
+    hash.update("\n");
+    hash.update(record.content);
+    hash.update("\n");
+    hash.update(stableMetadataString(record.metadata));
     hash.update("\n");
   }
   return hash.digest("hex");
@@ -602,6 +630,135 @@ function buildLexicalIndex(
   return {
     dbPath: path.join(targetRoot, "fts.sqlite3"),
     documentCount: records.length,
+  };
+}
+
+export interface RetrievalArtifactStatus {
+  readonly corpus: DataprepCorpusName;
+  readonly fresh: boolean;
+  readonly reasons: readonly string[];
+}
+
+function fileExists(filePath: string): boolean {
+  return existsSync(filePath);
+}
+
+function readJsonFile(filePath: string): Record<string, unknown> | null {
+  if (!fileExists(filePath)) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function readLexicalDocumentCount(dbPath: string): number | null {
+  if (!fileExists(dbPath)) {
+    return null;
+  }
+  try {
+    const db = new DatabaseSync(dbPath);
+    const row = db.prepare("SELECT COUNT(*) AS count FROM lexical_documents").get() as
+      | { count: number }
+      | undefined;
+    db.close();
+    return typeof row?.count === "number" ? row.count : null;
+  } catch {
+    return null;
+  }
+}
+
+export function inspectRetrievalArtifacts(
+  config: DataprepCorpusConfig,
+  expected: {
+    readonly fingerprint: string;
+    readonly codeFingerprint: string;
+    readonly recordCount: number;
+    readonly embeddingModel: string;
+  },
+): RetrievalArtifactStatus {
+  const reasons: string[] = [];
+  const manifestPath = path.join(config.outputRoot, "knowledge-manifest.json");
+  const manifest = readJsonFile(manifestPath);
+  if (!manifest) {
+    reasons.push("knowledge-manifest.json missing or invalid");
+  } else {
+    if (manifest.corpus !== config.corpus) {
+      reasons.push("knowledge manifest corpus mismatch");
+    }
+    if (manifest.mode === "knowledge-only") {
+      reasons.push("knowledge manifest is knowledge-only");
+    }
+    if (manifest.retrievalArtifactCacheVersion !== RETRIEVAL_ARTIFACT_CACHE_VERSION) {
+      reasons.push("retrieval artifact cache version mismatch");
+    }
+    if (manifest.fingerprint !== expected.fingerprint) {
+      reasons.push("knowledge manifest fingerprint mismatch");
+    }
+    if (manifest.retrievalArtifactCodeFingerprint !== expected.codeFingerprint) {
+      reasons.push("retrieval artifact code fingerprint mismatch");
+    }
+    if (manifest.embeddingModel !== expected.embeddingModel) {
+      reasons.push("embedding model mismatch");
+    }
+    if (manifest.recordCount !== expected.recordCount) {
+      reasons.push("knowledge manifest record count mismatch");
+    }
+    if (!manifest.vectorExport) {
+      reasons.push("knowledge manifest missing vectorExport section");
+    }
+    if (!manifest.lexical) {
+      reasons.push("knowledge manifest missing lexical section");
+    }
+  }
+
+  const vectorRoot = path.join(config.outputRoot, "vector-export");
+  const vectorManifest = readJsonFile(path.join(vectorRoot, "manifest.json"));
+  for (const filename of ["items.jsonl", "vectors.f32", "squared_norms.f32"]) {
+    if (!fileExists(path.join(vectorRoot, filename))) {
+      reasons.push(`vector-export/${filename} missing`);
+    }
+  }
+  if (!vectorManifest) {
+    reasons.push("vector-export/manifest.json missing or invalid");
+  } else {
+    if (vectorManifest.corpus !== config.corpus) {
+      reasons.push("vector manifest corpus mismatch");
+    }
+    if (vectorManifest.embeddingModel !== expected.embeddingModel) {
+      reasons.push("vector manifest embedding model mismatch");
+    }
+    if (vectorManifest.count !== expected.recordCount) {
+      reasons.push("vector manifest count mismatch");
+    }
+  }
+
+  const lexicalDbPath = path.join(config.outputRoot, "lexical", "fts.sqlite3");
+  const lexicalCount = readLexicalDocumentCount(lexicalDbPath);
+  if (lexicalCount === null) {
+    reasons.push("lexical/fts.sqlite3 missing or invalid");
+  } else if (lexicalCount !== expected.recordCount) {
+    reasons.push("lexical document count mismatch");
+  }
+
+  const ontologyRoot = path.join(config.outputRoot, "ontology");
+  for (const filename of ["atas.json", "parts.json", "zones.json", "relations.json", "occurrences.json", "index.json"]) {
+    if (!fileExists(path.join(ontologyRoot, filename))) {
+      reasons.push(`ontology/${filename} missing`);
+    }
+  }
+
+  const wikiRoot = path.join(config.outputRoot, "wiki");
+  if (!fileExists(path.join(wikiRoot, "index.json"))) {
+    reasons.push("wiki/index.json missing");
+  }
+
+  return {
+    corpus: config.corpus,
+    fresh: reasons.length === 0,
+    reasons,
   };
 }
 
@@ -896,6 +1053,9 @@ function buildKnowledgeManifest(
         generatedAt: new Date().toISOString(),
         sourceFile: config.sourceFile,
         fingerprint,
+        mode: "full",
+        retrievalArtifactCacheVersion: RETRIEVAL_ARTIFACT_CACHE_VERSION,
+        retrievalArtifactCodeFingerprint: buildDataprepCodeFingerprint(),
         llmAssistMode: options.llmAssistMode ?? "off",
         embeddingModel: options.embeddingProvider.model,
         partCanonicalizerModel: options.partCanonicalizer?.model ?? null,

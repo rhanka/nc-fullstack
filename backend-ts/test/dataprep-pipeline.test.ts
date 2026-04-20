@@ -10,6 +10,10 @@ import {
   normalizeNcPreparedRow,
   normalizeTechDocsPreparedRow,
   parseDelimitedTable,
+  buildDataprepCodeFingerprint,
+  buildSourceFingerprint,
+  inspectRetrievalArtifacts,
+  readPreparedRecords,
   runDataprepForCorpus,
   runKnowledgeDataprepForCorpus,
   type DataprepCorpusConfig,
@@ -64,6 +68,57 @@ test("parseDelimitedTable preserves multiline quoted TSV fields", () => {
   const rows = parseDelimitedTable('a\t"line 1\nline 2"\tb\n');
   assert.equal(rows.length, 1);
   assert.deepEqual(rows[0], ["a", "line 1\nline 2", "b"]);
+});
+
+test("buildSourceFingerprint changes when prepared content changes", () => {
+  const root = buildTestRoot();
+  const sourceFile = path.join(root, "tech_docs.csv.gz");
+  const outputRoot = path.join(root, "tech");
+
+  const header = ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"];
+  writeGzipTsv(sourceFile, [
+    header,
+    [
+      "A220-ATA52-door-page_0001.pdf",
+      "A220-ATA52-door.pdf",
+      "A220-ATA52-door-page_0001.json",
+      "Original door inspection limits.",
+      "32",
+      "A220-ATA52-door-page_0001.pdf 0",
+      "ATA 52",
+      "Door Frame",
+      "procedure",
+    ],
+  ]);
+
+  const config: DataprepCorpusConfig = {
+    corpus: "tech_docs",
+    sourceFile,
+    outputRoot,
+    hasHeader: true,
+    normalizeRow: normalizeTechDocsPreparedRow,
+  };
+  const firstFingerprint = buildSourceFingerprint(config, readPreparedRecords(config));
+
+  writeGzipTsv(sourceFile, [
+    header,
+    [
+      "A220-ATA52-door-page_0001.pdf",
+      "A220-ATA52-door.pdf",
+      "A220-ATA52-door-page_0001.json",
+      "Updated door inspection limits.",
+      "31",
+      "A220-ATA52-door-page_0001.pdf 0",
+      "ATA 52",
+      "Door Frame",
+      "procedure",
+    ],
+  ]);
+
+  assert.notEqual(
+    firstFingerprint,
+    buildSourceFingerprint(config, readPreparedRecords(config)),
+  );
 });
 
 test("runDataprepForCorpus builds retrieval and knowledge artifacts from prepared corpora", async () => {
@@ -150,6 +205,17 @@ test("runDataprepForCorpus builds retrieval and knowledge artifacts from prepare
   const techManifest = JSON.parse(readFileSync(techResult.knowledgeManifestPath, "utf8")) as Record<string, unknown>;
   assert.equal(techManifest.corpus, "tech_docs");
   assert.equal(techManifest.embeddingModel, "fake-embedding-model");
+  assert.equal(techManifest.retrievalArtifactCacheVersion, "retrieval-artifacts-v1");
+  assert.equal(techManifest.retrievalArtifactCodeFingerprint, buildDataprepCodeFingerprint());
+  assert.deepEqual(
+    inspectRetrievalArtifacts(techConfig, {
+      fingerprint: String(techManifest.fingerprint),
+      codeFingerprint: buildDataprepCodeFingerprint(),
+      recordCount: techResult.recordCount,
+      embeddingModel: "fake-embedding-model",
+    }),
+    { corpus: "tech_docs", fresh: true, reasons: [] },
+  );
 
   const techParts = JSON.parse(
     readFileSync(path.join(techResult.ontology.root, "parts.json"), "utf8"),
