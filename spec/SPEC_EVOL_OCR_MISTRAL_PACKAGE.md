@@ -262,6 +262,213 @@ Replay requirement before full rebuild:
 3. Compare route decisions against human evaluation of where `gpt-5.4` added useful RAG or Wiki value.
 4. Finalize a routing matrix before applying cascade to the full corpus.
 
+## L6.10b Calibration Spec
+
+Status: specification only. This section does not validate the cascade. It defines the replay that must validate or reject it before implementation.
+
+### Objective
+
+Calibrate whether `gpt-5.4-nano` can classify OCR-extracted image content well enough to route only the high-value cases to `gpt-5.4`.
+
+The routing objective has two consumers:
+
+- RAG: improve retrievable technical text, labels, identifiers, procedures and troubleshooting clues.
+- LLM Wiki: preserve entities and relationships for later linking into `ATA / part / zone / system_component` pages.
+
+### `a220_image_caption_v2`
+
+V2 is additive. It keeps V1 caption fields compatible with existing dataprep and adds a `routing_profile_v1` object.
+
+```json
+{
+  "schema_version": "a220_image_caption_v2",
+  "page_category": "technical_diagram",
+  "page_category_confidence": 0.0,
+  "is_non_content_page": false,
+  "retrieval_action": "index",
+  "retrieval_weight": 1.0,
+  "short_summary": "",
+  "technical_description": "",
+  "visible_text": [],
+  "visible_identifiers": [],
+  "ata_candidates": [],
+  "part_or_zone_candidates": [],
+  "diagram_elements": [],
+  "relationships_or_flows": [],
+  "warnings_or_limits": [],
+  "figure_or_table_refs": [],
+  "uncertainties": [],
+  "routing_profile_v1": {
+    "visual_content_type": "system_architecture_diagram",
+    "domain_candidates": ["power_plant_oil"],
+    "rag_signal": {
+      "ocr_markdown_sufficient": false,
+      "visual_caption_adds_retrieval_terms": true,
+      "retrieval_terms": ["oil pressure sensor", "EEC", "EICAS", "ARINC 429"]
+    },
+    "wiki_signal": {
+      "has_named_entities": true,
+      "has_entity_relationships": true,
+      "has_part_zone_or_ata_candidates": true,
+      "has_component_hierarchy": false,
+      "entity_candidates": [
+        {
+          "label": "Electronic Engine Control",
+          "type": "system_component",
+          "evidence": "visible block label"
+        }
+      ],
+      "relationship_candidates": [
+        {
+          "source": "Oil pressure sensor",
+          "relation": "sends_signal_to",
+          "target": "Electronic Engine Control",
+          "evidence": "visible analog line"
+        }
+      ]
+    },
+    "routing_evidence": [
+      "visible ARINC 429 label",
+      "visible CAN BUS label",
+      "sensor blocks connected to EEC"
+    ]
+  }
+}
+```
+
+The model is not allowed to output a final route decision. It outputs content type and evidence. TypeScript owns routing.
+
+### Controlled Vocabularies
+
+`visual_content_type` must be one of:
+
+- `cover_page`
+- `front_matter`
+- `index_page`
+- `blank_page`
+- `separation_page`
+- `simple_labeled_component_view`
+- `cockpit_panel_or_display`
+- `technical_table`
+- `technical_photo`
+- `technical_procedure`
+- `system_architecture_diagram`
+- `flow_diagram`
+- `wiring_signal_bus_diagram`
+- `fuel_oil_hydraulic_transfer_diagram`
+- `component_hierarchy_or_exploded_view`
+- `other`
+- `unclear`
+
+`domain_candidates` may include:
+
+- `fuel`
+- `power_plant_oil`
+- `flight_controls`
+- `hydraulics`
+- `avionics_electrical`
+- `airframe`
+- `doors`
+- `landing_gear`
+- `cabin`
+- `oxygen`
+- `fire_protection`
+- `unknown`
+
+Entity candidate `type` must be one of:
+
+- `ata`
+- `part`
+- `zone`
+- `system`
+- `system_component`
+- `sensor`
+- `actuator`
+- `valve`
+- `panel`
+- `display`
+- `procedure`
+- `figure`
+- `other`
+
+Relationship candidate `relation` must be one of:
+
+- `contains`
+- `part_of`
+- `located_in`
+- `connected_to`
+- `interfaces_with`
+- `feeds`
+- `sends_signal_to`
+- `receives_signal_from`
+- `controls`
+- `monitors`
+- `actuates`
+- `transfers_to`
+- `routes_to`
+- `indicates`
+- `protects`
+- `other`
+
+### Candidate Routing Matrix
+
+This matrix is a hypothesis to calibrate, not a final decision.
+
+| Type | Candidate route | Why |
+| --- | --- | --- |
+| `cover_page`, `front_matter`, `index_page`, `blank_page`, `separation_page` | `nano` / exclude | No deep pass needed unless OCR classification itself fails. |
+| `technical_table` | `nano` | Text is usually in Markdown; Wiki value is low unless entities are clearly named. |
+| `technical_photo` | `nano` | Useful for keywords and visual context, usually weak for structured relations. |
+| `cockpit_panel_or_display` | `nano` by default | Deep pass only if multiple controls/states/relations are extracted. |
+| `simple_labeled_component_view` | `nano` by default | Good for entity candidates; deep pass only if hierarchy is dense. |
+| `technical_procedure` | `nano` by default | Deep pass only if the image is the main source of step logic. |
+| `system_architecture_diagram` | `gpt-5.4` candidate | High relationship value for Wiki and troubleshooting. |
+| `flow_diagram` | `gpt-5.4` candidate | Flow direction and relation extraction are the main value. |
+| `wiring_signal_bus_diagram` | `gpt-5.4` candidate | Bus/signal interfaces need relationship precision. |
+| `fuel_oil_hydraulic_transfer_diagram` | `gpt-5.4` candidate | Transfer paths support both RAG and Wiki relations. |
+| `component_hierarchy_or_exploded_view` | `gpt-5.4` candidate | Useful for `contains` / `part_of` graph edges. |
+
+### Replay Protocol
+
+The replay must use the same deterministic benchmark sample as `L6.10a` unless the sample file is unavailable; if unavailable, regenerate the sample with the same deterministic selector.
+
+Steps:
+
+1. Run `gpt-5.4-nano` with the V2 prompt on each sampled OCR page.
+2. Persist raw V2 outputs and normalized profiles under an ignored benchmark output directory.
+3. Apply the candidate TypeScript routing matrix without calling `gpt-5.4`.
+4. Compare each route decision against the L6.10a paired benchmark and human review.
+5. Label each page as:
+   - `nano_sufficient`: no material RAG/Wiki gain from `gpt-5.4`.
+   - `deep_useful_for_rag`: `gpt-5.4` materially improves retrieval text.
+   - `deep_useful_for_wiki`: `gpt-5.4` materially improves entity/relation extraction.
+   - `deep_required`: `nano` misses critical relationships or entities.
+   - `ambiguous`: needs manual review or larger sample.
+6. Produce a report at `spec/REPORT_L6_10B_OCR_ROUTING_CALIBRATION.md`.
+
+### Metrics
+
+The report must include:
+
+- Total pages replayed.
+- Pages routed `nano`.
+- Pages routed `gpt-5.4`.
+- False `nano`: routed `nano` but human label is `deep_useful_for_rag`, `deep_useful_for_wiki` or `deep_required`.
+- False `gpt-5.4`: routed `gpt-5.4` but human label is `nano_sufficient`.
+- Ambiguous pages.
+- Estimated `gpt-5.4` call ratio for the full corpus.
+- Examples of each confusion category.
+
+### Acceptance Gate Before `L6.10d`
+
+The cascade can move to implementation only if the replay produces an explicit decision:
+
+- `accept_matrix`: false `nano` risk is acceptable and examples are understood.
+- `revise_matrix`: rules need adjustment and replay should be repeated.
+- `reject_cascade`: use a simpler model policy, for example `nano` only with technical retry, or `gpt-5.4` on a fixed explicit subset.
+
+No full rebuild may use the cascade until this gate is closed.
+
 ## Open Technical Questions
 
 - Whether page-wide classification needs additional OCR-text heuristics beyond the extracted image crop plus Markdown context.
