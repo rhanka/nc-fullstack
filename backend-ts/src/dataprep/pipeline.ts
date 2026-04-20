@@ -109,6 +109,13 @@ type MutablePartCanonicalizerInput = {
   sampleSnippets: string[];
 };
 
+type ProgressFieldValue = string | number | boolean | null | undefined;
+type DataprepProgressLogger = (
+  phase: string,
+  message: string,
+  fields?: Readonly<Record<string, ProgressFieldValue>>,
+) => void;
+
 const API_ROOT = fileURLToPath(new URL("../../../api/", import.meta.url));
 export const DEFAULT_EMBEDDING_MODEL = process.env.DATAPREP_EMBEDDING_MODEL?.trim() || "text-embedding-3-large";
 export const RETRIEVAL_ARTIFACT_CACHE_VERSION = "retrieval-artifacts-v1";
@@ -183,6 +190,23 @@ function uniqueSorted(values: Iterable<string>): string[] {
         .filter(Boolean),
     ),
   ).sort((left, right) => left.localeCompare(right));
+}
+
+function formatProgressFields(fields: Readonly<Record<string, ProgressFieldValue>> = {}): string {
+  const parts = Object.entries(fields)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => {
+      const rendered = typeof value === "string" && /\s/u.test(value) ? JSON.stringify(value) : String(value);
+      return `${key}=${rendered}`;
+    });
+  return parts.length > 0 ? ` ${parts.join(" ")}` : "";
+}
+
+function createConsoleProgressLogger(corpus: DataprepCorpusName): DataprepProgressLogger {
+  return (phase, message, fields) => {
+    const label = message ? `${phase} ${message}` : phase;
+    console.log(`[dataprep] ${corpus} ${label}${formatProgressFields(fields)}`);
+  };
 }
 
 function isPartCandidate(value: string): boolean {
@@ -487,6 +511,7 @@ async function buildVectorExport(
   records: readonly PreparedRecord[],
   embeddingProvider: EmbeddingProvider,
   batchSize: number,
+  progress?: DataprepProgressLogger,
 ): Promise<RunDataprepResult["vectorExport"]> {
   if (records.length === 0) {
     throw new Error(`No prepared records found for ${config.corpus}`);
@@ -502,10 +527,19 @@ async function buildVectorExport(
   const squaredNormChunks: Buffer[] = [];
   const itemLines: string[] = [];
   let dimensions: number | null = null;
+  const totalBatches = Math.ceil(records.length / batchSize);
 
   for (let offset = 0; offset < records.length; offset += batchSize) {
     const batch = records.slice(offset, offset + batchSize);
+    const batchNumber = Math.floor(offset / batchSize) + 1;
+    const completedRecords = Math.min(offset + batch.length, records.length);
+    progress?.("vector-export", `embedding batch ${batchNumber}/${totalBatches} start`, {
+      records: `${completedRecords}/${records.length}`,
+    });
     const embeddings = await embeddingProvider.embed(batch.map((record) => record.content));
+    progress?.("vector-export", `embedding batch ${batchNumber}/${totalBatches} done`, {
+      records: `${Math.min(offset + batch.length, records.length)}/${records.length}`,
+    });
     if (embeddings.length !== batch.length) {
       throw new Error(
         `Embedding batch size mismatch for ${config.corpus}: expected ${batch.length}, got ${embeddings.length}`,
@@ -1264,18 +1298,75 @@ export async function runDataprepForCorpus(
   config: DataprepCorpusConfig,
   options: RunDataprepOptions,
 ): Promise<RunDataprepResult> {
+  const startedAt = Date.now();
+  const logProgress = createConsoleProgressLogger(config.corpus);
+  logProgress("start", "", { source: config.sourceFile, output: config.outputRoot });
+
+  const readStartedAt = Date.now();
   const records = readPreparedRecords(config);
+  logProgress("records", "loaded", {
+    count: records.length,
+    durationMs: Date.now() - readStartedAt,
+  });
+
+  const fingerprintStartedAt = Date.now();
   const fingerprint = buildSourceFingerprint(config, records);
+  logProgress("fingerprint", "computed", {
+    sha256: fingerprint.slice(0, 12),
+    durationMs: Date.now() - fingerprintStartedAt,
+  });
+
+  const canonicalizationStartedAt = Date.now();
   const partCanonicalizations = await canonicalizeParts(records, options);
+  logProgress("canonicalization", "done", {
+    mode: options.llmAssistMode ?? "off",
+    parts: partCanonicalizations.size,
+    durationMs: Date.now() - canonicalizationStartedAt,
+  });
+
+  const vectorStartedAt = Date.now();
+  logProgress("vector-export", "start", {
+    records: records.length,
+    batchSize: options.embeddingBatchSize ?? 64,
+    model: options.embeddingProvider.model,
+  });
   const vectorExport = await buildVectorExport(
     config,
     records,
     options.embeddingProvider,
     options.embeddingBatchSize ?? 64,
+    logProgress,
   );
+  logProgress("vector-export", "done", {
+    records: vectorExport.count,
+    dimensions: vectorExport.dimensions,
+    durationMs: Date.now() - vectorStartedAt,
+  });
+
+  const lexicalStartedAt = Date.now();
   const lexical = buildLexicalIndex(config, records, fingerprint);
+  logProgress("lexical", "done", {
+    records: lexical.documentCount,
+    durationMs: Date.now() - lexicalStartedAt,
+  });
+
+  const ontologyStartedAt = Date.now();
   const ontology = buildOntologyArtifacts(config, records, fingerprint, partCanonicalizations);
+  logProgress("ontology", "done", {
+    ata: ontology.ataCount,
+    parts: ontology.partCount,
+    zones: ontology.zoneCount,
+    occurrences: ontology.occurrenceCount,
+    durationMs: Date.now() - ontologyStartedAt,
+  });
+
+  const wikiStartedAt = Date.now();
   const wiki = buildWikiArtifacts(config, ontology.root);
+  logProgress("wiki", "done", {
+    pages: wiki.pageCount,
+    durationMs: Date.now() - wikiStartedAt,
+  });
+
   const partialResult = {
     recordCount: records.length,
     vectorExport,
@@ -1284,6 +1375,11 @@ export async function runDataprepForCorpus(
     wiki,
   };
   const knowledgeManifestPath = buildKnowledgeManifest(config, fingerprint, partialResult, options);
+  logProgress("manifest", "written", { path: knowledgeManifestPath });
+  logProgress("done", "", {
+    records: records.length,
+    durationMs: Date.now() - startedAt,
+  });
   return {
     corpus: config.corpus,
     ...partialResult,
