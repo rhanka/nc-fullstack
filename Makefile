@@ -251,6 +251,8 @@ dataprep-upload-retrieval-cache: check-s5cmd
 		echo "▶ Uploading retrieval cache artifacts to Scaleway..."; \
 		export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY}; \
 		export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY}; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/managed_dataset/a220_tech_docs_content_canonical.csv.gz' s3://${S3_BUCKET_DOCS}/managed_dataset/a220_tech_docs_content_canonical.csv.gz && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/managed_dataset/a220_tech_docs_content_canonical.audit.json' s3://${S3_BUCKET_DOCS}/managed_dataset/a220_tech_docs_content_canonical.audit.json && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/lexical/*' s3://${S3_BUCKET_DOCS}/lexical/ && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/vector-export/*' s3://${S3_BUCKET_DOCS}/vector-export/ && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/ontology/*' s3://${S3_BUCKET_DOCS}/ontology/ && \
