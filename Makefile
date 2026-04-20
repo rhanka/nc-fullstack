@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci
+.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-upload-retrieval-cache
 
 # ----------------------------
 # Helpers
@@ -11,7 +11,7 @@
 # ----------------------------
 export UI_DIR          ?= ui
 export API_IMAGE_NAME  ?= nc-chatbot-api
-export API_VERSION     ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/package-lock.json backend-ts/Dockerfile shared api/src api/requirements.txt api/data/${TECH_DOCS_DIR}/ontology api/data/${TECH_DOCS_DIR}/wiki api/data/${NC_DIR}/ontology api/data/${NC_DIR}/wiki" | tr ' ' '\n' | xargs -I '{}' sh -c 'test -e "$$1" && find "$$1" -type f || true' sh '{}' | egrep -v '(__pycache__|/ontology/index\.json)' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION     ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/package-lock.json backend-ts/Dockerfile shared api/src api/requirements.txt api/data/${TECH_DOCS_DIR}/lexical api/data/${TECH_DOCS_DIR}/ontology api/data/${TECH_DOCS_DIR}/vector-export api/data/${TECH_DOCS_DIR}/wiki api/data/${TECH_DOCS_DIR}/knowledge-manifest.json api/data/${NC_DIR}/lexical api/data/${NC_DIR}/ontology api/data/${NC_DIR}/vector-export api/data/${NC_DIR}/wiki api/data/${NC_DIR}/knowledge-manifest.json" | tr ' ' '\n' | xargs -I '{}' sh -c 'test -e "$$1" && find "$$1" -type f || true' sh '{}' | egrep -v '(__pycache__|/ontology/index\.json)' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_CPU_LIMIT   ?= 250
 export API_MEM_LIMIT   ?= 512
 export UI_VERSION      ?= $(shell echo "ui/src ui/static ui/package.json ui/Dockerfile ui/vite.config.ts ui/svelte.config.js ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
@@ -81,7 +81,7 @@ ui-check: ui-install
 # Containerisation
 # ----------------------------
 
-api-prepare-data-ci: dataprep-knowledge-ci
+api-prepare-data-ci: dataprep-retrieval-ci
 	@echo "✔️ API data artifacts ready for CI image build."
 
 api-build: api-prepare-data-ci
@@ -135,6 +135,11 @@ dataprep-knowledge-tech-docs: api-install
 dataprep-knowledge-ci: dataprep-download-minimal api-install
 	@echo "▶ Preparing knowledge artifacts for API image..."
 	cd backend-ts && npm run dataprep:knowledge
+
+dataprep-retrieval-ci: dataprep-download-minimal api-install
+	@echo "▶ Ensuring retrieval artifacts for API image..."
+	cd backend-ts && npm run dataprep:ensure-retrieval
+	$(MAKE) dataprep-upload-retrieval-cache
 
 check: ui-build api-test api-contracts
 	@echo "✔️ UI build and backend checks completed."
@@ -233,6 +238,29 @@ dataprep-upload-tech-docs: check-s5cmd
 	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY} &&\
 	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
 		cp --acl "public-read" 'api/data/${S3_BUCKET_DOCS}/*' s3://${S3_BUCKET_DOCS}/
+
+dataprep-upload-retrieval-cache: check-s5cmd
+	@if [ "${DATAPREP_UPLOAD_RETRIEVAL_CACHE}" = "0" ]; then \
+		echo "↷ Retrieval cache upload disabled."; \
+	elif [ -z "${S3_DATAPREP_ACCESS_KEY}" ] || [ -z "${S3_DATAPREP_SECRET_KEY}" ]; then \
+		echo "↷ S3_DATAPREP_ACCESS_KEY/S3_DATAPREP_SECRET_KEY missing; retrieval cache upload skipped."; \
+	else \
+		echo "▶ Uploading retrieval cache artifacts to Scaleway..."; \
+		export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY}; \
+		export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY}; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/lexical/*' s3://${S3_BUCKET_DOCS}/lexical/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/vector-export/*' s3://${S3_BUCKET_DOCS}/vector-export/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/ontology/*' s3://${S3_BUCKET_DOCS}/ontology/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/wiki/index.json' s3://${S3_BUCKET_DOCS}/wiki/index.json && \
+		if [ -d 'api/data/${TECH_DOCS_DIR}/wiki/parts' ]; then s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/wiki/parts/*' s3://${S3_BUCKET_DOCS}/wiki/parts/; fi && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/knowledge-manifest.json' s3://${S3_BUCKET_DOCS}/knowledge-manifest.json && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/lexical/*' s3://${S3_BUCKET_NC}/lexical/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/vector-export/*' s3://${S3_BUCKET_NC}/vector-export/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/ontology/*' s3://${S3_BUCKET_NC}/ontology/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/wiki/index.json' s3://${S3_BUCKET_NC}/wiki/index.json && \
+		if [ -d 'api/data/${NC_DIR}/wiki/parts' ]; then s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/wiki/parts/*' s3://${S3_BUCKET_NC}/wiki/parts/; fi && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/knowledge-manifest.json' s3://${S3_BUCKET_NC}/knowledge-manifest.json; \
+	fi
 
 dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
 	@echo "✔️  All data upload completed."

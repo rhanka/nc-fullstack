@@ -41,6 +41,8 @@ jobs:
           DOCKER_USERNAME: nologin
           DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          S3_DATAPREP_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+          S3_DATAPREP_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
         continue-on-error: true
 
       - name: Capture API version
@@ -52,6 +54,8 @@ jobs:
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          S3_DATAPREP_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+          S3_DATAPREP_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
           API_VERSION: ${{ steps.api_version.outputs.api_version }}
         if: steps.image-check.outcome == 'failure'
 

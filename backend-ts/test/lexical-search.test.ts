@@ -47,3 +47,17 @@ test("searchLexicalCorpus rebuilds and returns ranked matches", () => {
   assert.equal(results[0]?.doc, "ATA-56-demo.md");
   assert.equal(results[0]?.lexical_rank, 1);
 });
+
+test("searchLexicalCorpus returns empty results when source root is absent and index is empty", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "nc-backend-ts-lexical-missing-source-"));
+  const corpus: LexicalCorpusConfig = {
+    name: "missing_source",
+    sourceRoot: path.join(root, "missing-source"),
+    fileGlobSuffix: ".md",
+    dbPath: path.join(root, "fts.sqlite3"),
+  };
+
+  const results = searchLexicalCorpus(corpus, "windshield rivet", { limit: 5 });
+
+  assert.deepEqual(results, []);
+});
