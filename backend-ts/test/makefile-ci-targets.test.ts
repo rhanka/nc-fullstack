@@ -19,6 +19,10 @@ test("API image check only prepares retrieval artifacts, not runtime PDF assets"
   assert.ok(!targetPrerequisites("dataprep-retrieval-ci").includes("dataprep-download-minimal"));
 });
 
+test("API image check does not install dependencies or regenerate retrieval artifacts", () => {
+  assert.deepEqual(targetPrerequisites("api-image-check"), ["dataprep-download-retrieval-inputs", "docker-login"]);
+});
+
 test("API build downloads runtime assets after retrieval artifacts are ready", () => {
   assert.deepEqual(targetPrerequisites("api-build"), ["api-prepare-data-ci", "api-runtime-data-ci"]);
   assert.deepEqual(targetPrerequisites("api-runtime-data-ci"), ["dataprep-download-runtime-assets"]);
