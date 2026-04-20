@@ -64,6 +64,20 @@ function buildTestRoot(): string {
   return mkdtempSync(path.join(os.tmpdir(), "nc-backend-ts-dataprep-"));
 }
 
+async function captureConsoleLogs(run: () => Promise<void>): Promise<string[]> {
+  const originalLog = console.log;
+  const lines: string[] = [];
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map(String).join(" "));
+  };
+  try {
+    await run();
+  } finally {
+    console.log = originalLog;
+  }
+  return lines;
+}
+
 test("parseDelimitedTable preserves multiline quoted TSV fields", () => {
   const rows = parseDelimitedTable('a\t"line 1\nline 2"\tb\n');
   assert.equal(rows.length, 1);
@@ -246,6 +260,80 @@ test("runDataprepForCorpus builds retrieval and knowledge artifacts from prepare
   ) as Array<Record<string, unknown>>;
   assert.equal(ncOccurrences[0]?.task_kind, "000");
   assert.ok(Array.isArray(ncOccurrences[0]?.part_numbers));
+});
+
+test("runDataprepForCorpus logs progress across long rebuild phases", async () => {
+  const root = buildTestRoot();
+  const techSource = path.join(root, "tech_docs.csv.gz");
+  const techOutputRoot = path.join(root, "tech");
+  mkdirSync(techOutputRoot, { recursive: true });
+
+  writeGzipTsv(techSource, [
+    ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"],
+    [
+      "A220-ATA52-door-page_0001.pdf",
+      "A220-ATA52-door.pdf",
+      "A220-ATA52-door-page_0001.json",
+      "Door frame inspection reference.",
+      "64",
+      "A220-ATA52-door-page_0001.pdf 0",
+      "ATA 52",
+      "Door Frame",
+      "procedure",
+    ],
+    [
+      "A220-ATA52-door-page_0002.pdf",
+      "A220-ATA52-door.pdf",
+      "A220-ATA52-door-page_0002.json",
+      "Passenger door seal installation reference.",
+      "64",
+      "A220-ATA52-door-page_0002.pdf 0",
+      "ATA 52",
+      "Passenger Door Seal",
+      "procedure",
+    ],
+    [
+      "A220-ATA28-tank-page_0001.pdf",
+      "A220-ATA28-tank.pdf",
+      "A220-ATA28-tank-page_0001.json",
+      "Fuel tank bonding inspection reference.",
+      "64",
+      "A220-ATA28-tank-page_0001.pdf 0",
+      "ATA 28",
+      "Fuel Tank",
+      "procedure",
+    ],
+  ]);
+
+  const techConfig: DataprepCorpusConfig = {
+    corpus: "tech_docs",
+    sourceFile: techSource,
+    outputRoot: techOutputRoot,
+    hasHeader: true,
+    normalizeRow: normalizeTechDocsPreparedRow,
+  };
+
+  const lines = await captureConsoleLogs(async () => {
+    await runDataprepForCorpus(techConfig, {
+      embeddingProvider: new FakeEmbeddingProvider(),
+      embeddingBatchSize: 2,
+    });
+  });
+  const text = lines.join("\n");
+
+  assert.match(text, /\[dataprep\] tech_docs start source=/u);
+  assert.match(text, /\[dataprep\] tech_docs records loaded count=3/u);
+  assert.match(text, /\[dataprep\] tech_docs vector-export start records=3 batchSize=2/u);
+  assert.match(text, /\[dataprep\] tech_docs vector-export embedding batch 1\/2 start records=2\/3/u);
+  assert.match(text, /\[dataprep\] tech_docs vector-export embedding batch 1\/2 done records=2\/3/u);
+  assert.match(text, /\[dataprep\] tech_docs vector-export embedding batch 2\/2 start records=3\/3/u);
+  assert.match(text, /\[dataprep\] tech_docs vector-export embedding batch 2\/2 done records=3\/3/u);
+  assert.match(text, /\[dataprep\] tech_docs vector-export done records=3 dimensions=3 durationMs=\d+/u);
+  assert.match(text, /\[dataprep\] tech_docs lexical done records=3 durationMs=\d+/u);
+  assert.match(text, /\[dataprep\] tech_docs ontology done ata=2 parts=3 zones=0 occurrences=0 durationMs=\d+/u);
+  assert.match(text, /\[dataprep\] tech_docs wiki done pages=3 durationMs=\d+/u);
+  assert.match(text, /\[dataprep\] tech_docs manifest written path=/u);
+  assert.match(text, /\[dataprep\] tech_docs done records=3 durationMs=\d+/u);
 });
 
 test("runKnowledgeDataprepForCorpus builds ontology and wiki without embeddings", async () => {
