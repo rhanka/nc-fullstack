@@ -329,6 +329,82 @@ test("runOcrTechDocsDataprep does not reuse a previous image audit for no-image 
   assert.equal(existsSync(path.join(ocrDir, "A220-door_page_0002.image-caption.audit.json")), false);
 });
 
+test("runOcrTechDocsDataprep uses isolated caption clients with concurrent workers", async () => {
+  const root = buildTestRoot();
+  const pagesDir = path.join(root, "pages");
+  const ocrDir = path.join(root, "ocr");
+  const outputFile = path.join(root, "managed_dataset", "a220_tech_docs_content_prepared.csv.gz");
+  mkdirSync(pagesDir, { recursive: true });
+  mkdirSync(ocrDir, { recursive: true });
+  for (const page of ["0001", "0002"]) {
+    writeFileSync(path.join(pagesDir, "A220-door_page_" + page + ".pdf"), "");
+    writeFileSync(
+      path.join(ocrDir, "A220-door_page_" + page + ".json"),
+      JSON.stringify({
+        pages: [
+          {
+            index: 0,
+            markdown: "# Door " + page + "\n\n![img-0.jpeg](img-0.jpeg)",
+            images: [{ id: "img-0.jpeg", imageBase64: "data:image/png;base64,aGVsbG8=" }],
+          },
+        ],
+      }),
+    );
+  }
+
+  let clientsCreated = 0;
+  const seenDocs: string[] = [];
+
+  const result = await runOcrTechDocsDataprep({
+    pagesDir,
+    ocrDir,
+    outputFile,
+    mode: "existing",
+    captionMode: "force",
+    captionConcurrency: 2,
+    imageCaptionClientFactory: () => {
+      clientsCreated += 1;
+      let lastDoc = "";
+      return {
+        provider: "mock",
+        model: "gpt-5.4-nano->gpt-5.4",
+        async analyzePage(input) {
+          lastDoc = input.doc;
+          seenDocs.push(input.doc);
+          await new Promise((resolve) => setTimeout(resolve, input.doc.includes("0001") ? 15 : 1));
+          return normalizeImageCaptionAnalysis({
+            schema_version: "a220_image_caption_v1",
+            page_category: "technical_photo",
+            page_category_confidence: 0.8,
+            retrieval_action: "index",
+            retrieval_weight: 1,
+            short_summary: "Caption for " + input.doc,
+            technical_description: "Caption for " + input.doc,
+          });
+        },
+        getLastAudit() {
+          return {
+            doc: lastDoc,
+            selectedModel: "gpt-5.4-nano",
+            route: "nano",
+            trigger: "nano_route",
+          };
+        },
+      };
+    },
+  });
+
+  assert.equal(result.ocr.captionJsonWritten, 2);
+  assert.equal(clientsCreated, 2);
+  assert.deepEqual(seenDocs.sort(), ["A220-door_page_0001.pdf", "A220-door_page_0002.pdf"]);
+  for (const page of ["0001", "0002"]) {
+    const audit = JSON.parse(
+      readFileSync(path.join(ocrDir, "A220-door_page_" + page + ".image-caption.audit.json"), "utf8"),
+    ) as { doc?: string };
+    assert.equal(audit.doc, "A220-door_page_" + page + ".pdf");
+  }
+});
+
 
 test("OpenAI image caption client sends OCR-extracted images with markdown context", async () => {
   const originalFetch = globalThis.fetch;
