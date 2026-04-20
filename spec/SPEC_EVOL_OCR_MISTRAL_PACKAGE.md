@@ -500,6 +500,40 @@ Normalization:
 
 The default single-model policy remains unchanged unless the cascade policy is explicitly enabled.
 
+### `L6.10e` Batch OCR Caption Execution
+
+The full-corpus image-caption run must use OpenAI Batch for the high-volume primary pass instead of synchronous page-by-page calls.
+
+Rationale:
+
+- OpenAI Batch supports `/v1/responses` JSONL requests, has a separate async processing pool, and gives a 50% input/output discount for workloads that can complete within 24h.
+- The primary pass is offline dataprep, so it does not need interactive latency.
+- A synchronous runner remains useful only for smoke tests, debugging and small limits.
+
+Batch shape:
+
+1. Create a primary `gpt-5.4-nano` batch over OCR pages that contain extracted images.
+2. Upload each OCR-extracted image crop with `purpose=vision`; the batch JSONL references images by `file_id` rather than embedding base64 payloads directly.
+3. Each JSONL line targets `/v1/responses`, uses the `a220_image_caption_v2` prompt, includes immediate OCR Markdown context and a unique `custom_id`.
+4. Import batch results by `custom_id`, normalize to `a220_image_caption_v2`, write `*.image-caption.json`, and write `*.image-caption.audit.json`.
+5. Apply the TypeScript route matrix locally after primary import.
+6. For pages routed `gpt-5.4`, create a second deep batch with model `gpt-5.4`; importing the deep batch overwrites the final caption/audit for those pages.
+7. Run the normal OCR dataprep after imports to fill text-only default captions where needed and regenerate enriched `__with_img_desc.*` plus the prepared CSV.
+
+Make contract:
+
+- `make dataprep-ocr-caption-batch-create`: creates the batch, uploads vision files, uploads the JSONL input, creates an OpenAI batch and writes a versioned manifest.
+- `make dataprep-ocr-caption-batch-status`: refreshes manifest status and output/error file IDs.
+- `make dataprep-ocr-caption-batch-import`: imports completed output JSONL into caption/audit sidecars.
+
+Relevant environment:
+
+- `OCR_CAPTION_BATCH_PHASE=primary|deep`, default `primary`.
+- `OCR_CAPTION_BATCH_MODE=missing|force`, default `missing`.
+- `OCR_CAPTION_BATCH_DIR` or `OCR_CAPTION_BATCH_MANIFEST` for explicit batch state.
+- `OCR_CAPTION_BATCH_MODEL`, with defaults `gpt-5.4-nano` for primary and `gpt-5.4` for deep.
+- `OCR_CAPTION_BATCH_LIMIT` for safe dry runs.
+
 ## Open Technical Questions
 
 - Whether page-wide classification needs additional OCR-text heuristics beyond the extracted image crop plus Markdown context.

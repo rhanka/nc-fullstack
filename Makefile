@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-knowledge-ci
+.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-knowledge-ci
 
 # ----------------------------
 # Helpers
@@ -143,6 +143,18 @@ dataprep-ocr-caption-benchmark: api-install
 dataprep-ocr-routing-calibration: api-install
 	@echo "▶ Running OCR routing calibration replay..."
 	cd backend-ts && npm run dataprep:ocr-routing-calibration
+
+dataprep-ocr-caption-batch-create: api-install
+	@echo "▶ Creating OCR caption OpenAI batch..."
+	cd backend-ts && npm run dataprep:ocr-caption-batch:create
+
+dataprep-ocr-caption-batch-status: api-install
+	@echo "▶ Checking OCR caption OpenAI batch..."
+	cd backend-ts && npm run dataprep:ocr-caption-batch:status
+
+dataprep-ocr-caption-batch-import: api-install
+	@echo "▶ Importing OCR caption OpenAI batch results..."
+	cd backend-ts && npm run dataprep:ocr-caption-batch:import
 
 dataprep-knowledge-ci: dataprep-download-minimal api-install
 	@echo "▶ Preparing knowledge artifacts for API image..."
