@@ -63,6 +63,7 @@ function captionPayload(visualContentType: string): string {
 class FakeBatchClient implements OcrCaptionBatchApiClient {
   uploaded: Array<{ fileName: string; purpose: string; content: string | Uint8Array }> = [];
   jsonl = "";
+  failFirstVisionUpload = false;
 
   async uploadFile(input: {
     readonly fileName: string;
@@ -70,6 +71,10 @@ class FakeBatchClient implements OcrCaptionBatchApiClient {
     readonly content: Uint8Array | string;
     readonly purpose: "vision" | "batch";
   }): Promise<string> {
+    if (this.failFirstVisionUpload && input.purpose === "vision") {
+      this.failFirstVisionUpload = false;
+      throw new Error("temporary timeout");
+    }
     this.uploaded.push(input);
     if (input.purpose === "batch") {
       this.jsonl = Buffer.from(input.content).toString("utf8");
@@ -124,6 +129,49 @@ test("createOcrCaptionBatch uploads OCR images and creates a Responses JSONL bat
   assert.match(JSON.stringify(request.body), /file_id/u);
   assert.match(JSON.stringify(request.body), /OCR markdown context/u);
   assert.match(readFileSync(result.manifestPath, "utf8"), /batch-123/u);
+});
+
+test("createOcrCaptionBatch retries uploads and reuses checkpointed vision files", async () => {
+  const root = buildRoot();
+  writeOcrPage(root, "A220-door_page_0001.pdf", "# Door\n\n![img](img.png)");
+  const batchDir = path.join(root, "batch");
+  const firstClient = new FakeBatchClient();
+  firstClient.failFirstVisionUpload = true;
+
+  const first = await createOcrCaptionBatch({
+    pagesDir: path.join(root, "pages"),
+    ocrDir: path.join(root, "ocr"),
+    outputFile: path.join(root, "managed", "prepared.csv.gz"),
+    batchDir,
+    phase: "primary",
+    mode: "missing",
+    model: "gpt-5.4-nano",
+    reasoning: "low",
+    imageDetail: "original",
+    maxOutputTokens: 6000,
+    client: firstClient,
+  });
+  assert.equal(first.manifest.requestCount, 1);
+  assert.equal(firstClient.uploaded.filter((entry) => entry.purpose === "vision").length, 1);
+
+  const secondClient = new FakeBatchClient();
+  await createOcrCaptionBatch({
+    pagesDir: path.join(root, "pages"),
+    ocrDir: path.join(root, "ocr"),
+    outputFile: path.join(root, "managed", "prepared.csv.gz"),
+    batchDir,
+    phase: "primary",
+    mode: "force",
+    model: "gpt-5.4-nano",
+    reasoning: "low",
+    imageDetail: "original",
+    maxOutputTokens: 6000,
+    client: secondClient,
+  });
+
+  assert.equal(secondClient.uploaded.filter((entry) => entry.purpose === "vision").length, 0);
+  assert.equal(secondClient.uploaded.filter((entry) => entry.purpose === "batch").length, 1);
+  assert.match(readFileSync(path.join(batchDir, "vision-files.json"), "utf8"), /file-vision-1/u);
 });
 
 test("importOcrCaptionBatchResults writes primary captions and marks deep candidates pending", async () => {

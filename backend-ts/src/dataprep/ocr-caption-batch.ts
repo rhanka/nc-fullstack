@@ -59,6 +59,11 @@ export interface OcrCaptionBatchManifest {
   readonly errorFileId?: string | null;
 }
 
+export interface OcrCaptionVisionFileCheckpoint {
+  readonly schema_version: "a220_ocr_caption_batch_vision_files_v1";
+  readonly files: Record<string, string>;
+}
+
 export interface OcrCaptionBatchObject {
   readonly id: string;
   readonly status: string;
@@ -121,6 +126,10 @@ function ensureDir(dirPath: string): void {
   mkdirSync(dirPath, { recursive: true });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function timestampSlug(date = new Date()): string {
   return date.toISOString().replace(/[:.]/gu, "-");
 }
@@ -160,6 +169,26 @@ function slugCustomId(phase: OcrCaptionBatchPhase, doc: string): string {
       .replace(/^-+|-+$/gu, "")
       .slice(0, 180)
   );
+}
+
+function visionFileCheckpointPath(batchDir: string): string {
+  return path.join(batchDir, "vision-files.json");
+}
+
+function readVisionFileCheckpoint(batchDir: string): OcrCaptionVisionFileCheckpoint {
+  const checkpointPath = visionFileCheckpointPath(batchDir);
+  if (!existsSync(checkpointPath)) {
+    return { schema_version: "a220_ocr_caption_batch_vision_files_v1", files: {} };
+  }
+  return readJsonFile<OcrCaptionVisionFileCheckpoint>(checkpointPath);
+}
+
+function writeVisionFileCheckpoint(batchDir: string, checkpoint: OcrCaptionVisionFileCheckpoint): void {
+  atomicWriteFile(visionFileCheckpointPath(batchDir), JSON.stringify(checkpoint, null, 2) + "\n");
+}
+
+function visionFileCheckpointKey(doc: string, imageIndex: number): string {
+  return pageBaseFromDoc(doc) + "#image-" + String(imageIndex + 1);
 }
 
 function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; mimeType: string; extension: string } {
@@ -225,29 +254,73 @@ function shouldIncludeDoc(options: OcrCaptionBatchCreateOptions, doc: string): b
 
 async function uploadVisionFiles(
   client: OcrCaptionBatchApiClient,
+  batchDir: string,
+  checkpoint: OcrCaptionVisionFileCheckpoint,
   doc: string,
   imageDataUrls: readonly string[],
 ): Promise<string[]> {
   const fileIds: string[] = [];
   for (const [index, dataUrl] of imageDataUrls.entries()) {
+    const checkpointKey = visionFileCheckpointKey(doc, index);
+    const checkpointedFileId = checkpoint.files[checkpointKey];
+    if (checkpointedFileId) {
+      fileIds.push(checkpointedFileId);
+      continue;
+    }
     const image = dataUrlToBytes(dataUrl);
     const fileName = pageBaseFromDoc(doc) + "_image_" + String(index + 1) + "." + image.extension;
-    fileIds.push(
-      await client.uploadFile({
-        fileName,
-        contentType: image.mimeType,
-        content: image.bytes,
-        purpose: "vision",
-      }),
-    );
+    const fileId = await uploadFileWithRetry(client, {
+      fileName,
+      contentType: image.mimeType,
+      content: image.bytes,
+      purpose: "vision",
+    });
+    checkpoint.files[checkpointKey] = fileId;
+    writeVisionFileCheckpoint(batchDir, checkpoint);
+    fileIds.push(fileId);
   }
   return fileIds;
+}
+
+async function uploadFileWithRetry(
+  client: OcrCaptionBatchApiClient,
+  input: {
+    readonly fileName: string;
+    readonly contentType: string;
+    readonly content: Uint8Array | string;
+    readonly purpose: "vision" | "batch";
+  },
+): Promise<string> {
+  const maxAttempts = 4;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await client.uploadFile(input);
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts) {
+        break;
+      }
+      await sleep(750 * attempt);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function uploadBatchInputFile(client: OcrCaptionBatchApiClient, inputJsonlPath: string): Promise<string> {
+  return await uploadFileWithRetry(client, {
+    fileName: "input.jsonl",
+    contentType: "application/jsonl",
+    content: readFileSync(inputJsonlPath),
+    purpose: "batch",
+  });
 }
 
 export async function createOcrCaptionBatch(
   options: OcrCaptionBatchCreateOptions,
 ): Promise<OcrCaptionBatchCreateResult> {
   ensureDir(options.batchDir);
+  const visionCheckpoint = readVisionFileCheckpoint(options.batchDir);
   const requests: OcrCaptionBatchRequestRecord[] = [];
   const jsonlLines: string[] = [];
   let skipped = 0;
@@ -269,7 +342,7 @@ export async function createOcrCaptionBatch(
       skipped += 1;
       continue;
     }
-    const imageFileIds = await uploadVisionFiles(options.client, doc, imageDataUrls);
+    const imageFileIds = await uploadVisionFiles(options.client, options.batchDir, visionCheckpoint, doc, imageDataUrls);
     const customId = slugCustomId(options.phase, doc);
     const body = buildResponseBody({
       doc,
@@ -297,12 +370,7 @@ export async function createOcrCaptionBatch(
   if (requests.length === 0) {
     throw new Error("No OCR image caption requests selected for batch");
   }
-  const inputFileId = await options.client.uploadFile({
-    fileName: "input.jsonl",
-    contentType: "application/jsonl",
-    content: readFileSync(inputJsonlPath),
-    purpose: "batch",
-  });
+  const inputFileId = await uploadBatchInputFile(options.client, inputJsonlPath);
   const batch = await options.client.createBatch({
     inputFileId,
     endpoint: "/v1/responses",
