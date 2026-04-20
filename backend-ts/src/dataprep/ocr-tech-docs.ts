@@ -114,6 +114,8 @@ export interface RunOcrTechDocsDataprepOptions extends BuildPreparedTechDocsCsvO
   readonly forceOcr?: boolean;
   readonly captionMode?: OcrTechDocsCaptionMode;
   readonly imageCaptionClient?: ImageCaptionClient;
+  readonly imageCaptionClientFactory?: () => ImageCaptionClient;
+  readonly captionConcurrency?: number;
   readonly mistralModel?: string;
 }
 
@@ -935,27 +937,35 @@ async function generateImageCaptionArtifacts(
   if (captionMode === "off") {
     return { captionJsonWritten: 0, captionJsonSkipped: docs.length };
   }
-  const client = options.imageCaptionClient ?? createImageCaptionClientFromEnv();
+  const sharedClient = options.imageCaptionClient ?? (options.imageCaptionClientFactory ? null : createImageCaptionClientFromEnv());
+  const createClientForPage = (): ImageCaptionClient => options.imageCaptionClientFactory?.() ?? sharedClient!;
+  const captionConcurrency =
+    options.imageCaptionClient && !options.imageCaptionClientFactory
+      ? 1
+      : Math.max(1, Math.min(8, Math.trunc(options.captionConcurrency ?? 1)));
   let captionJsonWritten = 0;
   let captionJsonSkipped = 0;
-  for (const doc of docs) {
+  let nextDocIndex = 0;
+
+  async function processDoc(doc: string): Promise<void> {
     const outputPath = captionJsonPath(options.ocrDir, doc);
     if (captionMode === "missing" && existsSync(outputPath)) {
       captionJsonSkipped += 1;
-      continue;
+      return;
     }
     const ocrPath = findOcrJsonPath(options.ocrDir, doc, false);
     if (!ocrPath) {
       captionJsonSkipped += 1;
-      continue;
+      return;
     }
     const ocrDocument = readJsonFile<OcrDocument>(ocrPath);
     const markdown = extractMarkdown(ocrDocument, true);
     const imageDataUrls = extractImageDataUrls(ocrDocument);
     const usedImageCaptionClient = imageDataUrls.length > 0;
+    const client = usedImageCaptionClient ? createClientForPage() : null;
     const analysis =
       usedImageCaptionClient
-        ? await client.analyzePage({ doc, markdown, imageDataUrls })
+        ? await client!.analyzePage({ doc, markdown, imageDataUrls })
         : inferDefaultAnalysis(markdown, doc);
     atomicWriteFile(outputPath, JSON.stringify(analysis, null, 2) + "\n");
     const audit = usedImageCaptionClient
@@ -969,6 +979,20 @@ async function generateImageCaptionArtifacts(
     }
     captionJsonWritten += 1;
   }
+
+  await Promise.all(
+    Array.from({ length: captionConcurrency }, async () => {
+      for (;;) {
+        const docIndex = nextDocIndex;
+        nextDocIndex += 1;
+        if (docIndex >= docs.length) {
+          return;
+        }
+        await processDoc(docs[docIndex]!);
+      }
+    }),
+  );
+
   return { captionJsonWritten, captionJsonSkipped };
 }
 
