@@ -137,11 +137,11 @@ dataprep-knowledge-tech-docs: api-install
 
 dataprep-knowledge-ci: dataprep-download-retrieval-inputs api-install
 	@echo "▶ Preparing knowledge artifacts for API image..."
-	cd backend-ts && npm run dataprep:knowledge
+	cd backend-ts && npm run dataprep:knowledge:ci
 
 dataprep-retrieval-ci: dataprep-download-retrieval-inputs api-install
 	@echo "▶ Ensuring retrieval artifacts for API image..."
-	cd backend-ts && npm run dataprep:ensure-retrieval
+	cd backend-ts && npm run dataprep:ensure-retrieval:ci
 	$(MAKE) dataprep-upload-retrieval-cache
 
 check: ui-build api-test api-contracts
