@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-upload-retrieval-cache
+.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-runtime-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-upload-retrieval-cache dataprep-download-retrieval-inputs dataprep-download-runtime-assets
 
 # ----------------------------
 # Helpers
@@ -84,7 +84,10 @@ ui-check: ui-install
 api-prepare-data-ci: dataprep-retrieval-ci
 	@echo "✔️ API data artifacts ready for CI image build."
 
-api-build: api-prepare-data-ci
+api-runtime-data-ci: dataprep-download-runtime-assets
+	@echo "✔️ API runtime data artifacts ready for CI image build."
+
+api-build: api-prepare-data-ci api-runtime-data-ci
 	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
 	docker compose build api
 
@@ -132,11 +135,11 @@ dataprep-knowledge-tech-docs: api-install
 	@echo "▶ Running knowledge-only dataprep for tech docs..."
 	cd backend-ts && npm run dataprep:knowledge:tech-docs
 
-dataprep-knowledge-ci: dataprep-download-minimal api-install
+dataprep-knowledge-ci: dataprep-download-retrieval-inputs api-install
 	@echo "▶ Preparing knowledge artifacts for API image..."
 	cd backend-ts && npm run dataprep:knowledge
 
-dataprep-retrieval-ci: dataprep-download-minimal api-install
+dataprep-retrieval-ci: dataprep-download-retrieval-inputs api-install
 	@echo "▶ Ensuring retrieval artifacts for API image..."
 	cd backend-ts && npm run dataprep:ensure-retrieval
 	$(MAKE) dataprep-upload-retrieval-cache
@@ -282,8 +285,8 @@ dataprep-download-tech-docs: check-s5cmd
 dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 	@echo "✔️  All data download completed."
 
-dataprep-download-minimal: check-s5cmd
-	@echo "▶ Downloading minimal data from Scaleway..."
+dataprep-download-retrieval-inputs: check-s5cmd
+	@echo "▶ Downloading retrieval input data from Scaleway..."
 	@mkdir -p 'api/data/${TECH_DOCS_DIR}/managed_dataset/' &&\
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_DOCS}/managed_dataset/* 'api/data/${TECH_DOCS_DIR}/managed_dataset/'
@@ -301,9 +304,6 @@ dataprep-download-minimal: check-s5cmd
 		sync s3://${S3_BUCKET_DOCS}/wiki/* 'api/data/${TECH_DOCS_DIR}/wiki/' 2>/dev/null || true
 	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		cp s3://${S3_BUCKET_DOCS}/knowledge-manifest.json 'api/data/${TECH_DOCS_DIR}/knowledge-manifest.json' 2>/dev/null || true
-	@mkdir -p 'api/data/${TECH_DOCS_DIR}/pages/' &&\
-	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_DOCS}/pages/* 'api/data/${TECH_DOCS_DIR}/pages/'
 	@mkdir -p 'api/data/${NC_DIR}/managed_dataset/' && \
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_NC}/managed_dataset/* 'api/data/${NC_DIR}/managed_dataset/'
@@ -321,9 +321,19 @@ dataprep-download-minimal: check-s5cmd
 		sync s3://${S3_BUCKET_NC}/wiki/* 'api/data/${NC_DIR}/wiki/' 2>/dev/null || true
 	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		cp s3://${S3_BUCKET_NC}/knowledge-manifest.json 'api/data/${NC_DIR}/knowledge-manifest.json' 2>/dev/null || true
+	@echo "✔️  Retrieval input data download completed."
+
+dataprep-download-runtime-assets: check-s5cmd
+	@echo "▶ Downloading API runtime assets from Scaleway..."
+	@mkdir -p 'api/data/${TECH_DOCS_DIR}/pages/' &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_DOCS}/pages/* 'api/data/${TECH_DOCS_DIR}/pages/'
 	@mkdir -p 'api/data/${NC_DIR}/json/' && \
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_NC}/json/* 'api/data/${NC_DIR}/json/'
+	@echo "✔️  API runtime assets download completed."
+
+dataprep-download-minimal: dataprep-download-retrieval-inputs dataprep-download-runtime-assets
 	@echo "✔️  Minimal data download completed."
 
 .PHONY: deps env config clean
