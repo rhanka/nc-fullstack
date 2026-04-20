@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { gunzipSync } from "node:zlib";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -246,6 +246,87 @@ test("runOcrTechDocsDataprep writes image caption audit sidecars when the client
   };
   assert.equal(audit.selectedModel, "gpt-5.4-nano");
   assert.equal(audit.trigger, "nano_route");
+});
+
+test("runOcrTechDocsDataprep does not reuse a previous image audit for no-image pages", async () => {
+  const root = buildTestRoot();
+  const pagesDir = path.join(root, "pages");
+  const ocrDir = path.join(root, "ocr");
+  const outputFile = path.join(root, "managed_dataset", "a220_tech_docs_content_prepared.csv.gz");
+  mkdirSync(pagesDir, { recursive: true });
+  mkdirSync(ocrDir, { recursive: true });
+  writeFileSync(path.join(pagesDir, "A220-door_page_0001.pdf"), "");
+  writeFileSync(path.join(pagesDir, "A220-door_page_0002.pdf"), "");
+  writeFileSync(
+    path.join(ocrDir, "A220-door_page_0001.json"),
+    JSON.stringify({
+      pages: [
+        {
+          index: 0,
+          markdown: "# Door\n\n![img-0.jpeg](img-0.jpeg)",
+          images: [{ id: "img-0.jpeg", imageBase64: "data:image/png;base64,aGVsbG8=" }],
+        },
+      ],
+    }),
+  );
+  writeFileSync(
+    path.join(ocrDir, "A220-door_page_0002.json"),
+    JSON.stringify({
+      pages: [
+        {
+          index: 0,
+          markdown: "# Door text-only page\n\nNo extracted image on this page.",
+          images: [],
+        },
+      ],
+    }),
+  );
+  writeFileSync(
+    path.join(ocrDir, "A220-door_page_0002.image-caption.audit.json"),
+    JSON.stringify({
+      doc: "A220-door_page_0001.pdf",
+      selectedModel: "gpt-5.4-nano",
+      route: "nano",
+      trigger: "nano_route",
+    }),
+  );
+
+  const client: ImageCaptionClient & { getLastAudit(): unknown } = {
+    provider: "mock",
+    model: "gpt-5.4-nano->gpt-5.4",
+    async analyzePage(input) {
+      return normalizeImageCaptionAnalysis({
+        schema_version: "a220_image_caption_v1",
+        page_category: "technical_photo",
+        page_category_confidence: 0.8,
+        retrieval_action: "index",
+        retrieval_weight: 1,
+        short_summary: "Caption for " + input.doc,
+        technical_description: "Caption for " + input.doc,
+      });
+    },
+    getLastAudit() {
+      return {
+        doc: "A220-door_page_0001.pdf",
+        selectedModel: "gpt-5.4-nano",
+        route: "nano",
+        trigger: "nano_route",
+      };
+    },
+  };
+
+  const result = await runOcrTechDocsDataprep({
+    pagesDir,
+    ocrDir,
+    outputFile,
+    mode: "existing",
+    captionMode: "force",
+    imageCaptionClient: client,
+  });
+
+  assert.equal(result.ocr.captionJsonWritten, 2);
+  assert.ok(existsSync(path.join(ocrDir, "A220-door_page_0001.image-caption.audit.json")));
+  assert.equal(existsSync(path.join(ocrDir, "A220-door_page_0002.image-caption.audit.json")), false);
 });
 
 

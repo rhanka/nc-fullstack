@@ -4,6 +4,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -951,14 +952,20 @@ async function generateImageCaptionArtifacts(
     const ocrDocument = readJsonFile<OcrDocument>(ocrPath);
     const markdown = extractMarkdown(ocrDocument, true);
     const imageDataUrls = extractImageDataUrls(ocrDocument);
+    const usedImageCaptionClient = imageDataUrls.length > 0;
     const analysis =
-      imageDataUrls.length > 0
+      usedImageCaptionClient
         ? await client.analyzePage({ doc, markdown, imageDataUrls })
         : inferDefaultAnalysis(markdown, doc);
     atomicWriteFile(outputPath, JSON.stringify(analysis, null, 2) + "\n");
-    const audit = (client as ImageCaptionClient & { getLastAudit?: () => unknown }).getLastAudit?.();
+    const audit = usedImageCaptionClient
+      ? (client as ImageCaptionClient & { getLastAudit?: () => unknown }).getLastAudit?.()
+      : null;
+    const auditPath = captionAuditJsonPath(options.ocrDir, doc);
     if (audit) {
-      atomicWriteFile(captionAuditJsonPath(options.ocrDir, doc), JSON.stringify(audit, null, 2) + "\n");
+      atomicWriteFile(auditPath, JSON.stringify(audit, null, 2) + "\n");
+    } else if (existsSync(auditPath)) {
+      unlinkSync(auditPath);
     }
     captionJsonWritten += 1;
   }
