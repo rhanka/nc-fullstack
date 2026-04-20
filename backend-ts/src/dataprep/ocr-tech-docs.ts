@@ -361,6 +361,10 @@ function captionJsonPath(ocrDir: string, pageDoc: string): string {
   return path.join(ocrDir, pageBaseFromDoc(pageDoc) + ".image-caption.json");
 }
 
+function captionAuditJsonPath(ocrDir: string, pageDoc: string): string {
+  return path.join(ocrDir, pageBaseFromDoc(pageDoc) + ".image-caption.audit.json");
+}
+
 function rawOcrJsonPath(ocrDir: string, pageDoc: string): string {
   return path.join(ocrDir, pageBaseFromDoc(pageDoc) + ".json");
 }
@@ -952,6 +956,10 @@ async function generateImageCaptionArtifacts(
         ? await client.analyzePage({ doc, markdown, imageDataUrls })
         : inferDefaultAnalysis(markdown, doc);
     atomicWriteFile(outputPath, JSON.stringify(analysis, null, 2) + "\n");
+    const audit = (client as ImageCaptionClient & { getLastAudit?: () => unknown }).getLastAudit?.();
+    if (audit) {
+      atomicWriteFile(captionAuditJsonPath(options.ocrDir, doc), JSON.stringify(audit, null, 2) + "\n");
+    }
     captionJsonWritten += 1;
   }
   return { captionJsonWritten, captionJsonSkipped };

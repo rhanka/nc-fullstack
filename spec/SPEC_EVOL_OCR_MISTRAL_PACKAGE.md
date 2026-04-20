@@ -469,6 +469,32 @@ The cascade can move to implementation only if the replay produces an explicit d
 
 No full rebuild may use the cascade until this gate is closed.
 
+### `L6.10d` Cascade Implementation
+
+The accepted routing matrix is implemented as an opt-in dataprep caption policy, not as an API runtime behavior.
+
+Activation:
+
+- `IMAGE_CAPTION_POLICY=cascade` or `OCR_TECH_DOCS_CAPTION_POLICY=cascade`.
+- Primary model: `IMAGE_CAPTION_PRIMARY_MODEL`, default `gpt-5.4-nano`.
+- Deep-pass model: `IMAGE_CAPTION_DEEP_MODEL`, default `gpt-5.4`.
+
+Runtime behavior per OCR page:
+
+1. Run the primary `a220_image_caption_v2` profile with `gpt-5.4-nano`.
+2. Apply deterministic TypeScript routing from `routing_profile_v1`.
+3. Keep the primary caption when the route is `nano`.
+4. Run the deep model only when the accepted route is `gpt-5.4`.
+5. Treat primary JSON/schema/API failures as a technical retry, separate from routed deep passes.
+6. If a routed deep pass fails, keep the primary caption and write the deep error in audit rather than losing the page.
+
+Audit:
+
+- For each generated `*.image-caption.json`, an optional sibling `*.image-caption.audit.json` records `primaryModel`, `deepModel`, `selectedModel`, route, trigger, reasons and errors.
+- Triggers are `nano_route`, `routing_deep_pass`, `technical_retry`, and `deep_pass_failed_fallback_to_nano`.
+
+The default single-model policy remains unchanged unless the cascade policy is explicitly enabled.
+
 ## Open Technical Questions
 
 - Whether page-wide classification needs additional OCR-text heuristics beyond the extracted image crop plus Markdown context.
