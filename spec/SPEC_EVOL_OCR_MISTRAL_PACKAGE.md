@@ -493,6 +493,11 @@ Audit:
 - For each generated `*.image-caption.json`, an optional sibling `*.image-caption.audit.json` records `primaryModel`, `deepModel`, `selectedModel`, route, trigger, reasons and errors.
 - Triggers are `nano_route`, `routing_deep_pass`, `technical_retry`, and `deep_pass_failed_fallback_to_nano`.
 
+Normalization:
+
+- If a valid V2 response omits V1-compatible prose fields, dataprep derives `page_category`, `short_summary` and `technical_description` from `routing_profile_v1`.
+- This fallback keeps generated captions indexable for RAG and LLM Wiki while preserving deterministic routing ownership in TypeScript.
+
 The default single-model policy remains unchanged unless the cascade policy is explicitly enabled.
 
 ## Open Technical Questions
