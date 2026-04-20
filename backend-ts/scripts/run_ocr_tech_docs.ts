@@ -4,6 +4,7 @@ import {
   type OcrTechDocsCaptionMode,
   type OcrTechDocsMode,
 } from "../src/dataprep/ocr-tech-docs.ts";
+import { createCascadeImageCaptionClientFromEnv } from "../src/dataprep/ocr-caption-cascade.ts";
 
 function envString(name: string): string | undefined {
   const value = process.env[name]?.trim();
@@ -40,7 +41,19 @@ function envCaptionMode(): OcrTechDocsCaptionMode {
   throw new Error("OCR_TECH_DOCS_CAPTIONS must be off, missing or force");
 }
 
+function useCascadeCaptionPolicy(): boolean {
+  const value = (envString("OCR_TECH_DOCS_CAPTION_POLICY") ?? envString("IMAGE_CAPTION_POLICY") ?? "single").toLowerCase();
+  if (value === "single" || value === "default") {
+    return false;
+  }
+  if (value === "cascade") {
+    return true;
+  }
+  throw new Error("IMAGE_CAPTION_POLICY must be single or cascade");
+}
+
 const defaults = getDefaultOcrTechDocsPaths();
+const imageCaptionClient = useCascadeCaptionPolicy() ? createCascadeImageCaptionClientFromEnv() : undefined;
 const result = await runOcrTechDocsDataprep({
   ...defaults,
   pagesDir: envString("OCR_TECH_DOCS_PAGES_DIR") ?? defaults.pagesDir,
@@ -49,6 +62,7 @@ const result = await runOcrTechDocsDataprep({
   auditFile: envString("OCR_TECH_DOCS_AUDIT_FILE") ?? defaults.auditFile,
   mode: envMode(),
   captionMode: envCaptionMode(),
+  imageCaptionClient,
   limit: envNumber("OCR_TECH_DOCS_LIMIT"),
   forceOcr: envBoolean("OCR_TECH_DOCS_FORCE"),
   mistralModel: envString("MISTRAL_OCR_MODEL"),
