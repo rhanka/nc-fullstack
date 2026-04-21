@@ -45,3 +45,8 @@ test("retrieval cache upload publishes the canonical tech-doc dataset", () => {
   assert.match(makefile, /a220_tech_docs_content_canonical\.csv\.gz/);
   assert.match(makefile, /a220_tech_docs_content_canonical\.audit\.json/);
 });
+
+test("retrieval cache upload skips empty wiki parts directories", () => {
+  assert.match(makefile, /find 'api\/data\/\$\{TECH_DOCS_DIR\}\/wiki\/parts' -type f -name '\*\.md' \| grep -q \./);
+  assert.match(makefile, /find 'api\/data\/\$\{NC_DIR\}\/wiki\/parts' -type f -name '\*\.md' \| grep -q \./);
+});
