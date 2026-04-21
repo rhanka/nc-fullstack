@@ -1,3 +1,4 @@
+import { rmSync, writeFileSync } from "node:fs";
 import {
   DEFAULT_EMBEDDING_MODEL,
   buildDataprepCodeFingerprint,
@@ -16,7 +17,13 @@ const corpusNames: readonly DataprepCorpusName[] =
   requested === "all" ? ["tech_docs", "non_conformities"] : [requested as DataprepCorpusName];
 const configs = buildDefaultCorpusConfigs();
 const codeFingerprint = buildDataprepCodeFingerprint();
+const rebuildMarkerPath = process.env.DATAPREP_REBUILD_MARKER?.trim();
+const rebuiltCorpora: DataprepCorpusName[] = [];
 let options: RunDataprepOptions | null = null;
+
+if (rebuildMarkerPath) {
+  rmSync(rebuildMarkerPath, { force: true });
+}
 
 for (const corpus of corpusNames) {
   const config = configs[corpus];
@@ -45,5 +52,10 @@ for (const corpus of corpusNames) {
 
   options ??= buildDataprepCliOptions();
   await runDataprepForCorpus(config, options);
+  rebuiltCorpora.push(corpus);
   console.log(`retrieval artifacts rebuilt: ${corpus} (${records.length} records)`);
+}
+
+if (rebuildMarkerPath && rebuiltCorpora.length > 0) {
+  writeFileSync(rebuildMarkerPath, `${rebuiltCorpora.join("\n")}\n`);
 }
