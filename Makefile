@@ -257,13 +257,13 @@ dataprep-upload-retrieval-cache: check-s5cmd
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/vector-export/*' s3://${S3_BUCKET_DOCS}/vector-export/ && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/ontology/*' s3://${S3_BUCKET_DOCS}/ontology/ && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/wiki/index.json' s3://${S3_BUCKET_DOCS}/wiki/index.json && \
-		if [ -d 'api/data/${TECH_DOCS_DIR}/wiki/parts' ]; then s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/wiki/parts/*' s3://${S3_BUCKET_DOCS}/wiki/parts/; fi && \
+		if [ -d 'api/data/${TECH_DOCS_DIR}/wiki/parts' ] && find 'api/data/${TECH_DOCS_DIR}/wiki/parts' -type f -name '*.md' | grep -q .; then s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/wiki/parts/*' s3://${S3_BUCKET_DOCS}/wiki/parts/; fi && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/knowledge-manifest.json' s3://${S3_BUCKET_DOCS}/knowledge-manifest.json && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/lexical/*' s3://${S3_BUCKET_NC}/lexical/ && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/vector-export/*' s3://${S3_BUCKET_NC}/vector-export/ && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/ontology/*' s3://${S3_BUCKET_NC}/ontology/ && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/wiki/index.json' s3://${S3_BUCKET_NC}/wiki/index.json && \
-		if [ -d 'api/data/${NC_DIR}/wiki/parts' ]; then s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/wiki/parts/*' s3://${S3_BUCKET_NC}/wiki/parts/; fi && \
+		if [ -d 'api/data/${NC_DIR}/wiki/parts' ] && find 'api/data/${NC_DIR}/wiki/parts' -type f -name '*.md' | grep -q .; then s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/wiki/parts/*' s3://${S3_BUCKET_NC}/wiki/parts/; fi && \
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/knowledge-manifest.json' s3://${S3_BUCKET_NC}/knowledge-manifest.json; \
 	fi
 
