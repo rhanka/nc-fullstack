@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const makefile = readFileSync(new URL("../../Makefile", import.meta.url), "utf8");
+const ensureRetrievalScript = readFileSync(
+  new URL("../scripts/ensure_retrieval_artifacts.ts", import.meta.url),
+  "utf8",
+);
 const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
   scripts: Record<string, string>;
 };
@@ -49,4 +53,16 @@ test("retrieval cache upload publishes the canonical tech-doc dataset", () => {
 test("retrieval cache upload skips empty wiki parts directories", () => {
   assert.match(makefile, /find 'api\/data\/\$\{TECH_DOCS_DIR\}\/wiki\/parts' -type f -name '\*\.md' \| grep -q \./);
   assert.match(makefile, /find 'api\/data\/\$\{NC_DIR\}\/wiki\/parts' -type f -name '\*\.md' \| grep -q \./);
+});
+
+test("CI retrieval cache upload runs only after an actual rebuild", () => {
+  assert.match(makefile, /DATAPREP_REBUILD_MARKER=\.\.\/\.dataprep-retrieval-rebuilt/);
+  assert.match(makefile, /if \[ -f \.dataprep-retrieval-rebuilt \]; then \\\s*\$\(MAKE\) dataprep-upload-retrieval-cache;/);
+  assert.match(makefile, /Retrieval artifacts fresh; retrieval cache upload skipped/);
+});
+
+test("retrieval ensure script emits a rebuild marker for CI upload gating", () => {
+  assert.match(ensureRetrievalScript, /DATAPREP_REBUILD_MARKER/);
+  assert.match(ensureRetrievalScript, /writeFileSync\(rebuildMarkerPath/);
+  assert.match(ensureRetrievalScript, /rebuiltCorpora/);
 });

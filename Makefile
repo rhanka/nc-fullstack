@@ -140,9 +140,14 @@ dataprep-knowledge-ci: dataprep-download-retrieval-inputs api-install
 	cd backend-ts && npm run dataprep:knowledge:ci
 
 dataprep-retrieval-ci: dataprep-download-retrieval-inputs api-install
+	@rm -f .dataprep-retrieval-rebuilt
 	@echo "▶ Ensuring retrieval artifacts for API image..."
-	cd backend-ts && npm run dataprep:ensure-retrieval:ci
-	$(MAKE) dataprep-upload-retrieval-cache
+	cd backend-ts && DATAPREP_REBUILD_MARKER=../.dataprep-retrieval-rebuilt npm run dataprep:ensure-retrieval:ci
+	@if [ -f .dataprep-retrieval-rebuilt ]; then \
+		$(MAKE) dataprep-upload-retrieval-cache; \
+	else \
+		echo "↷ Retrieval artifacts fresh; retrieval cache upload skipped."; \
+	fi
 
 check: ui-build api-test api-contracts
 	@echo "✔️ UI build and backend checks completed."
