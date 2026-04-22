@@ -157,12 +157,19 @@
 - [x] L6F.4c Brancher le RAG TS sur le CSV canonique. Recette: `dataprep`, `dataprep-tech-docs`, `dataprep-knowledge*` et `api-prepare-data-ci` consomment le canonique sans filtre runtime. `TEST`
 - [x] L6F.4d Rebuilder les artefacts tech docs depuis le CSV canonique. Recette: `vector-export / lexical / ontology / wiki` régénérés et audit local montrant zéro source technique non servable dans les artefacts. `TEST`
 - [x] L6F.5 Injecter les entites knowledge dans la synthese du rapport `100`. Recette: `search_entities_wiki` est consomme par le prompt `100`, contient un resume exploitable, et un test prouve que le contexte entites atteint la generation d'analyse. `TEST`
+- [x] L6F.6 Spécifier `Wiki Image Intelligence` comme extension de la fiche `Entities`. Recette: spec dédiée validant `Linked images` avant `Supporting documents`, artefacts publics dérivés, absence de drawer image, et regroupement simple des related entities par classes. `AUTO`
+- [ ] L6F.7 Générer les artefacts publics image/entity. Recette: `ontology/images.json`, `ontology/image_relations.json` et `wiki/images/*` sont produits depuis les OCR/captions existants sans exposer les sidecars batch bruts. `TEST`
+- [ ] L6F.8 Brancher les images liées dans le wiki. Recette: `wiki/index.json` expose `linked_images`, les articles `wiki/parts/*.md` ajoutent une section `Linked images`, et le tri limite le bruit par score déterministe. `TEST`
+- [ ] L6F.9 Afficher `Linked images` dans `EntityDetail`. Recette: section située avant `Supporting documents`, cartes image compactes, miniature si disponible, caption utile, action `Open document`, et aucun nouveau drawer. `TEST`
+- [ ] L6F.10 Grouper les related entities par classes simples. Recette: `Same answer`, `Image-linked`, `Same document`, `Same ATA`, `Same zone` sont affichés en chips cliquables sans canvas graphe complet. `TEST`
+- [ ] L6F.11 Brancher le CI/CD data associé. Recette: les artefacts publics image/wiki sont rebuild/uploadés avec les targets dataprep existantes sans relancer automatiquement les batches OpenAI caption. `TEST`
 
 ## Lot 6.4 - Smoke tests UAT couche connaissance
 
 - [ ] L6S.1 Rejouer un smoke test `000` après les fixes post-UAT. Recette: `Entities` present, liens ouvrables, aucune régression chat/réponse/rapport. `TEST` + `UAT`
 - [ ] L6S.2 Rejouer un smoke test `100` après les fixes post-UAT. Recette: même validation sur un cas d'analyse plus riche. `TEST` + `UAT`
 - [x] L6S.3 Vérifier qu'aucune dépendance `graphify` ou `lancedb` n'a été réintroduite pendant les fixes. Recette: grep repo-local propre + checks backend verts. `TEST`
+- [ ] L6S.4 Rejouer un smoke test `Linked images`. Recette: une entité issue d'un schéma technique affiche des images liées, ouvre le document source sans 404, et conserve une fiche `Entities` lisible. `TEST` + `UAT`
 
 - Note: un bloqueur pré-UAT du lot 6 a été corrigé: si `ontology/` ou `wiki/` manque, le backend TS bootstrap désormais la couche connaissance en mode déterministe sans embeddings, et filtre les faux concepts documentaires génériques (`1. Scope`, `Reference`, etc.).
 - Note: ce bootstrap local sert uniquement à débloquer le runtime et les checks techniques; il ne remplace pas le full rebuild TS attendu avant l'UAT utilisateur du lot 6.
