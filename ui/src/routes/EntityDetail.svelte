@@ -15,6 +15,20 @@
     readonly part_numbers?: unknown;
     readonly supporting_docs?: unknown;
     readonly primary_doc?: unknown;
+    readonly linked_images?: unknown;
+  };
+
+  type EntityLinkedImage = {
+    readonly id?: unknown;
+    readonly doc?: unknown;
+    readonly asset_path?: unknown;
+    readonly caption?: unknown;
+    readonly technical_description?: unknown;
+    readonly page_category?: unknown;
+    readonly figure_or_table_refs?: unknown;
+    readonly visible_identifiers?: unknown;
+    readonly score?: unknown;
+    readonly reasons?: unknown;
   };
 
   type EntityArticle = {
@@ -101,6 +115,17 @@
     return item ? textArray(asEntity(item).supporting_docs) : [];
   }
 
+  function linkedImagesFor(item: ReferenceSourceItem | null): EntityLinkedImage[] {
+    const linkedImages = item ? asEntity(item).linked_images : null;
+    if (!Array.isArray(linkedImages)) {
+      return [];
+    }
+
+    return linkedImages
+      .filter((image): image is EntityLinkedImage => Boolean(image && typeof image === "object"))
+      .filter((image) => Boolean(textValue(image.asset_path) || textValue(image.doc)));
+  }
+
   function metadataFor(item: ReferenceSourceItem | null): string {
     if (!item) {
       return "";
@@ -127,7 +152,7 @@
 
     return markdown
       .replace(/^# .*(\r?\n)+/u, "")
-      .replace(/\r?\n## Technical documents[\s\S]*$/u, "")
+      .replace(/\r?\n## (?:Linked images|Technical documents)[\s\S]*$/u, "")
       .trim();
   }
 
@@ -147,6 +172,28 @@
   function openRelated(entity: ReferenceSourceItem): void {
     selectEntity.set(entity);
     activeTabValue.set(4);
+  }
+
+  function imageAssetUrl(image: EntityLinkedImage): string | null {
+    const assetPath = textValue(image.asset_path)?.replace(/^wiki\//u, "");
+    if (!assetPath) {
+      return null;
+    }
+
+    return apiBaseUrl + "/wiki/" + encodeURIComponent(assetPath);
+  }
+
+  function imageTitleFor(image: EntityLinkedImage): string {
+    return textArray(image.figure_or_table_refs)[0] ?? textValue(image.doc) ?? textValue(image.id) ?? "Linked image";
+  }
+
+  function imageCaptionFor(image: EntityLinkedImage): string {
+    return textValue(image.caption) ?? textValue(image.technical_description) ?? "";
+  }
+
+  function imageCategoryFor(image: EntityLinkedImage): string | null {
+    const category = textValue(image.page_category);
+    return category?.replace(/^technical_/u, "").replace(/_/gu, " ") ?? null;
   }
 
   async function loadArticle(nextPath: string): Promise<void> {
@@ -175,6 +222,7 @@
   $: selectedPath = pathFor(selectedEntity);
   $: selectedPrimaryDoc = primaryDocFor(selectedEntity);
   $: selectedSupportingDocs = supportingDocsFor(selectedEntity);
+  $: selectedLinkedImages = linkedImagesFor(selectedEntity);
   $: selectedEntityKey = entityKey(selectedEntity);
   $: relatedEntities = entitiesList.filter((entity) => entityKey(entity) !== selectedEntityKey).slice(0, 10);
 
@@ -237,6 +285,40 @@
         <p class="entity-detail__muted">No article available for this entity.</p>
       {/if}
     </section>
+
+    {#if selectedLinkedImages.length > 0}
+      <details class="entity-detail__card" open={selectedLinkedImages.length <= 3}>
+        <summary>Linked images ({selectedLinkedImages.length})</summary>
+        <div class="entity-detail__image-list">
+          {#each selectedLinkedImages as image}
+            <article class="entity-detail__image-card">
+              {#if imageAssetUrl(image)}
+                <img src={imageAssetUrl(image) ?? ""} alt={imageTitleFor(image)} loading="lazy" />
+              {/if}
+
+              <div class="entity-detail__image-body">
+                <span class="entity-detail__image-title">{imageTitleFor(image)}</span>
+
+                {#if imageCaptionFor(image)}
+                  <p>{imageCaptionFor(image)}</p>
+                {/if}
+
+                <div class="entity-detail__image-meta">
+                  {#if imageCategoryFor(image)}
+                    <span>{imageCategoryFor(image)}</span>
+                  {/if}
+                  {#if textValue(image.doc)}
+                    <button type="button" on:click={() => openDocument(textValue(image.doc))}>
+                      Open document
+                    </button>
+                  {/if}
+                </div>
+              </div>
+            </article>
+          {/each}
+        </div>
+      </details>
+    {/if}
 
     {#if selectedSupportingDocs.length > 0}
       <details class="entity-detail__card" open>
@@ -353,7 +435,8 @@
 
   .entity-detail__primary-action,
   .entity-detail__doc-list button,
-  .entity-detail__related-list button {
+  .entity-detail__related-list button,
+  .entity-detail__image-meta button {
     border: 1px solid rgba(37, 99, 235, 0.18);
     border-radius: 999px;
     background: #eff6ff;
@@ -384,10 +467,73 @@
   }
 
   .entity-detail__doc-list button,
-  .entity-detail__related-list button {
+  .entity-detail__related-list button,
+  .entity-detail__image-meta button {
     padding: 0.42rem 0.65rem;
     max-width: 100%;
     overflow-wrap: anywhere;
+  }
+
+  .entity-detail__image-list {
+    display: grid;
+    gap: 0.7rem;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    margin-top: 0.85rem;
+  }
+
+  .entity-detail__image-card {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.65rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 0.9rem;
+    background: #f8fafc;
+  }
+
+  .entity-detail__image-card img {
+    width: 5.5rem;
+    height: 4.2rem;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 0.6rem;
+    background: white;
+    object-fit: contain;
+  }
+
+  .entity-detail__image-body {
+    min-width: 0;
+  }
+
+  .entity-detail__image-title {
+    display: block;
+    color: #101828;
+    font-size: 0.84rem;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .entity-detail__image-body p {
+    margin: 0.35rem 0 0;
+    color: #475467;
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
+  .entity-detail__image-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.55rem;
+  }
+
+  .entity-detail__image-meta span {
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #334155;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
   }
 
   .entity-detail__markdown {
@@ -411,6 +557,15 @@
 
     .entity-detail__empty {
       margin-top: 3rem;
+    }
+
+    .entity-detail__image-card {
+      grid-template-columns: 1fr;
+    }
+
+    .entity-detail__image-card img {
+      width: 100%;
+      height: 8rem;
     }
   }
 </style>

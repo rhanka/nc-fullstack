@@ -160,7 +160,7 @@
 - [x] L6F.6 Spécifier `Wiki Image Intelligence` comme extension de la fiche `Entities`. Recette: spec dédiée validant `Linked images` avant `Supporting documents`, artefacts publics dérivés, absence de drawer image, et regroupement simple des related entities par classes. `AUTO`
 - [x] L6F.7 Générer les artefacts publics image/entity. Recette: `ontology/images.json`, `ontology/image_relations.json` et `wiki/images/*` sont produits depuis les OCR/captions existants sans exposer les sidecars batch bruts. `TEST`
 - [x] L6F.8 Brancher les images liées dans le wiki. Recette: `wiki/index.json` expose `linked_images`, les articles `wiki/parts/*.md` ajoutent une section `Linked images`, et le tri limite le bruit par score déterministe. `TEST`
-- [ ] L6F.9 Afficher `Linked images` dans `EntityDetail`. Recette: section située avant `Supporting documents`, cartes image compactes, miniature si disponible, caption utile, action `Open document`, et aucun nouveau drawer. `TEST`
+- [x] L6F.9 Afficher `Linked images` dans `EntityDetail`. Recette: section située avant `Supporting documents`, cartes image compactes, miniature si disponible, caption utile, action `Open document`, et aucun nouveau drawer. `TEST`
 - [ ] L6F.10 Grouper les related entities par classes simples. Recette: `Same answer`, `Image-linked`, `Same document`, `Same ATA`, `Same zone` sont affichés en chips cliquables sans canvas graphe complet. `TEST`
 - [ ] L6F.11 Brancher le CI/CD data associé. Recette: les artefacts publics image/wiki sont rebuild/uploadés avec les targets dataprep existantes sans relancer automatiquement les batches OpenAI caption. `TEST`
 
