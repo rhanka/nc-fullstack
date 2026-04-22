@@ -86,3 +86,22 @@ test("validateKnowledgePublicArtifacts rejects broken linked image assets", () =
   assert.equal(report.ok, false);
   assert.ok(report.errors.some((error) => error.includes("missing linked image asset")));
 });
+
+test("validateKnowledgePublicArtifacts rejects missing required image artifacts", () => {
+  const outputRoot = buildRoot();
+  writeJson(path.join(outputRoot, "ontology", "images.json"), []);
+  writeJson(path.join(outputRoot, "ontology", "image_relations.json"), []);
+  writeJson(path.join(outputRoot, "wiki", "index.json"), []);
+
+  const report = validateKnowledgePublicArtifacts({
+    corpora: [{ corpus: "tech_docs", outputRoot }],
+    minimumImageCounts: { tech_docs: 1 },
+    minimumImageRelationCounts: { tech_docs: 1 },
+    minimumLinkedImageCounts: { tech_docs: 1 },
+  });
+
+  assert.equal(report.ok, false);
+  assert.ok(report.errors.some((error) => error.includes("expected at least 1 public wiki images")));
+  assert.ok(report.errors.some((error) => error.includes("expected at least 1 public wiki image relations")));
+  assert.ok(report.errors.some((error) => error.includes("expected at least 1 linked wiki images")));
+});

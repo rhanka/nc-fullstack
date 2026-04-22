@@ -299,6 +299,10 @@ test("runKnowledgeDataprepForCorpus builds public image/entity artifacts from OC
   const techSource = path.join(root, "tech_docs.csv.gz");
   const techOutputRoot = path.join(root, "tech");
   mkdirSync(path.join(techOutputRoot, "ocr"), { recursive: true });
+  mkdirSync(path.join(techOutputRoot, "ontology", "image-assets"), { recursive: true });
+  mkdirSync(path.join(techOutputRoot, "wiki", "images"), { recursive: true });
+  writeFileSync(path.join(techOutputRoot, "ontology", "image-assets", "stale.png"), Buffer.from("stale"));
+  writeFileSync(path.join(techOutputRoot, "wiki", "images", "stale.png"), Buffer.from("stale"));
 
   writeGzipTsv(techSource, [
     ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"],
@@ -369,6 +373,8 @@ test("runKnowledgeDataprepForCorpus builds public image/entity artifacts from OC
   assert.equal(images[0]?.asset_path, "wiki/images/a220-bleed-system-page-0001-1.png");
   assert.ok(existsSync(path.join(result.ontology.root, "image-assets", "a220-bleed-system-page-0001-1.png")));
   assert.ok(existsSync(path.join(result.wiki.root, "images", "a220-bleed-system-page-0001-1.png")));
+  assert.equal(existsSync(path.join(result.ontology.root, "image-assets", "stale.png")), false);
+  assert.equal(existsSync(path.join(result.wiki.root, "images", "stale.png")), false);
 
   const imageRelations = JSON.parse(
     readFileSync(path.join(result.ontology.root, "image_relations.json"), "utf8"),
@@ -394,4 +400,65 @@ test("runKnowledgeDataprepForCorpus builds public image/entity artifacts from OC
   assert.match(wikiMarkdown, /## Linked images/u);
   assert.match(wikiMarkdown, /Figure 02-02-4/u);
   assert.match(wikiMarkdown, /\.\.\/images\/a220-bleed-system-page-0001-1\.png/u);
+});
+
+test("runKnowledgeDataprepForCorpus derives public image artifacts from enriched OCR markdown without caption sidecars", async () => {
+  const root = buildTestRoot();
+  const techSource = path.join(root, "tech_docs.csv.gz");
+  const techOutputRoot = path.join(root, "tech");
+  mkdirSync(path.join(techOutputRoot, "ocr"), { recursive: true });
+
+  writeGzipTsv(techSource, [
+    ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"],
+    [
+      "A220-door-system_page_0002.pdf",
+      "A220-door-system.pdf",
+      "A220-door-system_page_0002.json",
+      "Door proximity sensor technical diagram.",
+      "64",
+      "A220-door-system_page_0002.pdf 0",
+      "ATA 52",
+      "Door Proximity Sensor",
+      "diagram",
+    ],
+  ]);
+
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "A220-door-system_page_0002__with_img_desc.json"),
+    JSON.stringify({
+      pages: [
+        {
+          markdown: "![img-0.jpeg](img-0.jpeg)",
+          images: [{ id: "img-0.jpeg", image_base64: "data:image/png;base64,aGVsbG8=" }],
+        },
+      ],
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "A220-door-system_page_0002__with_img_desc.md"),
+    "![Door Proximity Sensor installation diagram showing the sensor bracket](img-0.jpeg)\n",
+    "utf8",
+  );
+
+  const techConfig: DataprepCorpusConfig = {
+    corpus: "tech_docs",
+    sourceFile: techSource,
+    outputRoot: techOutputRoot,
+    hasHeader: true,
+    normalizeRow: normalizeTechDocsPreparedRow,
+  };
+
+  const result = await runKnowledgeDataprepForCorpus(techConfig);
+  const images = JSON.parse(
+    readFileSync(path.join(result.ontology.root, "images.json"), "utf8"),
+  ) as Array<Record<string, unknown>>;
+  assert.equal(images.length, 1);
+  assert.equal(images[0]?.caption, "Door Proximity Sensor installation diagram showing the sensor bracket");
+
+  const wikiIndex = JSON.parse(readFileSync(result.wiki.indexPath, "utf8")) as Array<Record<string, unknown>>;
+  const doorSensor = wikiIndex.find((entry) => entry.slug === "door-proximity-sensor");
+  assert.ok(doorSensor);
+  const linkedImages = doorSensor.linked_images as Array<Record<string, unknown>>;
+  assert.equal(linkedImages.length, 1);
 });
