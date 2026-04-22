@@ -3,6 +3,10 @@
   import Icon from "@iconify/svelte";
   import { getApiBaseUrl } from "$lib/api-base";
   import type { ReferenceSourceItem } from "$lib/chat/contracts";
+  import {
+    buildEntityRelationshipGroups,
+    type EntityRelationshipSource,
+  } from "$lib/entities/entity-relationship-groups";
   import { activeTabValue, selectDoc, selectEntity } from "./store";
 
   type EntitySourceItem = ReferenceSourceItem & {
@@ -72,21 +76,6 @@
     }
 
     return values.slice(0, limit).join(", ") + " +" + String(values.length - limit);
-  }
-
-  function entityKey(item: ReferenceSourceItem | null): string | null {
-    if (!item) {
-      return null;
-    }
-
-    const entity = asEntity(item);
-    for (const value of [entity.path, entity.slug, entity.doc, entity.title, entity.chunk_id]) {
-      if (typeof value === "string" && value.trim()) {
-        return value.trim();
-      }
-    }
-
-    return null;
   }
 
   function titleFor(item: ReferenceSourceItem | null): string {
@@ -174,6 +163,10 @@
     activeTabValue.set(4);
   }
 
+  function openRelatedSource(entity: EntityRelationshipSource): void {
+    openRelated(entity as ReferenceSourceItem);
+  }
+
   function imageAssetUrl(image: EntityLinkedImage): string | null {
     const assetPath = textValue(image.asset_path)?.replace(/^wiki\//u, "");
     if (!assetPath) {
@@ -223,8 +216,11 @@
   $: selectedPrimaryDoc = primaryDocFor(selectedEntity);
   $: selectedSupportingDocs = supportingDocsFor(selectedEntity);
   $: selectedLinkedImages = linkedImagesFor(selectedEntity);
-  $: selectedEntityKey = entityKey(selectedEntity);
-  $: relatedEntities = entitiesList.filter((entity) => entityKey(entity) !== selectedEntityKey).slice(0, 10);
+  $: relatedEntityGroups = buildEntityRelationshipGroups(
+    selectedEntity as EntityRelationshipSource | null,
+    entitiesList as readonly EntityRelationshipSource[],
+  );
+  $: relatedEntityCount = relatedEntityGroups.find((group) => group.key === "same_answer")?.items.length ?? 0;
 
   $: if (selectedPath && selectedPath !== articlePath) {
     void loadArticle(selectedPath);
@@ -331,12 +327,19 @@
       </details>
     {/if}
 
-    {#if relatedEntities.length > 0}
+    {#if relatedEntityGroups.length > 0}
       <details class="entity-detail__card">
-        <summary>Related entities found in this answer ({relatedEntities.length})</summary>
-        <div class="entity-detail__related-list">
-          {#each relatedEntities as entity}
-            <button type="button" on:click={() => openRelated(entity)}>{titleFor(entity)}</button>
+        <summary>Related entities found in this answer ({relatedEntityCount})</summary>
+        <div class="entity-detail__related-groups">
+          {#each relatedEntityGroups as group}
+            <section class="entity-detail__related-group">
+              <h3>{group.label}</h3>
+              <div class="entity-detail__related-list">
+                {#each group.items as item (group.key + item.key)}
+                  <button type="button" on:click={() => openRelatedSource(item.source)}>{item.title}</button>
+                {/each}
+              </div>
+            </section>
           {/each}
         </div>
       </details>
@@ -464,6 +467,25 @@
     flex-wrap: wrap;
     gap: 0.45rem;
     margin-top: 0.85rem;
+  }
+
+  .entity-detail__related-groups {
+    display: grid;
+    gap: 0.9rem;
+    margin-top: 0.85rem;
+  }
+
+  .entity-detail__related-group h3 {
+    margin: 0;
+    color: #475467;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .entity-detail__related-group .entity-detail__related-list {
+    margin-top: 0.45rem;
   }
 
   .entity-detail__doc-list button,
