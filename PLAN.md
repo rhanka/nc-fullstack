@@ -163,6 +163,7 @@
 - [x] L6F.9 Afficher `Linked images` dans `EntityDetail`. Recette: section située avant `Supporting documents`, cartes image compactes, miniature si disponible, caption utile, action `Open document`, et aucun nouveau drawer. `TEST`
 - [x] L6F.10 Grouper les related entities par classes simples. Recette: `Same answer`, `Image-linked`, `Same document`, `Same ATA`, `Same zone` sont affichés en chips cliquables sans canvas graphe complet. `TEST`
 - [x] L6F.11 Brancher le CI/CD data associé. Recette: les artefacts publics image/wiki sont rebuild/uploadés avec les targets dataprep existantes sans relancer automatiquement les batches OpenAI caption. `TEST`
+- [x] L6F.11a Corriger le rebuild CI des images wiki. Recette: la cible CI télécharge aussi les artefacts source `ocr/` enrichis depuis Scaleway, nettoie les images générées périmées, et échoue si `tech_docs` produit zéro image/relation liée. `TEST`
 
 ## Lot 6.4 - Smoke tests UAT couche connaissance
 

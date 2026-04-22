@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-knowledge-ci
+.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-download-tech-docs-ocr dataprep-knowledge-ci
 
 # ----------------------------
 # Helpers
@@ -156,9 +156,9 @@ dataprep-ocr-caption-batch-import: api-install
 	@echo "▶ Importing OCR caption OpenAI batch results..."
 	cd backend-ts && npm run dataprep:ocr-caption-batch:import
 
-dataprep-knowledge-ci: dataprep-download-minimal api-install
+dataprep-knowledge-ci: dataprep-download-minimal dataprep-download-tech-docs-ocr api-install
 	@echo "▶ Preparing knowledge artifacts for API image..."
-	cd backend-ts && npm run dataprep:knowledge && npm run dataprep:knowledge:public-check
+	cd backend-ts && npm run dataprep:knowledge && KNOWLEDGE_PUBLIC_CHECK_REQUIRE_TECH_DOC_IMAGES=1 npm run dataprep:knowledge:public-check
 
 check: ui-build api-test api-contracts
 	@echo "✔️ UI build and backend checks completed."
@@ -277,6 +277,13 @@ dataprep-download-tech-docs: check-s5cmd
 
 dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 	@echo "✔️  All data download completed."
+
+dataprep-download-tech-docs-ocr: check-s5cmd
+	@echo "▶ Downloading OCR and enriched image source artifacts from Scaleway..."
+	@mkdir -p 'api/data/${TECH_DOCS_DIR}/ocr/' &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_DOCS}/ocr/* 'api/data/${TECH_DOCS_DIR}/ocr/' >/dev/null
+	@echo "✔️  OCR source artifacts present: $$(find 'api/data/${TECH_DOCS_DIR}/ocr' -maxdepth 1 -type f | wc -l) files"
 
 dataprep-download-minimal: check-s5cmd
 	@echo "▶ Downloading minimal data from Scaleway..."

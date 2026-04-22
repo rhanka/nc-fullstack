@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -100,6 +101,52 @@ function readCaptionAnalyses(filePath: string): ImageCaptionAnalysis[] {
   return [normalizeImageCaptionAnalysis(parsed)];
 }
 
+function enrichedMarkdownPath(ocrDir: string, pageDoc: string): string {
+  return path.join(ocrDir, pageBaseFromDoc(pageDoc) + "__with_img_desc.md");
+}
+
+function imageAltTextsFromMarkdown(markdown: string): string[] {
+  return Array.from(markdown.matchAll(/!\[([^\]]+)\]\([^)]+\)/gu))
+    .map((match) => match[1]?.replace(/\s+/gu, " ").trim() ?? "")
+    .filter(Boolean);
+}
+
+function analysesFromEnrichedMarkdown(filePath: string): ImageCaptionAnalysis[] {
+  if (!existsSync(filePath)) {
+    return [];
+  }
+  return imageAltTextsFromMarkdown(readFileSync(filePath, "utf8")).map((caption) =>
+    normalizeImageCaptionAnalysis({
+      page_category: "technical_content",
+      page_category_confidence: 0.6,
+      is_non_content_page: false,
+      retrieval_action: "index",
+      retrieval_weight: 1,
+      short_summary: caption,
+      technical_description: caption,
+      visible_text: [caption],
+      visible_identifiers: [caption],
+      part_or_zone_candidates: [caption],
+      diagram_elements: [],
+      relationships_or_flows: [],
+      warnings_or_limits: [],
+      figure_or_table_refs: [],
+      uncertainties: ["Derived from enriched OCR markdown because raw caption sidecar is unavailable."],
+    }),
+  );
+}
+
+function readImageAnalyses(ocrDir: string, pageDoc: string): { analyses: ImageCaptionAnalysis[]; hasCaptionSidecar: boolean } {
+  const captionPath = captionJsonPath(ocrDir, pageDoc);
+  if (existsSync(captionPath)) {
+    return { analyses: readCaptionAnalyses(captionPath), hasCaptionSidecar: true };
+  }
+  return {
+    analyses: analysesFromEnrichedMarkdown(enrichedMarkdownPath(ocrDir, pageDoc)),
+    hasCaptionSidecar: false,
+  };
+}
+
 function dataUrlToBuffer(dataUrl: string): Buffer | null {
   const match = dataUrl.match(/^data:image\/([a-z0-9.+-]+);base64,(.+)$/iu);
   if (!match) {
@@ -189,6 +236,7 @@ function relationForPart(image: PublicWikiImage, part: WikiImagePart): PublicWik
 export function buildPublicWikiImageArtifacts(options: BuildPublicWikiImageArtifactsOptions): void {
   const ocrDir = path.join(options.outputRoot, "ocr");
   const assetRoot = path.join(options.ontologyRoot, "image-assets");
+  rmSync(assetRoot, { recursive: true, force: true });
   mkdirSync(assetRoot, { recursive: true });
 
   const images: PublicWikiImage[] = [];
@@ -196,16 +244,15 @@ export function buildPublicWikiImageArtifacts(options: BuildPublicWikiImageArtif
   const techRecords = options.records.filter((record) => record.corpus === "tech_docs");
 
   for (const record of techRecords) {
-    const captionPath = captionJsonPath(ocrDir, record.doc);
-    if (!existsSync(captionPath)) {
+    const { analyses, hasCaptionSidecar } = readImageAnalyses(ocrDir, record.doc);
+    if (analyses.length === 0) {
       continue;
     }
-    const ocrPath = findOcrJsonPath(ocrDir, record.doc, true);
+    const ocrPath = findOcrJsonPath(ocrDir, record.doc, hasCaptionSidecar);
     if (!ocrPath) {
       continue;
     }
 
-    const analyses = readCaptionAnalyses(captionPath);
     const ocrDocument = readJsonFile<OcrDocument>(ocrPath);
     const imageDataUrls = extractImageDataUrls(ocrDocument);
     if (imageDataUrls.length === 0) {
@@ -300,6 +347,8 @@ export function readPublicWikiImageRelations(ontologyRoot: string): PublicWikiIm
 
 export function copyPublicWikiImageAssets(ontologyRoot: string, wikiRoot: string): void {
   const assetRoot = path.join(ontologyRoot, "image-assets");
+  const wikiImagesRoot = path.join(wikiRoot, "images");
+  rmSync(wikiImagesRoot, { recursive: true, force: true });
   if (!existsSync(assetRoot)) {
     return;
   }
@@ -310,7 +359,7 @@ export function copyPublicWikiImageAssets(ontologyRoot: string, wikiRoot: string
     if (!existsSync(sourcePath)) {
       continue;
     }
-    const targetPath = path.join(wikiRoot, "images", assetName);
+    const targetPath = path.join(wikiImagesRoot, assetName);
     mkdirSync(path.dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, readFileSync(sourcePath));
   }

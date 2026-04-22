@@ -10,6 +10,9 @@ export interface KnowledgePublicArtifactsCorpus {
 
 export interface KnowledgePublicArtifactsValidationOptions {
   readonly corpora: readonly KnowledgePublicArtifactsCorpus[];
+  readonly minimumImageCounts?: Partial<Record<DataprepCorpusName, number>>;
+  readonly minimumImageRelationCounts?: Partial<Record<DataprepCorpusName, number>>;
+  readonly minimumLinkedImageCounts?: Partial<Record<DataprepCorpusName, number>>;
 }
 
 export interface KnowledgePublicArtifactsCorpusReport {
@@ -83,7 +86,11 @@ function listPublicSidecars(root: string): string[] {
   return matches;
 }
 
-function validateCorpus(corpus: KnowledgePublicArtifactsCorpus, errors: string[]): KnowledgePublicArtifactsCorpusReport {
+function validateCorpus(
+  corpus: KnowledgePublicArtifactsCorpus,
+  options: KnowledgePublicArtifactsValidationOptions,
+  errors: string[],
+): KnowledgePublicArtifactsCorpusReport {
   const ontologyRoot = path.join(corpus.outputRoot, "ontology");
   const wikiRoot = path.join(corpus.outputRoot, "wiki");
   const images = readJsonArray(path.join(ontologyRoot, "images.json"), errors);
@@ -128,20 +135,39 @@ function validateCorpus(corpus: KnowledgePublicArtifactsCorpus, errors: string[]
     errors.push(`${corpus.corpus}: raw batch/caption sidecar leaked into public artifacts: ${sidecar}`);
   }
 
-  return {
+  const report = {
     corpus: corpus.corpus,
     outputRoot: corpus.outputRoot,
     imageCount: images.length,
     imageRelationCount: imageRelations.length,
     linkedImageCount,
   };
+
+  const minimumImageCount = options.minimumImageCounts?.[corpus.corpus] ?? 0;
+  const minimumImageRelationCount = options.minimumImageRelationCounts?.[corpus.corpus] ?? 0;
+  const minimumLinkedImageCount = options.minimumLinkedImageCounts?.[corpus.corpus] ?? 0;
+  if (report.imageCount < minimumImageCount) {
+    errors.push(`${corpus.corpus}: expected at least ${minimumImageCount} public wiki images, got ${report.imageCount}`);
+  }
+  if (report.imageRelationCount < minimumImageRelationCount) {
+    errors.push(
+      `${corpus.corpus}: expected at least ${minimumImageRelationCount} public wiki image relations, got ${report.imageRelationCount}`,
+    );
+  }
+  if (report.linkedImageCount < minimumLinkedImageCount) {
+    errors.push(
+      `${corpus.corpus}: expected at least ${minimumLinkedImageCount} linked wiki images, got ${report.linkedImageCount}`,
+    );
+  }
+
+  return report;
 }
 
 export function validateKnowledgePublicArtifacts(
   options: KnowledgePublicArtifactsValidationOptions,
 ): KnowledgePublicArtifactsValidationReport {
   const errors: string[] = [];
-  const corpora = options.corpora.map((corpus) => validateCorpus(corpus, errors));
+  const corpora = options.corpora.map((corpus) => validateCorpus(corpus, options, errors));
   return {
     ok: errors.length === 0,
     errors,
