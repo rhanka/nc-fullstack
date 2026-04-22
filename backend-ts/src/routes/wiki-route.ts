@@ -10,11 +10,13 @@ const TECH_DOCS_DIR = process.env.TECH_DOCS_DIR?.trim() || "a220-tech-docs";
 export interface WikiRouteResult {
   readonly statusCode: number;
   readonly headers: Readonly<Record<string, string>>;
-  readonly body: {
-    readonly path?: string;
-    readonly markdown?: string;
-    readonly detail?: string;
-  };
+  readonly body:
+    | Buffer
+    | {
+        readonly path?: string;
+        readonly markdown?: string;
+        readonly detail?: string;
+      };
 }
 
 export interface WikiRouteOptions {
@@ -34,12 +36,26 @@ function normalizeWikiPath(rawPath: string): string {
     decoded.includes("\\") ||
     decoded.startsWith("/") ||
     decoded.split("/").includes("..") ||
-    !decoded.endsWith(".md")
+    (!decoded.endsWith(".md") && !isWikiImagePath(decoded))
   ) {
     throw new Error("Invalid wiki path");
   }
 
   return decoded;
+}
+
+function isWikiImagePath(value: string): boolean {
+  return /^images\/[^/]+\.(?:png|jpe?g|webp)$/iu.test(value);
+}
+
+function imageContentType(value: string): string {
+  if (/\.png$/iu.test(value)) {
+    return "image/png";
+  }
+  if (/\.webp$/iu.test(value)) {
+    return "image/webp";
+  }
+  return "image/jpeg";
 }
 
 export async function handleWikiRoute(
@@ -80,6 +96,14 @@ export async function handleWikiRoute(
     };
   }
 
+  if (isWikiImagePath(wikiPath)) {
+    return {
+      statusCode: 200,
+      headers: { "content-type": imageContentType(wikiPath), "cache-control": "public, max-age=3600" },
+      body: await readFile(filePath),
+    };
+  }
+
   return {
     statusCode: 200,
     headers: { "content-type": "application/json; charset=utf-8" },
@@ -106,6 +130,6 @@ export async function routeWikiRequest(
   }
 
   response.writeHead(result.statusCode, result.headers);
-  response.end(JSON.stringify(result.body));
+  response.end(Buffer.isBuffer(result.body) ? result.body : JSON.stringify(result.body));
   return true;
 }
