@@ -158,7 +158,7 @@ dataprep-ocr-caption-batch-import: api-install
 
 dataprep-knowledge-ci: dataprep-download-minimal api-install
 	@echo "▶ Preparing knowledge artifacts for API image..."
-	cd backend-ts && npm run dataprep:knowledge
+	cd backend-ts && npm run dataprep:knowledge && npm run dataprep:knowledge:public-check
 
 check: ui-build api-test api-contracts
 	@echo "✔️ UI build and backend checks completed."
