@@ -175,6 +175,8 @@
 - [ ] L6S.4 Rejouer un smoke test `Linked images`. Recette: une entité issue d'un schéma technique affiche des images liées, ouvre le document source sans 404, et conserve une fiche `Entities` lisible. `TEST` + `UAT`
 - [ ] L6S.4a Rejouer un smoke test `Linked images` sans doublons documentaires. Recette: sur une entité issue d'un schéma FCOM, ni `Supporting documents` ni `Linked images` ne montrent de couple `long / court` pour la meme page. `TEST` + `UAT`
 
+- Note: smoke technique repo-local rejoué le 2026-04-24 sur `000`, `100` et `Linked images`; les items `TEST + UAT` restent volontairement ouverts jusqu'à validation utilisateur explicite.
+
 - Note: un bloqueur pré-UAT du lot 6 a été corrigé: si `ontology/` ou `wiki/` manque, le backend TS bootstrap désormais la couche connaissance en mode déterministe sans embeddings, et filtre les faux concepts documentaires génériques (`1. Scope`, `Reference`, etc.).
 - Note: ce bootstrap local sert uniquement à débloquer le runtime et les checks techniques; il ne remplace pas le full rebuild TS attendu avant l'UAT utilisateur du lot 6.
 
