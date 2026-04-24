@@ -17,6 +17,7 @@ import {
   type PartCanonicalizer,
   type PartCanonicalizerInput,
 } from "../src/dataprep/pipeline.ts";
+import { prepareTechDocsCanonicalDataset } from "../src/dataprep/tech-docs-canonical.ts";
 
 class FakeEmbeddingProvider implements EmbeddingProvider {
   readonly model = "fake-embedding-model";
@@ -400,6 +401,173 @@ test("runKnowledgeDataprepForCorpus builds public image/entity artifacts from OC
   assert.match(wikiMarkdown, /## Linked images/u);
   assert.match(wikiMarkdown, /Figure 02-02-4/u);
   assert.match(wikiMarkdown, /\.\.\/images\/a220-bleed-system-page-0001-1\.png/u);
+});
+
+test("runKnowledgeDataprepForCorpus keeps one canonical supporting document and one linked image for long/short FCOM duplicates", async () => {
+  const root = buildTestRoot();
+  const pagesDir = path.join(root, "pages");
+  const managedDatasetDir = path.join(root, "managed_dataset");
+  const techOutputRoot = path.join(root, "tech");
+  const preparedSource = path.join(managedDatasetDir, "tech_docs_prepared.csv.gz");
+  const canonicalSource = path.join(managedDatasetDir, "tech_docs_canonical.csv.gz");
+  mkdirSync(pagesDir, { recursive: true });
+  mkdirSync(managedDatasetDir, { recursive: true });
+  mkdirSync(path.join(techOutputRoot, "ocr"), { recursive: true });
+
+  const longDoc = "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529.pdf";
+  const shortDoc = "a220-300-FCOM-1-1-13_page_1529.pdf";
+  writeFileSync(path.join(pagesDir, longDoc), "");
+  writeFileSync(path.join(pagesDir, shortDoc), "");
+
+  writeGzipTsv(preparedSource, [
+    ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"],
+    [
+      longDoc,
+      "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped.pdf",
+      "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529.json",
+      "Fuel Tank Inerting System (FTIS) diagram with nitrogen-enriched air, ram air and heat exchangers.",
+      "99",
+      `${longDoc} 0`,
+      "ATA 28",
+      "Fuel Tank Inerting System",
+      "technical_diagram",
+    ],
+    [
+      longDoc,
+      "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped.pdf",
+      "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529.json",
+      "Fuel Tank Inerting System (FTIS) diagram with nitrogen-enriched air, ram air and heat exchangers.\nFlow continues toward the separation module.",
+      "139",
+      `${longDoc} 1`,
+      "ATA 28",
+      "Fuel Tank Inerting System",
+      "technical_diagram",
+    ],
+    [
+      shortDoc,
+      "a220-300-FCOM-1-1-13.pdf",
+      "a220-300-FCOM-1-1-13_page_1529.json",
+      "Fuel Tank Inerting System (FTIS) diagram with nitrogen-enriched air, ram air and heat exchangers.",
+      "99",
+      `${shortDoc} 0`,
+      "ATA 28",
+      "Fuel Tank Inerting System",
+      "technical_diagram",
+    ],
+    [
+      shortDoc,
+      "a220-300-FCOM-1-1-13.pdf",
+      "a220-300-FCOM-1-1-13_page_1529.json",
+      "Fuel Tank Inerting System (FTIS) diagram with nitrogen-enriched air, ram air and heat exchangers.\nFlow continues toward the separation module.",
+      "139",
+      `${shortDoc} 1`,
+      "ATA 28",
+      "Fuel Tank Inerting System",
+      "technical_diagram",
+    ],
+  ]);
+
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529__with_img_desc.json"),
+    JSON.stringify({
+      pages: [
+        {
+          markdown: "![ftis](img-1.png)\n\nFTIS diagram.",
+          images: [{ id: "img-1", imageBase64: "data:image/png;base64,aGVsbG8=" }],
+        },
+      ],
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529.image-caption.json"),
+    JSON.stringify({
+      page_category: "technical_diagram",
+      page_category_confidence: 0.99,
+      is_non_content_page: false,
+      retrieval_action: "index",
+      retrieval_weight: 1,
+      short_summary: "FTIS flow diagram.",
+      technical_description:
+        "Fuel Tank Inerting System (FTIS) flow diagram showing nitrogen-enriched air, ram air and heat exchangers.",
+      visible_text: ["FTIS", "NITROGEN ENRICHED AIR"],
+      visible_identifiers: ["Figure 28-10-1"],
+      ata_candidates: ["ATA 28"],
+      part_or_zone_candidates: ["Fuel Tank Inerting System"],
+      diagram_elements: ["heat exchanger", "separator module"],
+      relationships_or_flows: ["Nitrogen-enriched air flows through the FTIS path."],
+      warnings_or_limits: [],
+      figure_or_table_refs: ["Figure 28-10-1"],
+      uncertainties: [],
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "a220-300-FCOM-1-1-13_page_1529__with_img_desc.json"),
+    JSON.stringify({
+      pages: [
+        {
+          markdown: "![ftis](img-1.png)\n\nFTIS diagram.",
+          images: [{ id: "img-1", imageBase64: "data:image/png;base64,aGVsbG8=" }],
+        },
+      ],
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "a220-300-FCOM-1-1-13_page_1529.image-caption.json"),
+    JSON.stringify({
+      page_category: "technical_diagram",
+      page_category_confidence: 0.99,
+      is_non_content_page: false,
+      retrieval_action: "index",
+      retrieval_weight: 1,
+      short_summary: "FTIS flow diagram.",
+      technical_description:
+        "Fuel Tank Inerting System (FTIS) flow diagram showing nitrogen-enriched air, ram air and heat exchangers.",
+      visible_text: ["FTIS", "NITROGEN ENRICHED AIR"],
+      visible_identifiers: ["Figure 28-10-1"],
+      ata_candidates: ["ATA 28"],
+      part_or_zone_candidates: ["Fuel Tank Inerting System"],
+      diagram_elements: ["heat exchanger", "separator module"],
+      relationships_or_flows: ["Nitrogen-enriched air flows through the FTIS path."],
+      warnings_or_limits: [],
+      figure_or_table_refs: ["Figure 28-10-1"],
+      uncertainties: [],
+    }),
+    "utf8",
+  );
+
+  prepareTechDocsCanonicalDataset({
+    sourceFile: preparedSource,
+    outputFile: canonicalSource,
+    pagesDir,
+  });
+
+  const techConfig: DataprepCorpusConfig = {
+    corpus: "tech_docs",
+    sourceFile: canonicalSource,
+    outputRoot: techOutputRoot,
+    hasHeader: true,
+    normalizeRow: normalizeTechDocsPreparedRow,
+  };
+
+  const result = await runKnowledgeDataprepForCorpus(techConfig);
+  const wikiIndex = JSON.parse(readFileSync(result.wiki.indexPath, "utf8")) as Array<Record<string, unknown>>;
+  const ftis = wikiIndex.find((entry) => entry.slug === "fuel-tank-inerting-system");
+  assert.ok(ftis);
+  assert.deepEqual(ftis.supporting_docs, [shortDoc]);
+
+  const linkedImages = ftis.linked_images as Array<Record<string, unknown>>;
+  assert.equal(linkedImages.length, 1);
+  assert.equal(linkedImages[0]?.doc, shortDoc);
+  assert.equal(linkedImages[0]?.asset_path, "images/a220-300-fcom-1-1-13-page-1529-1.png");
+
+  const publicImages = JSON.parse(
+    readFileSync(path.join(result.ontology.root, "images.json"), "utf8"),
+  ) as Array<Record<string, unknown>>;
+  assert.equal(publicImages.length, 1);
+  assert.equal(publicImages[0]?.doc, shortDoc);
 });
 
 test("runKnowledgeDataprepForCorpus derives public image artifacts from enriched OCR markdown without caption sidecars", async () => {
