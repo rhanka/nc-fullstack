@@ -7,6 +7,16 @@
     buildEntityRelationshipGroups,
     type EntityRelationshipSource,
   } from "$lib/entities/entity-relationship-groups";
+  import {
+    getEntityAliasLine,
+    getEntityMetadata,
+    getEntityPartNumberLine,
+    getEntityPrimaryDoc,
+    getEntitySupportingDocs,
+    getEntityTitle,
+    getLinkedImages,
+    type EntityLinkedImageRecord,
+  } from "$lib/entities/entity-ui";
   import { activeTabValue, selectDoc, selectEntity } from "./store";
 
   type EntitySourceItem = ReferenceSourceItem & {
@@ -22,10 +32,7 @@
     readonly linked_images?: unknown;
   };
 
-  type EntityLinkedImage = {
-    readonly id?: unknown;
-    readonly doc?: unknown;
-    readonly asset_path?: unknown;
+  type EntityLinkedImage = EntityLinkedImageRecord & {
     readonly caption?: unknown;
     readonly technical_description?: unknown;
     readonly page_category?: unknown;
@@ -71,23 +78,6 @@
     return single ? [single] : [];
   }
 
-  function compact(values: string[], limit = 4): string {
-    if (values.length <= limit) {
-      return values.join(", ");
-    }
-
-    return values.slice(0, limit).join(", ") + " +" + String(values.length - limit);
-  }
-
-  function titleFor(item: ReferenceSourceItem | null): string {
-    if (!item) {
-      return "No entity selected";
-    }
-
-    const entity = asEntity(item);
-    return textValue(entity.title) ?? textValue(entity.doc) ?? textValue(entity.chunk_id) ?? "Untitled entity";
-  }
-
   function pathFor(item: ReferenceSourceItem | null): string | null {
     if (!item) {
       return null;
@@ -95,55 +85,6 @@
 
     const entity = asEntity(item);
     return textValue(entity.path) ?? textValue(entity.slug);
-  }
-
-  function primaryDocFor(item: ReferenceSourceItem | null): string | null {
-    return item ? textValue(asEntity(item).primary_doc) : null;
-  }
-
-  function supportingDocsFor(item: ReferenceSourceItem | null): string[] {
-    return item ? textArray(asEntity(item).supporting_docs) : [];
-  }
-
-  function linkedImagesFor(item: ReferenceSourceItem | null): EntityLinkedImage[] {
-    const linkedImages = item ? asEntity(item).linked_images : null;
-    if (!Array.isArray(linkedImages)) {
-      return [];
-    }
-
-    const seenKeys = new Set<string>();
-    return linkedImages
-      .filter((image): image is EntityLinkedImage => Boolean(image && typeof image === "object"))
-      .filter((image) => Boolean(textValue(image.asset_path) || textValue(image.doc)))
-      .filter((image) => {
-        const key =
-          textValue(image.asset_path) ??
-          [textValue(image.doc), textValue(image.id)].filter(Boolean).join(":");
-        if (!key || seenKeys.has(key)) {
-          return false;
-        }
-        seenKeys.add(key);
-        return true;
-      });
-  }
-
-  function metadataFor(item: ReferenceSourceItem | null): string {
-    if (!item) {
-      return "";
-    }
-
-    const entity = asEntity(item);
-    const ataCodes = textArray(entity.ata_codes);
-    const zones = textArray(entity.zones).map((zone) => "Zone " + zone);
-    return [...ataCodes, ...zones].join(" / ");
-  }
-
-  function aliasFor(item: ReferenceSourceItem | null): string {
-    return item ? compact(textArray(asEntity(item).aliases), 4) : "";
-  }
-
-  function partNumbersFor(item: ReferenceSourceItem | null): string {
-    return item ? compact(textArray(asEntity(item).part_numbers), 5) : "";
   }
 
   function articleBody(markdown: string | undefined): string {
@@ -239,9 +180,9 @@
   }
 
   $: selectedPath = pathFor(selectedEntity);
-  $: selectedPrimaryDoc = primaryDocFor(selectedEntity);
-  $: selectedSupportingDocs = supportingDocsFor(selectedEntity);
-  $: selectedLinkedImages = linkedImagesFor(selectedEntity);
+  $: selectedPrimaryDoc = getEntityPrimaryDoc(selectedEntity);
+  $: selectedSupportingDocs = getEntitySupportingDocs(selectedEntity);
+  $: selectedLinkedImages = getLinkedImages(selectedEntity) as EntityLinkedImage[];
   $: relatedEntityGroups = buildEntityRelationshipGroups(
     selectedEntity as EntityRelationshipSource | null,
     entitiesList as readonly EntityRelationshipSource[],
@@ -272,19 +213,19 @@
   {:else}
     <header class="entity-detail__header">
       <p class="entity-detail__eyebrow">Entity</p>
-      <h1>{titleFor(selectedEntity)}</h1>
+      <h1>{getEntityTitle(selectedEntity)}</h1>
       <span class="entity-detail__badge">Used in current answer</span>
 
-      {#if metadataFor(selectedEntity)}
-        <p class="entity-detail__meta">{metadataFor(selectedEntity)}</p>
+      {#if getEntityMetadata(selectedEntity, 99)}
+        <p class="entity-detail__meta">{getEntityMetadata(selectedEntity, 99)}</p>
       {/if}
 
-      {#if aliasFor(selectedEntity)}
-        <p class="entity-detail__line"><strong>Aliases:</strong> {aliasFor(selectedEntity)}</p>
+      {#if getEntityAliasLine(selectedEntity, 4)}
+        <p class="entity-detail__line"><strong>Aliases:</strong> {getEntityAliasLine(selectedEntity, 4)}</p>
       {/if}
 
-      {#if partNumbersFor(selectedEntity)}
-        <p class="entity-detail__line"><strong>Part numbers:</strong> {partNumbersFor(selectedEntity)}</p>
+      {#if getEntityPartNumberLine(selectedEntity, 5)}
+        <p class="entity-detail__line"><strong>Part numbers:</strong> {getEntityPartNumberLine(selectedEntity, 5)}</p>
       {/if}
 
       {#if selectedPrimaryDoc}
