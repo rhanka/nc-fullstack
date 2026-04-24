@@ -163,6 +163,18 @@
     return null;
   }
 
+  function entityHasLinkedImages(item: ReferenceSourceItem | null | undefined): boolean {
+    if (!item) {
+      return false;
+    }
+
+    const candidate = item as ReferenceSourceItem & {
+      readonly linked_images?: unknown;
+    };
+
+    return Array.isArray(candidate.linked_images) && candidate.linked_images.length > 0;
+  }
+
   function clearRetrievedSources() {
     clearReferenceSourceGroup("non_conformities");
     clearReferenceSourceGroup("tech_docs");
@@ -339,7 +351,7 @@
       : false;
 
     if (entity_num > 0 && !selectedStillPresent) {
-      selectEntity.set(entitiesFilter[0]);
+      selectEntity.set(entitiesFilter.find((entity) => entityHasLinkedImages(entity)) ?? entitiesFilter[0]);
     }
 
     if (entity_num === 0) {
