@@ -156,11 +156,13 @@
 - [x] L6F.4b Implémenter `dataprep-prepare-tech-docs`. Recette: génération de `a220_tech_docs_content_canonical.csv.gz` + audit JSON, lignes conservées recopiées sans re-sérialisation, lignes sans page servie exclues du corpus canonique. `TEST`
 - [x] L6F.4c Brancher le RAG TS sur le CSV canonique. Recette: `dataprep`, `dataprep-tech-docs`, `dataprep-knowledge*` et `api-prepare-data-ci` consomment le canonique sans filtre runtime. `TEST`
 - [x] L6F.4d Rebuilder les artefacts tech docs depuis le CSV canonique. Recette: `vector-export / lexical / ontology / wiki` régénérés et audit local montrant zéro source technique non servable dans les artefacts. `TEST`
+- [x] L6F.4e Dédupliquer les pages techniques equivalentes avant indexation. Recette: le CSV canonique remappe les alias FCOM `long / court` vers un seul document court, puis supprime ces doublons jusque dans `vector-export`, `lexical`, `supporting_docs`, `primary_doc` et les artefacts publics image/wiki. `TEST`
 - [x] L6F.5 Injecter les entites knowledge dans la synthese du rapport `100`. Recette: `search_entities_wiki` est consomme par le prompt `100`, contient un resume exploitable, et un test prouve que le contexte entites atteint la generation d'analyse. `TEST`
 - [x] L6F.6 Spécifier `Wiki Image Intelligence` comme extension de la fiche `Entities`. Recette: spec dédiée validant `Linked images` avant `Supporting documents`, artefacts publics dérivés, absence de drawer image, et regroupement simple des related entities par classes. `AUTO`
 - [x] L6F.7 Générer les artefacts publics image/entity. Recette: `ontology/images.json`, `ontology/image_relations.json` et `wiki/images/*` sont produits depuis les OCR/captions existants sans exposer les sidecars batch bruts. `TEST`
 - [x] L6F.8 Brancher les images liées dans le wiki. Recette: `wiki/index.json` expose `linked_images`, les articles `wiki/parts/*.md` ajoutent une section `Linked images`, et le tri limite le bruit par score déterministe. `TEST`
 - [x] L6F.9 Afficher `Linked images` dans `EntityDetail`. Recette: section située avant `Supporting documents`, cartes image compactes, miniature si disponible, caption utile, action `Open document`, et aucun nouveau drawer. `TEST`
+- [x] L6F.9a Refaire le rendu `Linked images` en preuve lisible. Recette: image pleine largeur dans `EntityDetail`, caption sous l'image, clic ouvrant un modal lisible, sans nouveau niveau de navigation. `TEST`
 - [x] L6F.10 Grouper les related entities par classes simples. Recette: `Same answer`, `Image-linked`, `Same document`, `Same ATA`, `Same zone` sont affichés en chips cliquables sans canvas graphe complet. `TEST`
 - [x] L6F.11 Brancher le CI/CD data associé. Recette: les artefacts publics image/wiki sont rebuild/uploadés avec les targets dataprep existantes sans relancer automatiquement les batches OpenAI caption. `TEST`
 - [x] L6F.11a Corriger le rebuild CI des images wiki. Recette: la cible CI télécharge aussi les artefacts source `ocr/` enrichis depuis Scaleway, nettoie les images générées périmées, et échoue si `tech_docs` produit zéro image/relation liée. `TEST`
@@ -171,6 +173,7 @@
 - [ ] L6S.2 Rejouer un smoke test `100` après les fixes post-UAT. Recette: même validation sur un cas d'analyse plus riche. `TEST` + `UAT`
 - [x] L6S.3 Vérifier qu'aucune dépendance `graphify` ou `lancedb` n'a été réintroduite pendant les fixes. Recette: grep repo-local propre + checks backend verts. `TEST`
 - [ ] L6S.4 Rejouer un smoke test `Linked images`. Recette: une entité issue d'un schéma technique affiche des images liées, ouvre le document source sans 404, et conserve une fiche `Entities` lisible. `TEST` + `UAT`
+- [ ] L6S.4a Rejouer un smoke test `Linked images` sans doublons documentaires. Recette: sur une entité issue d'un schéma FCOM, ni `Supporting documents` ni `Linked images` ne montrent de couple `long / court` pour la meme page. `TEST` + `UAT`
 
 - Note: un bloqueur pré-UAT du lot 6 a été corrigé: si `ontology/` ou `wiki/` manque, le backend TS bootstrap désormais la couche connaissance en mode déterministe sans embeddings, et filtre les faux concepts documentaires génériques (`1. Scope`, `Reference`, etc.).
 - Note: ce bootstrap local sert uniquement à débloquer le runtime et les checks techniques; il ne remplace pas le full rebuild TS attendu avant l'UAT utilisateur du lot 6.
