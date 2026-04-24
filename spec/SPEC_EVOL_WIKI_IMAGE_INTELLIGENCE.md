@@ -34,6 +34,12 @@ Objectif V1:
 
 Les artefacts publics sont derives et nettoyes. Ils ne sont pas les sidecars bruts OpenAI.
 
+Ils doivent aussi etre dedoublonnes a partir du corpus canonique:
+
+- pas de double document `long / court` pour une meme page
+- pas d'image publique dupliquee parce qu'une meme page est presente sous deux noms
+- pas de duplication image par chunk quand une page genere plusieurs chunks RAG
+
 ### `ontology/images.json`
 
 Liste les images OCR pertinentes extraites depuis les pages techniques.
@@ -78,6 +84,7 @@ Ces images sont limitees pour ne pas faire grossir les sources chat:
 - maximum 6 images par entite dans l'index
 - tri par score desc puis par document stable
 - aucune image avec `retrieval_action = exclude`
+- une seule image publique par page canonique et par index image
 
 ### `wiki/parts/<slug>.md`
 
@@ -141,12 +148,21 @@ La section `Linked images` est un `details` ouvert par defaut si `n <= 3`, repli
 
 Carte image:
 
-- miniature si `asset_path` est disponible
+- image large occupant toute la largeur utile de la fiche
+- clic sur l'image pour ouverture en modal
 - titre `figure_or_table_refs[0]` ou nom du document
-- caption courte
+- caption courte sous l'image
 - badges discrets pour `diagram`, `photo`, `table` si disponibles
 - bouton `Open document`
-- bouton optionnel `Open image context` si l'article wiki contient l'ancre/contexte
+- le nom du document reste secondaire
+
+Modal image:
+
+- overlay plein ecran leger
+- image centree en `contain`, sans nouveau viewer custom
+- caption et meta sous l'image
+- bouton `Open document`
+- fermeture par bouton, backdrop et `Esc`
 
 ## Related entities: clique + classes
 
@@ -191,14 +207,18 @@ Cas minimal:
 1. Ouvrir une analyse qui remonte une entite issue d'un schema technique.
 2. Cliquer `Sources > Entities > Open entity`.
 3. Verifier que la fiche affiche `Linked images` avant `Supporting documents`.
-4. Verifier qu'au moins une image a une caption utile et un document source ouvrable.
-5. Cliquer `Open document`; le viewer `/doc` ouvre la page source sans 404.
-6. Verifier que `Related entities found in this answer` reste lisible et que les groupes par classes n'ajoutent pas de bruit.
+4. Verifier qu'aucune page equivalente `long / court` n'apparait en double dans `Supporting documents` ni dans `Linked images`.
+5. Verifier qu'au moins une image occupe la largeur utile de la fiche, avec caption sous l'image.
+6. Cliquer l'image; un modal s'ouvre a taille lisible puis se ferme correctement.
+7. Cliquer `Open document`; le viewer `/doc` ouvre la page source sans 404.
+8. Verifier que `Related entities found in this answer` reste lisible et que les groupes par classes n'ajoutent pas de bruit.
 
 ## Criteres d'acceptation
 
 - les images liees sont visibles dans la fiche entite existante
 - les images ne creent pas de nouveau niveau de navigation
+- les documents techniques equivalentes n'apparaissent qu'une fois dans la fiche entite
+- les images liees ne sont pas dupliquees par alias documentaire ni par chunk RAG
 - les liens documents des images ouvrent `/doc`
 - les artefacts publics sont regenerables sans relancer les batches caption
 - les sidecars/audits OpenAI ne sont pas requis au runtime
