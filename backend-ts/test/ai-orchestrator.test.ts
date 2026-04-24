@@ -38,7 +38,20 @@ function createPrompt(system: string, user: string, jsonMode: boolean): PromptTe
   } as PromptTemplate;
 }
 
-function createDependencies(dependencyOptions: { readonly finalSystemPrompts?: string[] } = {}) {
+function createDependencies(
+  dependencyOptions: {
+    readonly finalSystemPrompts?: string[];
+    readonly finalResponse?: Record<string, unknown>;
+  } = {},
+) {
+  const finalResponse = dependencyOptions.finalResponse ?? {
+    label: "Windshield rivet flushness out of tolerance",
+    description: {
+      observation: "Measured rivet flushness below tolerance on right windshield frame.",
+    },
+    comment: "Draft updated with similar cases and technical references.",
+  };
+
   const llmRuntime: LlmRuntime = {
     async invoke(options) {
       const system = options.messages[0]?.content ?? "";
@@ -57,13 +70,7 @@ function createDependencies(dependencyOptions: { readonly finalSystemPrompts?: s
       return {
         providerId: "openai",
         model: options.model,
-        text: JSON.stringify({
-          label: "Windshield rivet flushness out of tolerance",
-          description: {
-            observation: "Measured rivet flushness below tolerance on right windshield frame.",
-          },
-          comment: "Draft updated with similar cases and technical references.",
-        }),
+        text: JSON.stringify(finalResponse),
         jsonMode: true,
         responseId: "final-1",
         reasoningSummary: "Cross-checked technical docs and one similar NC.",
@@ -82,17 +89,14 @@ function createDependencies(dependencyOptions: { readonly finalSystemPrompts?: s
         },
         {
           type: "delta",
-          delta: "\"description\":{\"observation\":\"Measured rivet flushness below tolerance on right windshield frame.\"},\"comment\":\"Draft updated with similar cases and technical references.\"}",
+          delta: JSON.stringify(finalResponse).slice(
+            "{\"label\":\"Windshield rivet flushness out of tolerance\",".length,
+            -1,
+          ),
         },
         {
           type: "completed",
-          text: JSON.stringify({
-            label: "Windshield rivet flushness out of tolerance",
-            description: {
-              observation: "Measured rivet flushness below tolerance on right windshield frame.",
-            },
-            comment: "Draft updated with similar cases and technical references.",
-          }),
+          text: JSON.stringify(finalResponse),
           responseId: "final-stream-1",
           reasoningSummary: "Cross-checked technical docs and one similar NC.",
         },
@@ -256,6 +260,27 @@ test("NativeAiOrchestrator.compute injects entity context into task 100 analysis
   assert.match(finalPrompt, /Windshield frame/u);
   assert.match(finalPrompt, /Canonical windshield frame entity/u);
   assert.match(finalPrompt, /Supporting doc: tech-window\.md/u);
+});
+
+test("NativeAiOrchestrator.compute clears raw JSON text when structured payload has no comment", async () => {
+  const orchestrator = new NativeAiOrchestrator(
+    createDependencies({
+      finalResponse: {
+        label: "Windshield rivet flushness out of tolerance",
+        description: {
+          synthesis: "Structured task 100 payload without chat comment.",
+        },
+      },
+    }),
+  );
+
+  const result = await orchestrator.compute(buildRequest("100"));
+
+  assert.equal(result.payload.text, null);
+  assert.equal(result.payload.label, "Windshield rivet flushness out of tolerance");
+  assert.deepEqual(result.payload.description, {
+    synthesis: "Structured task 100 payload without chat comment.",
+  });
 });
 
 test("NativeAiOrchestrator.openStream emits legacy SSE blocks without Python runtime", async () => {

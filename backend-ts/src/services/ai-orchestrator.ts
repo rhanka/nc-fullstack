@@ -206,13 +206,17 @@ function parseFinalPayload(responseText: string): {
 } {
   try {
     const parsed = JSON.parse(responseText) as Record<string, unknown>;
+    const label = typeof parsed.label === "string" ? parsed.label : null;
+    const description =
+      typeof parsed.description === "string" || (parsed.description && typeof parsed.description === "object")
+        ? (parsed.description as Record<string, unknown> | string)
+        : null;
+    const comment = typeof parsed.comment === "string" ? parsed.comment : null;
+
     return {
-      text: typeof parsed.comment === "string" ? parsed.comment : responseText,
-      label: typeof parsed.label === "string" ? parsed.label : null,
-      description:
-        typeof parsed.description === "string" || (parsed.description && typeof parsed.description === "object")
-          ? (parsed.description as Record<string, unknown> | string)
-          : null,
+      text: comment ?? (label || description ? null : responseText),
+      label,
+      description,
     };
   } catch {
     return {
