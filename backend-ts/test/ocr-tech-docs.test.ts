@@ -185,6 +185,130 @@ test("buildPreparedTechDocsCsvFromOcrArtifacts emits compatible rows and exclude
   assert.equal(audit.pagesExcluded, 1);
 });
 
+test("runOcrTechDocsDataprep excludes ATA chapter separator pages without invoking the caption client", async () => {
+  const root = buildTestRoot();
+  const pagesDir = path.join(root, "pages");
+  const ocrDir = path.join(root, "ocr");
+  const outputFile = path.join(root, "managed_dataset", "a220_tech_docs_content_prepared.csv.gz");
+  mkdirSync(pagesDir, { recursive: true });
+  mkdirSync(ocrDir, { recursive: true });
+
+  writeFileSync(path.join(pagesDir, "ATA-24_page_0001.pdf"), "");
+  writeFileSync(
+    path.join(ocrDir, "ATA-24_page_0001.json"),
+    JSON.stringify({
+      pages: [
+        {
+          index: 0,
+          dimensions: { width: 2200, height: 1700, dpi: 200 },
+          markdown: "# ATA 24 - Electrical Power\n\n![img-0.jpeg](img-0.jpeg)",
+          images: [
+            {
+              id: "img-0.jpeg",
+              top_left_x: 0,
+              top_left_y: 419,
+              bottom_right_x: 2200,
+              bottom_right_y: 1698,
+              imageBase64: "data:image/png;base64,aGVsbG8=",
+            },
+          ],
+        },
+      ],
+    }),
+  );
+
+  const client: ImageCaptionClient = {
+    provider: "mock",
+    model: "gpt-5.4",
+    async analyzePage() {
+      throw new Error("caption client should not be called for chapter separator pages");
+    },
+  };
+
+  const result = await runOcrTechDocsDataprep({
+    pagesDir,
+    ocrDir,
+    outputFile,
+    mode: "existing",
+    captionMode: "force",
+    imageCaptionClient: client,
+  });
+
+  assert.equal(result.ocr.captionJsonWritten, 1);
+  assert.equal(result.csv.pagesExcluded, 1);
+  assert.equal(result.csv.rowsWritten, 0);
+
+  const analysis = JSON.parse(readFileSync(path.join(ocrDir, "ATA-24_page_0001.image-caption.json"), "utf8")) as {
+    page_category?: string;
+    retrieval_action?: string;
+    technical_description?: string;
+  };
+  assert.equal(analysis.page_category, "separation_page");
+  assert.equal(analysis.retrieval_action, "exclude");
+  assert.equal(analysis.technical_description, "");
+  assert.doesNotMatch(readGzipText(outputFile), /ATA-24_page_0001\.pdf/u);
+});
+
+test("buildPreparedTechDocsCsvFromOcrArtifacts excludes ATA chapter separator pages despite stale technical captions", async () => {
+  const root = buildTestRoot();
+  const pagesDir = path.join(root, "pages");
+  const ocrDir = path.join(root, "ocr");
+  const outputFile = path.join(root, "managed_dataset", "a220_tech_docs_content_prepared.csv.gz");
+  mkdirSync(pagesDir, { recursive: true });
+  mkdirSync(ocrDir, { recursive: true });
+
+  writeFileSync(path.join(pagesDir, "ATA-30_page_0001.pdf"), "");
+  writeFileSync(
+    path.join(ocrDir, "ATA-30_page_0001.json"),
+    JSON.stringify({
+      pages: [
+        {
+          index: 0,
+          dimensions: { width: 2200, height: 1700, dpi: 200 },
+          markdown: "# ATA 30 - Ice And Rain Protection\n\n![img-0.jpeg](img-0.jpeg)",
+          images: [
+            {
+              id: "img-0.jpeg",
+              top_left_x: 0,
+              top_left_y: 380,
+              bottom_right_x: 2200,
+              bottom_right_y: 1690,
+              imageBase64: "data:image/png;base64,aGVsbG8=",
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  writeFileSync(
+    path.join(ocrDir, "ATA-30_page_0001.image-caption.json"),
+    JSON.stringify({
+      schema_version: "a220_image_caption_v1",
+      page_category: "technical_photo",
+      page_category_confidence: 0.94,
+      retrieval_action: "index",
+      retrieval_weight: 1,
+      short_summary: "CS100 aircraft photo.",
+      technical_description: "Marketing-style aircraft image.",
+      visible_text: ["ATA 30"],
+      ata_candidates: ["ATA 30"],
+      part_or_zone_candidates: ["Aircraft"],
+    }),
+  );
+
+  const result = await buildPreparedTechDocsCsvFromOcrArtifacts({
+    pagesDir,
+    ocrDir,
+    outputFile,
+    chunkMaxChars: 400,
+  });
+
+  assert.equal(result.pagesExcluded, 1);
+  assert.equal(result.pagesIndexed, 0);
+  assert.equal(result.rowsWritten, 0);
+  assert.doesNotMatch(readGzipText(outputFile), /ATA-30_page_0001\.pdf/u);
+});
+
 test("runOcrTechDocsDataprep writes image caption audit sidecars when the client exposes audit", async () => {
   const root = buildTestRoot();
   const pagesDir = path.join(root, "pages");

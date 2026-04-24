@@ -140,6 +140,10 @@ export type OcrImage = {
   readonly id: string;
   readonly imageBase64?: string;
   readonly image_base64?: string;
+  readonly top_left_x?: number;
+  readonly top_left_y?: number;
+  readonly bottom_right_x?: number;
+  readonly bottom_right_y?: number;
 };
 
 export type OcrPage = {
@@ -147,6 +151,11 @@ export type OcrPage = {
   readonly markdown?: string;
   readonly markdown_alt?: string;
   readonly images?: readonly OcrImage[];
+  readonly dimensions?: {
+    readonly width?: number;
+    readonly height?: number;
+    readonly dpi?: number;
+  };
 };
 
 export type OcrDocument = {
@@ -476,6 +485,107 @@ function inferDefaultAnalysis(markdown: string, doc: string): ImageCaptionAnalys
   });
 }
 
+function numberOrNull(value: unknown): number | null {
+  const candidate = Number(value);
+  return Number.isFinite(candidate) ? candidate : null;
+}
+
+function visibleMarkdownLines(markdown: string): string[] {
+  return markdown
+    .replace(/!\[[^\]]*\]\([^)]*\)/gu, "\n")
+    .split(/\r?\n/gu)
+    .map((line) =>
+      line
+        .replace(/^#{1,6}\s*/u, "")
+        .replace(/<br\s*\/?>/giu, " ")
+        .replace(/\s+/gu, " ")
+        .trim(),
+    )
+    .filter(Boolean);
+}
+
+function isLikelyAtaChapterSeparatorHeading(text: string): boolean {
+  return (
+    text.length > 0 &&
+    text.length <= 120 &&
+    /^ATA[\s-]?\d{2}\b/iu.test(text) &&
+    !/\b(figure|table|ref(?:erence)?|example|procedure|task|step|inspection|continued)\b/iu.test(text)
+  );
+}
+
+function imageWidthCoverage(page: OcrPage, image: OcrImage): number {
+  const pageWidth = numberOrNull(page.dimensions?.width);
+  const left = numberOrNull(image.top_left_x);
+  const right = numberOrNull(image.bottom_right_x);
+  if (pageWidth === null || pageWidth <= 0 || left === null || right === null || right <= left) {
+    return 0;
+  }
+  return clamp((right - left) / pageWidth, 0, 1);
+}
+
+export function inferDeterministicNonContentAnalysis(
+  ocrDocument: OcrDocument,
+  _doc: string,
+): ImageCaptionAnalysis | null {
+  const page = extractFirstPage(ocrDocument);
+  if (!page) {
+    return null;
+  }
+
+  const images = page.images ?? [];
+  if (images.length !== 1) {
+    return null;
+  }
+
+  const visibleLines = visibleMarkdownLines(String(page.markdown ?? ocrDocument.markdown ?? ""));
+  if (visibleLines.length !== 1) {
+    return null;
+  }
+
+  const heading = visibleLines[0] ?? "";
+  if (!isLikelyAtaChapterSeparatorHeading(heading)) {
+    return null;
+  }
+
+  if (imageWidthCoverage(page, images[0]!) < 0.92) {
+    return null;
+  }
+
+  return normalizeImageCaptionAnalysis({
+    page_category: "separation_page",
+    page_category_confidence: 0.99,
+    is_non_content_page: true,
+    retrieval_action: "exclude",
+    retrieval_weight: 0,
+    short_summary: "ATA chapter separator page.",
+    technical_description: "",
+    visible_text: [],
+    visible_identifiers: [],
+    ata_candidates: [],
+    part_or_zone_candidates: [],
+    diagram_elements: [],
+    relationships_or_flows: [],
+    warnings_or_limits: [],
+    figure_or_table_refs: [],
+    uncertainties: [],
+  });
+}
+
+export function resolvePageAnalyses(
+  ocrDocument: OcrDocument,
+  doc: string,
+  captionAnalyses: readonly ImageCaptionAnalysis[] = [],
+): readonly ImageCaptionAnalysis[] {
+  const deterministic = inferDeterministicNonContentAnalysis(ocrDocument, doc);
+  if (deterministic) {
+    return [deterministic];
+  }
+  if (captionAnalyses.length > 0) {
+    return captionAnalyses;
+  }
+  return [inferDefaultAnalysis(extractMarkdown(ocrDocument, true), doc)];
+}
+
 function encodeTsvField(value: string): string {
   if (/["\t\r\n\\]/u.test(value)) {
     return "\"" + value.replace(/\\/gu, "\\\\").replace(/"/gu, "\\\"") + "\"";
@@ -645,7 +755,7 @@ export async function buildPreparedTechDocsCsvFromOcrArtifacts(
       }
 
       const rawMarkdown = extractMarkdown(ocrDocument, captionAnalyses.length === 0);
-      const analyses = captionAnalyses.length > 0 ? captionAnalyses : [inferDefaultAnalysis(rawMarkdown, doc)];
+      const analyses = resolvePageAnalyses(ocrDocument, doc, captionAnalyses);
       const pagePolicy = applyPageRetrievalPolicy(analyses[0]!);
       if (pagePolicy.action === "exclude") {
         pagesExcluded += 1;
@@ -949,16 +1059,26 @@ async function generateImageCaptionArtifacts(
 
   async function processDoc(doc: string): Promise<void> {
     const outputPath = captionJsonPath(options.ocrDir, doc);
-    if (captionMode === "missing" && existsSync(outputPath)) {
-      captionJsonSkipped += 1;
-      return;
-    }
     const ocrPath = findOcrJsonPath(options.ocrDir, doc, false);
     if (!ocrPath) {
       captionJsonSkipped += 1;
       return;
     }
     const ocrDocument = readJsonFile<OcrDocument>(ocrPath);
+    const deterministicAnalysis = inferDeterministicNonContentAnalysis(ocrDocument, doc);
+    if (deterministicAnalysis) {
+      atomicWriteFile(outputPath, JSON.stringify(deterministicAnalysis, null, 2) + "\n");
+      const deterministicAuditPath = captionAuditJsonPath(options.ocrDir, doc);
+      if (existsSync(deterministicAuditPath)) {
+        unlinkSync(deterministicAuditPath);
+      }
+      captionJsonWritten += 1;
+      return;
+    }
+    if (captionMode === "missing" && existsSync(outputPath)) {
+      captionJsonSkipped += 1;
+      return;
+    }
     const markdown = extractMarkdown(ocrDocument, true);
     const imageDataUrls = extractImageDataUrls(ocrDocument);
     const usedImageCaptionClient = imageDataUrls.length > 0;
