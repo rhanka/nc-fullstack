@@ -13,6 +13,7 @@ import {
   captionJsonPath,
   extractImageDataUrls,
   findOcrJsonPath,
+  resolvePageAnalyses,
   normalizeImageCaptionAnalysis,
   pageBaseFromDoc,
   readJsonFile,
@@ -250,16 +251,18 @@ export function buildPublicWikiImageArtifacts(options: BuildPublicWikiImageArtif
   }
 
   for (const record of uniqueDocs.values()) {
-    const { analyses, hasCaptionSidecar } = readImageAnalyses(ocrDir, record.doc);
-    if (analyses.length === 0) {
+    const { analyses: rawAnalyses, hasCaptionSidecar } = readImageAnalyses(ocrDir, record.doc);
+    if (rawAnalyses.length === 0) {
       continue;
     }
-    const ocrPath = findOcrJsonPath(ocrDir, record.doc, hasCaptionSidecar);
+    const rawOcrPath = path.join(ocrDir, pageBaseFromDoc(record.doc) + ".json");
+    const ocrPath = existsSync(rawOcrPath) ? rawOcrPath : findOcrJsonPath(ocrDir, record.doc, hasCaptionSidecar);
     if (!ocrPath) {
       continue;
     }
 
     const ocrDocument = readJsonFile<OcrDocument>(ocrPath);
+    const analyses = resolvePageAnalyses(ocrDocument, record.doc, rawAnalyses);
     const imageDataUrls = extractImageDataUrls(ocrDocument);
     if (imageDataUrls.length === 0) {
       continue;
