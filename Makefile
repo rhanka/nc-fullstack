@@ -27,6 +27,10 @@ export API_PORT        ?= 8000
 export UI_PORT         ?= 5177
 export NGINX_PORT      ?= 8080
 export DC_OPTS         ?= --build --force-recreate
+export TECH_DOCS_S3_UPLOAD_DIRS ?= managed_dataset vector-export lexical ontology wiki pages ocr
+export TECH_DOCS_S3_UPLOAD_FILES ?= knowledge-manifest.json
+export NC_S3_UPLOAD_DIRS ?= managed_dataset json vector-export lexical ontology wiki
+export NC_S3_UPLOAD_FILES ?= knowledge-manifest.json
 
 # ----------------------------
 # Main targets
@@ -242,10 +246,19 @@ dataprep-upload-nc-data: check-s5cmd
 		exit 1; \
 	fi
 	@echo "▶ Uploading non-conformities data to Scaleway..."
-	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY} &&\
-	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY} &&\
-	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
-		cp --acl "public-read" 'api/data/${S3_BUCKET_NC}/*' s3://${S3_BUCKET_NC}/
+	@set -eu; \
+	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY}; \
+	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY}; \
+	for dir in ${NC_S3_UPLOAD_DIRS}; do \
+		test -d "api/data/${NC_DIR}/$$dir" || { echo "❌ Missing upload directory: api/data/${NC_DIR}/$$dir"; exit 1; }; \
+		echo "  - $$dir"; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "api/data/${NC_DIR}/$$dir/*" "s3://${S3_BUCKET_NC}/$$dir/"; \
+	done; \
+	for file in ${NC_S3_UPLOAD_FILES}; do \
+		test -f "api/data/${NC_DIR}/$$file" || { echo "❌ Missing upload file: api/data/${NC_DIR}/$$file"; exit 1; }; \
+		echo "  - $$file"; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "api/data/${NC_DIR}/$$file" "s3://${S3_BUCKET_NC}/$$file"; \
+	done
 
 dataprep-upload-tech-docs: check-s5cmd
 	@if [ -z "${S3_DATAPREP_ACCESS_KEY}" ] || [ -z "${S3_DATAPREP_SECRET_KEY}" ]; then \
@@ -253,10 +266,19 @@ dataprep-upload-tech-docs: check-s5cmd
 		exit 1; \
 	fi
 	@echo "▶ Uploading technical documentation to Scaleway..."
-	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY} &&\
-	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY} &&\
-	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
-		cp --acl "public-read" 'api/data/${S3_BUCKET_DOCS}/*' s3://${S3_BUCKET_DOCS}/
+	@set -eu; \
+	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY}; \
+	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY}; \
+	for dir in ${TECH_DOCS_S3_UPLOAD_DIRS}; do \
+		test -d "api/data/${TECH_DOCS_DIR}/$$dir" || { echo "❌ Missing upload directory: api/data/${TECH_DOCS_DIR}/$$dir"; exit 1; }; \
+		echo "  - $$dir"; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "api/data/${TECH_DOCS_DIR}/$$dir/*" "s3://${S3_BUCKET_DOCS}/$$dir/"; \
+	done; \
+	for file in ${TECH_DOCS_S3_UPLOAD_FILES}; do \
+		test -f "api/data/${TECH_DOCS_DIR}/$$file" || { echo "❌ Missing upload file: api/data/${TECH_DOCS_DIR}/$$file"; exit 1; }; \
+		echo "  - $$file"; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "api/data/${TECH_DOCS_DIR}/$$file" "s3://${S3_BUCKET_DOCS}/$$file"; \
+	done
 
 dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
 	@echo "✔️  All data upload completed."
@@ -267,13 +289,25 @@ dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
 
 dataprep-download-nc-data: check-s5cmd
 	@echo "▶ Downloading non-conformities data from Scaleway..."
-	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_NC}/* 'api/data/${NC_DIR}/'
+	@set -eu; \
+	for dir in ${NC_S3_UPLOAD_DIRS}; do \
+		mkdir -p "api/data/${NC_DIR}/$$dir"; \
+		s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} sync "s3://${S3_BUCKET_NC}/$$dir/*" "api/data/${NC_DIR}/$$dir/"; \
+	done; \
+	for file in ${NC_S3_UPLOAD_FILES}; do \
+		s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_NC}/$$file" "api/data/${NC_DIR}/$$file"; \
+	done
 
 dataprep-download-tech-docs: check-s5cmd
 	@echo "▶ Downloading technical documentation from Scaleway..."
-	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_DOCS}/* 'api/data/${TECH_DOCS_DIR}/'
+	@set -eu; \
+	for dir in ${TECH_DOCS_S3_UPLOAD_DIRS}; do \
+		mkdir -p "api/data/${TECH_DOCS_DIR}/$$dir"; \
+		s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} sync "s3://${S3_BUCKET_DOCS}/$$dir/*" "api/data/${TECH_DOCS_DIR}/$$dir/"; \
+	done; \
+	for file in ${TECH_DOCS_S3_UPLOAD_FILES}; do \
+		s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$$file" "api/data/${TECH_DOCS_DIR}/$$file"; \
+	done
 
 dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 	@echo "✔️  All data download completed."
