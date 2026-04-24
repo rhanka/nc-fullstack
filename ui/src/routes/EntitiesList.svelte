@@ -10,6 +10,7 @@
     readonly part_numbers?: unknown;
     readonly supporting_docs?: unknown;
     readonly primary_doc?: unknown;
+    readonly linked_images?: unknown;
   };
 
   export let entitiesList: ReferenceSourceItem[] = [];
@@ -79,14 +80,32 @@
   function docsFor(item: ReferenceSourceItem): string {
     const entity = asEntity(item);
     const supportingDocs = textArray(entity.supporting_docs);
-    const hasPrimary = Boolean(textValue(entity.primary_doc));
-    const total = supportingDocs.length + (hasPrimary ? 1 : 0);
+    const docs = new Set(supportingDocs);
+    const primaryDoc = textValue(entity.primary_doc);
+    if (primaryDoc) {
+      docs.add(primaryDoc);
+    }
+    const total = docs.size;
 
     if (total === 0) {
       return "";
     }
 
     return String(total) + " doc" + (total === 1 ? "" : "s");
+  }
+
+  function imageCountFor(item: ReferenceSourceItem): string {
+    const linkedImages = asEntity(item).linked_images;
+    if (!Array.isArray(linkedImages)) {
+      return "";
+    }
+
+    const total = linkedImages.filter((image) => Boolean(image && typeof image === "object")).length;
+    if (total === 0) {
+      return "";
+    }
+
+    return String(total) + " image" + (total === 1 ? "" : "s");
   }
 
   function select(item: ReferenceSourceItem): void {
@@ -122,6 +141,10 @@
 
             {#if docsFor(entity)}
               <span class="entities-list__docs">{docsFor(entity)}</span>
+            {/if}
+
+            {#if imageCountFor(entity)}
+              <span class="entities-list__images">{imageCountFor(entity)}</span>
             {/if}
           </button>
         </li>
@@ -192,7 +215,8 @@
 
   .entities-list__meta,
   .entities-list__line,
-  .entities-list__docs {
+  .entities-list__docs,
+  .entities-list__images {
     display: block;
     margin-top: 0.25rem;
     color: #475467;
@@ -202,6 +226,11 @@
 
   .entities-list__docs {
     color: #2563eb;
+    font-weight: 600;
+  }
+
+  .entities-list__images {
+    color: #0f766e;
     font-weight: 600;
   }
 </style>
