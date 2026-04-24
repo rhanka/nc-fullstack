@@ -29,7 +29,7 @@ export NGINX_PORT      ?= 8080
 export DC_OPTS         ?= --build --force-recreate
 export TECH_DOCS_S3_UPLOAD_DIRS ?= managed_dataset vector-export lexical ontology wiki pages ocr
 export TECH_DOCS_S3_UPLOAD_FILES ?= knowledge-manifest.json
-export NC_S3_UPLOAD_DIRS ?= managed_dataset json vector-export lexical ontology wiki
+export NC_S3_UPLOAD_DIRS ?= managed_dataset json md vector-export lexical ontology wiki
 export NC_S3_UPLOAD_FILES ?= knowledge-manifest.json
 
 # ----------------------------
