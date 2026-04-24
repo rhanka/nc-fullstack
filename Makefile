@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-download-tech-docs-ocr dataprep-knowledge-ci
+.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-download-tech-docs-ocr dataprep-knowledge-ci
 
 # ----------------------------
 # Helpers
@@ -80,6 +80,10 @@ ui-build: ui-install
 ui-check: ui-install
 	@echo "▶ Checking UI..."
 	cd $(UI_DIR) && npm run check
+
+ui-test:
+	@echo "▶ Running UI logic tests..."
+	node --experimental-strip-types --test ui/test/*.test.ts
 
 # ----------------------------
 # Containerisation
@@ -164,8 +168,8 @@ dataprep-knowledge-ci: dataprep-download-minimal dataprep-download-tech-docs-ocr
 	@echo "▶ Preparing knowledge artifacts for API image..."
 	cd backend-ts && npm run dataprep:knowledge && KNOWLEDGE_PUBLIC_CHECK_REQUIRE_TECH_DOC_IMAGES=1 npm run dataprep:knowledge:public-check
 
-check: ui-build api-test api-contracts
-	@echo "✔️ UI build and backend checks completed."
+check: ui-build ui-test api-test api-contracts
+	@echo "✔️ UI build, UI tests and backend checks completed."
 
 docker-login:
 	@echo "▶ Logging in to registry"
@@ -383,6 +387,9 @@ help:
 	@echo "  down          Stop and remove containers, networks"
 	@echo "  logs          Follow log output"
 	@echo "  shell         Access the api container shell"
+	@echo "  ui-build      Build the UI"
+	@echo "  ui-check      Run Svelte UI checks"
+	@echo "  ui-test       Run UI logic tests"
 	@echo "  dataprep-prepare-tech-docs  Build canonical tech docs CSV"
 	@echo "  dataprep      Rebuild retrieval and knowledge artifacts"
 	@echo "  dataprep-knowledge  Rebuild ontology and wiki artifacts"

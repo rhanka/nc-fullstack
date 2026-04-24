@@ -20,6 +20,7 @@
   import Drawer from "./Drawer.svelte";
   import Icon from "@iconify/svelte";
   import { getApiBaseUrl } from "$lib/api-base";
+  import { chooseSelectedEntity, entitySelectionKey } from "$lib/entities/entity-ui";
   import {
     askForHelp,
     referencesList,
@@ -142,38 +143,6 @@
   let chatWidth = "25rem";
   let chatHeight = "70vh";
   let isChatDocked = false;
-
-  function entitySelectionKey(item: ReferenceSourceItem | null | undefined): string | null {
-    if (!item) {
-      return null;
-    }
-
-    const candidate = item as ReferenceSourceItem & {
-      readonly path?: unknown;
-      readonly title?: unknown;
-      readonly slug?: unknown;
-    };
-
-    for (const value of [candidate.path, candidate.slug, candidate.doc, candidate.title, candidate.chunk_id]) {
-      if (typeof value === "string" && value.trim()) {
-        return value.trim();
-      }
-    }
-
-    return null;
-  }
-
-  function entityHasLinkedImages(item: ReferenceSourceItem | null | undefined): boolean {
-    if (!item) {
-      return false;
-    }
-
-    const candidate = item as ReferenceSourceItem & {
-      readonly linked_images?: unknown;
-    };
-
-    return Array.isArray(candidate.linked_images) && candidate.linked_images.length > 0;
-  }
 
   function clearRetrievedSources() {
     clearReferenceSourceGroup("non_conformities");
@@ -351,7 +320,7 @@
       : false;
 
     if (entity_num > 0 && !selectedStillPresent) {
-      selectEntity.set(entitiesFilter.find((entity) => entityHasLinkedImages(entity)) ?? entitiesFilter[0]);
+      selectEntity.set(chooseSelectedEntity(entitiesFilter, get(selectEntity)));
     }
 
     if (entity_num === 0) {
