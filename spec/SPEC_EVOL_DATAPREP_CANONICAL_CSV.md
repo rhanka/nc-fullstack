@@ -29,6 +29,14 @@ Le legacy Python ne les indexait pas dans Chroma.
 
 Le portage TS a consommé le CSV amont sans refaire cette sélection de corpus, ce qui permet au RAG de retourner des sources que `/doc` ne peut pas ouvrir.
 
+Le corpus peut aussi contenir plusieurs pages PDF servables mais equivalentes par contenu, en particulier des couples de noms `long / court` pour une meme page FCOM.
+
+Sans canonicalisation document:
+
+- le RAG retourne des doublons documentaires
+- le wiki et `supporting_docs` remontent plusieurs variantes de la meme page
+- les images liees sont dupliquees car elles sont rattachees a chacune des variantes
+
 ## Décision
 
 La correction se fait dans la préparation de corpus, pas dans le runtime chat.
@@ -40,6 +48,8 @@ Règles:
 - ne pas modifier le CSV amont
 - produire un CSV canonique servant de source au dataprep RAG
 - préserver les lignes conservées caractère par caractère
+- choisir un seul document canonique quand une page appartient a une famille d'alias documentaires connue
+- preferer la variante courte lisible quand un couple `long / court` FCOM existe
 
 ## Algorithme V1
 
@@ -58,8 +68,14 @@ Etapes:
    - rejeter les lignes dont `pages/<doc>` n'existe pas
    - rejeter les doublons de `chunk_id`
    - conserver toutes les autres lignes
-4. Ecrire le CSV canonique gzippé.
-5. Ecrire un audit JSON.
+4. Regrouper les lignes conservables par `doc`.
+5. Appliquer les regles de canonicalisation documentaires connues.
+6. Pour la famille d'alias FCOM V1 `611795195-..._page_XXXX.pdf`:
+   - choisir `a220-300-FCOM-1-1-13_page_XXXX.pdf` comme document canonique
+   - ne conserver que les lignes du document canonique
+   - compter la variante longue comme `droppedEquivalentDocRows`
+7. Ecrire le CSV canonique gzippé.
+8. Ecrire un audit JSON qui garde la trace des alias supprimes.
 
 ## Garantie de diff
 
@@ -87,8 +103,10 @@ Le fichier audit contient au minimum:
 - `droppedMalformedRows`
 - `droppedMissingPageRows`
 - `droppedDuplicateChunkRows`
+- `droppedEquivalentDocRows`
 - `missingPageRoots`
 - `duplicateChunkIds`
+- `equivalentDocGroups`
 - `keptRowsCharExact`
 - `sourceKeptRowsSha256`
 - `canonicalRowsSha256`
@@ -112,5 +130,6 @@ Commandes qui doivent déclencher cette préparation:
 1. Le CSV canonique est produit sans modifier le CSV amont.
 2. Les lignes conservées sont identiques au caractère près à la source.
 3. Les lignes dont `doc` n'existe pas dans `pages/` ne sont plus indexées.
-4. `vector-export`, `lexical`, `ontology` et `wiki` consomment le CSV canonique.
-5. L'UAT `sources RAG -> /doc` ne montre plus de 404 pour les sources techniques affichées.
+4. Les doublons documentaires exacts `long / court` FCOM ne remontent plus dans `vector-export`, `lexical`, `ontology` ni `wiki`.
+5. `supporting_docs`, `primary_doc` et les artefacts image/wiki ne conservent qu'un document canonique par page equivalente.
+6. L'UAT `sources RAG -> /doc` ne montre plus de 404 ni de doublons documentaires techniques visibles.

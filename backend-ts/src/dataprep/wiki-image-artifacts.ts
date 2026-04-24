@@ -242,8 +242,14 @@ export function buildPublicWikiImageArtifacts(options: BuildPublicWikiImageArtif
   const images: PublicWikiImage[] = [];
   const relations: PublicWikiImageRelation[] = [];
   const techRecords = options.records.filter((record) => record.corpus === "tech_docs");
-
+  const uniqueDocs = new Map<string, PreparedRecord>();
   for (const record of techRecords) {
+    if (!uniqueDocs.has(record.doc)) {
+      uniqueDocs.set(record.doc, record);
+    }
+  }
+
+  for (const record of uniqueDocs.values()) {
     const { analyses, hasCaptionSidecar } = readImageAnalyses(ocrDir, record.doc);
     if (analyses.length === 0) {
       continue;
