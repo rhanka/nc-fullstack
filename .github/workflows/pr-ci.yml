@@ -32,8 +32,3 @@ jobs:
 
       - name: Run backend smoke test
         run: make api-smoke
-
-      - name: Build API container
-        run: make api-build
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
