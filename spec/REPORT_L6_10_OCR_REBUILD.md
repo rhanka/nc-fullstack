@@ -94,5 +94,32 @@ Observed results:
 ### Current Status
 
 - `L6.10e` is implemented and verified.
-- `L6.10` remains open because the full retrieval rebuild did not complete under the current OpenAI embeddings quota.
-- The local repository stayed clean after the refresh and knowledge-only rebuild, which means the regenerated artifacts were stable versus the current checked-in/ignored state.
+- The initial `429 insufficient_quota` blocker described above has been superseded by the successful rerun documented below.
+- `L6.10` remains open only for the manual UAT portion after the now-successful full rebuild.
+
+## Addendum 2026-04-25 (quota refilled, full rebuild green)
+
+Commands executed:
+
+```bash
+make dataprep-tech-docs
+make dataprep-knowledge-tech-docs
+make api-smoke
+cd backend-ts && node --experimental-strip-types --test test/knowledge-public-artifacts.test.ts test/dataprep-pipeline.test.ts test/tech-docs-canonical.test.ts
+```
+
+Observed results:
+
+| Step | Result |
+| --- | --- |
+| Retrieval full rebuild | Completed: `12,227` records, `12,227` vectors, 3,072 dimensions |
+| Knowledge-only rebuild | Completed: `12,227` records, `45` ATA, `856` wiki pages |
+| Servability audit | `0` missing docs in `vector-export`; `0` missing docs in `wiki`; `0` long FCOM alias docs remaining |
+| Public image/wiki artifacts | Validation OK: `4,867` public images, `3,523` image relations, `1,232` linked wiki images |
+| Backend smoke | `make api-smoke` passed |
+| Targeted regression tests | `knowledge-public-artifacts`, `dataprep-pipeline`, `tech-docs-canonical` all passed |
+
+Updated status:
+
+- The previous `429 insufficient_quota` blocker is resolved.
+- `L6.10` now remains open only because the manual UAT portion (`000`, `100`, linked sources/images) is still pending.

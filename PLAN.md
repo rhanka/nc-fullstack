@@ -134,7 +134,7 @@
 - [x] L6.10e Basculer le traitement image OCR sur OpenAI Batch au moins pour la passe primaire `gpt-5.4-nano`, avec deep pass `gpt-5.4` sur le sous-ensemble routé. Recette: cibles Make `create/status/import`, requêtes Batch `/v1/responses`, images OCR référencées par `file_id` vision, manifest de batch versionné, import des captions/audits, mode sync conservé seulement comme fallback/debug petit volume. `TEST`
 - [ ] L6.10 Exécuter le rebuild complet RAG/wiki depuis la sortie OCR TS. Recette: génération complète `ocr/` + CSV préparé, `dataprep-prepare-tech-docs`, `dataprep-tech-docs`, `dataprep-knowledge-tech-docs`, audit zéro incohérence source servable, puis smoke UAT `000/100`. `TEST` + `UAT`
 
-- Note: tentative de rebuild complet rejouée le 2026-04-25. Le refresh OCR/CSV (`14,008` pages; `5,952` captions relues; `5,851` artefacts enrichis régénérés) et le rebuild knowledge-only (`12,227` records; `856` pages wiki) sont passés, mais `dataprep-tech-docs` reste bloqué sur `OpenAI embeddings request failed: 429 insufficient_quota`. Le lot reste donc ouvert tant que le rebuild vector/lexical complet n'a pas pu finir.
+- Note: rebuild complet rejoué avec succès le 2026-04-25 après refill quota OpenAI. Le refresh OCR/CSV (`14,008` pages; `5,952` captions relues; `5,851` artefacts enrichis régénérés), `dataprep-tech-docs` (`12,227` vecteurs; `12,227` docs FTS; `45` ATA; `856` pages wiki), `dataprep-knowledge-tech-docs`, l'audit de servabilité (`0` doc manquant dans `vector-export`, `0` doc manquant dans `wiki`, `0` alias FCOM longs restants) et `make api-smoke` sont passés. Le lot reste ouvert uniquement pour l'UAT `000/100`.
 
 ## Lot 6.2 - UAT couche connaissance
 
