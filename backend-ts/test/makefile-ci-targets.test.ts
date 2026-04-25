@@ -18,7 +18,8 @@ function targetPrerequisites(target: string): string[] {
 }
 
 test("API image check only prepares retrieval artifacts, not runtime PDF assets", () => {
-  assert.deepEqual(targetPrerequisites("api-prepare-data-ci"), ["dataprep-retrieval-ci"]);
+  assert.deepEqual(targetPrerequisites("api-prepare-data-ci"), ["dataprep-retrieval-ci-local"]);
+  assert.deepEqual(targetPrerequisites("dataprep-retrieval-ci-local"), ["api-install"]);
   assert.ok(targetPrerequisites("dataprep-retrieval-ci").includes("dataprep-download-retrieval-inputs"));
   assert.ok(!targetPrerequisites("dataprep-retrieval-ci").includes("dataprep-download-minimal"));
 });
@@ -28,8 +29,14 @@ test("API image check does not install dependencies or regenerate retrieval arti
 });
 
 test("API build downloads runtime assets after retrieval artifacts are ready", () => {
-  assert.deepEqual(targetPrerequisites("api-build"), ["api-prepare-data-ci", "api-runtime-data-ci"]);
+  assert.deepEqual(targetPrerequisites("api-build"), ["dataprep-retrieval-ci", "api-runtime-data-ci"]);
+  assert.deepEqual(targetPrerequisites("api-build-ci"), ["api-prepare-data-ci", "api-runtime-data-ci"]);
   assert.deepEqual(targetPrerequisites("api-runtime-data-ci"), ["dataprep-download-runtime-assets"]);
+});
+
+test("CD workflow reuses the retrieval download done by image check", () => {
+  assert.match(makefile, /^api-build-ci: api-prepare-data-ci api-runtime-data-ci$/m);
+  assert.match(makefile, /^dataprep-retrieval-ci-local: api-install$/m);
 });
 
 test("CI retrieval ensure uses the prepared dataset without requiring PDF pages", () => {

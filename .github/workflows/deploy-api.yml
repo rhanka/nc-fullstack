@@ -52,7 +52,7 @@ jobs:
         run: echo "api_version=$(make api-version)" >> "$GITHUB_OUTPUT"
 
       - name: Download data and Build API
-        run: make api-build
+        run: make api-build-ci
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

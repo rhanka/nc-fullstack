@@ -28,3 +28,8 @@ test("UI deploy waits for successful API deploy workflow on master", () => {
   assert.match(deployUiWorkflow, /ref:\s+\$\{\{\s*github\.event\.workflow_run\.head_sha\s*\}\}/u);
   assert.doesNotMatch(deployUiWorkflow, /on:\s*\n\s*push:/u);
 });
+
+test("API deploy workflow uses the CI build target that reuses retrieval inputs", () => {
+  assert.match(deployApiWorkflow, /- name: Download data and Build API[\s\S]*make api-build-ci/u);
+  assert.doesNotMatch(deployApiWorkflow, /- name: Download data and Build API[\s\S]*make api-build\s*$/mu);
+});
