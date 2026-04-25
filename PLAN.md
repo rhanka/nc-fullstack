@@ -186,7 +186,7 @@
 
 ## Lot 7 - CD ordonné et data runtime persistante
 
-- [ ] L7.1 Ordonner le CD `API -> UI` au lieu de deux workflows parallèles indépendants. Recette: un merge `master` déploie l'API en premier, valide un smoke minimal API/version, puis seulement l'UI; aucun état prod ne sert une UI plus récente que l'API attendue. `TEST`
+- [x] L7.1 Ordonner le CD `API -> UI` au lieu de deux workflows parallèles indépendants. Recette: un merge `master` déploie l'API en premier, valide un smoke minimal API/version, puis seulement l'UI; aucun état prod ne sert une UI plus récente que l'API attendue. `TEST`
 - [ ] L7.2 Mesurer précisément le budget temps du CD API actuel et isoler le coût `image check / data download / image build / publish / deploy`. Recette: rapport versionné avec temps par étape sur au moins un run `master`, plus baseline cible après optimisation. `TEST`
 - [ ] L7.3 Sortir les données runtime de l'image API. Recette: l'image API ne contient plus `pages/`, `json/`, `vector-export/`, `lexical/`, `ontology/` ni `wiki/`; elle devient une image applicative versionnée par le code seulement. `TEST`
 - [ ] L7.4 Introduire un bundle runtime data versionné par manifest/hash. Recette: artefacts corpus empaquetés en archive unique (`tar.zst` par défaut, `tar.gz` acceptable seulement si contrainte outillage), avec `knowledge-manifest.json`/hash explicite pour décider si une hydratation est nécessaire. `TEST`
