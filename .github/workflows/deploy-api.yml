@@ -5,6 +5,7 @@ on:
     branches:
       - master
     paths:
+      - 'ui/**'
       - 'api/**'
       - 'backend-ts/**'
       - 'shared/**'
@@ -13,6 +14,7 @@ on:
       - '.dockerignore'
       - 'Makefile'
       - '.github/workflows/deploy-api.yml'
+      - '.github/workflows/deploy-ui.yml'
   workflow_dispatch:
 
 jobs:

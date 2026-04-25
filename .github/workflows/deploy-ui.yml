@@ -1,22 +1,24 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Deploy API to Scaleway
+    types:
+      - completed
     branches:
       - master
-    paths:
-      - 'ui/**'
-      - 'dataprep/**'
-      - 'docker-compose.yml'
-      - 'Makefile'
-      - '.github/workflows/deploy-ui.yml'
+
 jobs:
   build:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
     - name: Check out the repository
       uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha }}
 
     - name: Set up Node.js
       uses: actions/setup-node@v4
@@ -38,6 +40,7 @@ jobs:
         path: ui/build/
 
   deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     needs: build
     runs-on: ubuntu-latest
 
