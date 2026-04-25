@@ -13,7 +13,6 @@ COPY svelte.config.js ./
 COPY tsconfig.json ./
 COPY src/ src/
 COPY static/ static/
-COPY .svelte-kit/ .svelte-kit/
 
 # Port exposé pour Vite
 EXPOSE 5173

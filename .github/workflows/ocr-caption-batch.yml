@@ -1,0 +1,86 @@
+name: OCR Caption Batch
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Batch step to run
+        required: true
+        type: choice
+        options:
+          - create
+          - status
+          - import
+          - refresh
+      phase:
+        description: Batch phase for create
+        required: false
+        default: primary
+        type: choice
+        options:
+          - primary
+          - deep
+      mode:
+        description: Selection mode for create
+        required: false
+        default: missing
+        type: choice
+        options:
+          - missing
+          - force
+      manifest_path:
+        description: Optional manifest path for status/import
+        required: false
+        default: ""
+        type: string
+      limit:
+        description: Optional page limit for safe dry runs
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  batch:
+    name: OCR caption batch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend-ts/package-lock.json
+
+      - name: Download OCR source artifacts
+        run: make dataprep-download-tech-docs-ocr
+
+      - name: Run selected OCR batch action
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OCR_CAPTION_BATCH_PHASE: ${{ inputs.phase }}
+          OCR_CAPTION_BATCH_MODE: ${{ inputs.mode }}
+          OCR_CAPTION_BATCH_MANIFEST: ${{ inputs.manifest_path }}
+          OCR_CAPTION_BATCH_LIMIT: ${{ inputs.limit }}
+        run: |
+          case "${{ inputs.action }}" in
+            create)
+              make dataprep-ocr-caption-batch-create
+              ;;
+            status)
+              make dataprep-ocr-caption-batch-status
+              ;;
+            import)
+              make dataprep-ocr-caption-batch-import
+              ;;
+            refresh)
+              make dataprep-ocr-caption-batch-refresh
+              ;;
+            *)
+              echo "Unsupported action: ${{ inputs.action }}"
+              exit 1
+              ;;
+          esac

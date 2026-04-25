@@ -10,6 +10,11 @@
     type LegacyFinalPayload,
     type LegacySources,
   } from "$lib/chat/legacy-payload";
+  import {
+    buildChatSourceGroups,
+    getChatSourceCount,
+    type ChatSourceGroup,
+  } from "$lib/chat/source-groups";
   import { chatLayoutMode } from "$lib/chat/layout";
   import {
     isUpdating,
@@ -33,6 +38,7 @@
     selectDoc,
     selectEntity,
     taskLabel,
+    setCreatedItemCurrentTask,
     updateCreatedItem,
   } from "./store";
 
@@ -1004,7 +1010,8 @@
     return text
       .replace(/\r\n/g, "\n")
       .replace(/[ \t]*•[ \t]*/g, "\n- ")
-      .replace(/(Détails Techniques\s*:)\n-/g, "$1\n\n-")
+      .replace(/\n(?=Détails\s+techniques?\s*:)/gi, "\n\n")
+      .replace(/(Détails\s+techniques?\s*:)\n-/gi, "$1\n\n-")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
   }
@@ -1523,7 +1530,7 @@
     }
 
     if (role) {
-      $createdItem.currentTask = role as typeof $createdItem.currentTask;
+      setCreatedItemCurrentTask(role as (typeof TASK_IDS)[number]);
     }
 
     const taskContext = buildTaskContext();
@@ -1714,28 +1721,12 @@
     );
   }
 
-  function getSourceGroups(part: SourcesPart) {
-    return [
-      {
-        key: "tech_docs" as const,
-        label: "Technical documents",
-        items: (part.sources?.tech_docs?.sources ?? []) as ReferenceSourceItem[],
-      },
-      {
-        key: "non_conformities" as const,
-        label: "Similar non-conformities",
-        items: (part.sources?.non_conformities?.sources ?? []) as ReferenceSourceItem[],
-      },
-      {
-        key: "entities_wiki" as const,
-        label: "Entities",
-        items: (part.sources?.entities_wiki?.sources ?? []) as ReferenceSourceItem[],
-      },
-    ].filter((group) => group.items.length > 0);
+  function getSourceGroups(part: SourcesPart): ChatSourceGroup[] {
+    return buildChatSourceGroups(part.sources as ReferenceSources);
   }
 
   function getSourceCount(part: SourcesPart) {
-    return getSourceGroups(part).reduce((total, group) => total + group.items.length, 0);
+    return getChatSourceCount(part.sources as ReferenceSources);
   }
 
   function textValue(value: unknown): string | null {

@@ -1,12 +1,13 @@
 # PLAN
 
-- Status date: 2026-04-11
+- Status date: 2026-04-18
 - Specs actives:
   - `spec/SPEC_INTENT_2026-04-10_ai-architecture-refresh.md`
   - `spec/SPEC_EVOL_2026-04-10_ai-architecture-refresh.md`
   - `spec/SPEC_EVOL_VECTOR_DB.md`
   - `spec/SPEC_EVOL_LLM_WIKI.md`
   - `spec/SPEC_EVOL_DATAPREP_TS.md`
+  - `spec/SPEC_EVOL_OCR_MISTRAL_PACKAGE.md`
 - Tags:
   - `AUTO`: validation statique ou déterministe
   - `TEST`: validation par tests, benchmarks ou evals
@@ -94,6 +95,7 @@
 - [x] L5.2p Ajouter une quick action `Random non conformity description` sur l'accueil vierge du chat. Recette: le bouton tire au hasard une des 4 descriptions `Description du Problème` de `api/test/scenarios.csv`, remplit la description du rapport `000` en pseudo streaming de saisie avec listes Markdown lisibles, puis lance l'assistant une fois la saisie terminée. `TEST` + `UAT`
 - [x] L5.2q Ajouter un mode demo propose apres 15 secondes sur chat et rapport `000` vierges. Recette: si le chat task `000` et le rapport restent vides et inactifs, meme widget ferme, un modal plein écran propose de remplir la description du rapport `000` avec une random non conformity; après confirmation, la saisie simulée se termine avant le lancement assistant. `TEST` + `UAT`
 - [x] L5.2r Corriger les quick actions par rôle. Recette: task `000` affiche la proposition de description + random NC; task `100` n'affiche jamais `Propose task description` ni random NC, même après changement de tâche ou réouverture du chat. `TEST` + `UAT`
+- [x] L5.2s Préserver les paragraphes Markdown des descriptions demo avant `Détails techniques`. Recette: les descriptions random NC gardent un saut de ligne visible avant le titre `Détails techniques` et avant la liste de détails, sans triple saut de ligne. `TEST` + `UAT`
 - [ ] L5.3 Nettoyer la dette de transition côté UI et backend. Recette: plus de double chemin critique non justifié. `AUTO`
 - Note: l'UAT de portage Python -> TS est considérée comme passée en prod pour les aspects fonctionnels de base du chat. Les items encore ouverts du lot 5 portent désormais surtout sur le design UI, le polissage ergonomique et le nettoyage final.
 - Checklist UAT `L5.2` à exécuter sur un cas `000` réaliste:
@@ -121,15 +123,27 @@
 - [x] L6.5 Décider explicitement si `graphify` apporte une valeur additionnelle après ontologie + wiki; sinon le différer sans ambiguïté. Recette: note de décision versionnée, sans intégration implicite. `AUTO` + `UAT`
 - [x] L6.6 Superséder la cible LanceDB et supprimer l'intégration `lancedb` devenue inutile du runtime, du build et de la documentation si aucun besoin concret ne justifie son maintien. Recette: plus de dépendance `@lancedb/lancedb`, plus de copies `api/data/*/lancedb/`, plus de chemin moteur `lancedb`, et spec réalignée sur un seul moteur runtime. `TEST`
 - [x] L6.7 Intégrer la préparation `ontology/wiki` au CI/CD de l'image API. Recette: `api-image-check` et `api-build` téléchargent les données minimales depuis Scaleway, régénèrent les artefacts knowledge via dataprep, excluent les fichiers horodatés du hash d'image, et embarquent `ontology/`, `wiki/` et `knowledge-manifest.json` dans le container. `TEST`
+- [x] L6.7a Faire construire l'image API par la PR CI, sans push registry. Recette: le workflow `PR CI` exécute `make api-build` après les tests backend pour valider Dockerfile + données minimales avant merge. `TEST`
+- [x] L6.8 Étudier le remplacement du codage OCR amont par le package npm `mistral-ocr`. Recette: spec dédiée décrivant l'état actuel, les contrats RAG à préserver, les adaptateurs nécessaires et les critères de migration progressive. `AUTO`
+- [x] L6.8a Spécifier le prompt de description image et la politique retrieval associée. Recette: prompt `a220_image_caption_v1` versionné, sortie JSON stricte, description des images extraites par Mistral OCR avec contexte Markdown immédiat, aucun rendu image pleine page PDF envoyé aux LLM, classification `cover/index/front matter/blank/separation`, et règles `index/downweight/exclude` pour éviter la pollution du rappel. `AUTO`
+- [x] L6.9 Implémenter le dataprep OCR TS avec `mistral-ocr` côté code et runner. Recette: commande `dataprep:ocr-tech-docs`, mode `existing` sans appel réseau, mode `live` optionnel via `mistral-ocr`, génération CSV préparé compatible, artefacts enrichis `__with_img_desc.*`, envoi testé des images extraites OCR aux LLM avec contexte Markdown, interdiction des rendus pleine page PDF, et audit déterministe pages/OCR/CSV couverts par tests. `TEST`
+- [x] L6.10a Benchmarker `gpt-5.4-nano` vs `gpt-5.4` pour la caption des images OCR. Recette: cible Make reproductible sur échantillon déterministe, sorties comparatives versionnées en rapport, décision `nano seul` / `cascade` / `5.4 obligatoire`. Décision révisée: pas de `low-signal`; calibrer une cascade par typage de contenu, avec valeur RAG + LLM Wiki. `TEST`
+- [x] L6.10b Spécifier le test de calibration `a220_image_caption_v2` / `routing_profile_v1` avant toute cascade. Recette: schema v2, matrice candidate, critères de comparaison RAG + LLM Wiki et protocole de replay documentés; aucune décision de cascade considérée validée à ce stade. `AUTO`
+- [x] L6.10c Exécuter le replay de calibration `routing_profile_v1` sur l'échantillon benchmark. Recette: `gpt-5.4-nano` produit caption + typage de contenu + indices RAG/Wiki; le replay compare les décisions de routage aux gains observés de `gpt-5.4`, mesure faux `nano` / faux `5.4`, puis fige ou rejette la matrice. `TEST`
+- [x] L6.10d Implémenter la cascade OCR caption seulement si le replay la valide. Recette: fallback technique séparé des deep pass, logs/audit du modèle réellement utilisé par page, tests unitaires du routeur et rapport de calibration référencé. `TEST`
+- [x] L6.10e Basculer le traitement image OCR sur OpenAI Batch au moins pour la passe primaire `gpt-5.4-nano`, avec deep pass `gpt-5.4` sur le sous-ensemble routé. Recette: cibles Make `create/status/import`, requêtes Batch `/v1/responses`, images OCR référencées par `file_id` vision, manifest de batch versionné, import des captions/audits, mode sync conservé seulement comme fallback/debug petit volume. `TEST`
+- [x] L6.10 Exécuter le rebuild complet RAG/wiki depuis la sortie OCR TS. Recette: génération complète `ocr/` + CSV préparé, `dataprep-prepare-tech-docs`, `dataprep-tech-docs`, `dataprep-knowledge-tech-docs`, audit zéro incohérence source servable, puis smoke UAT `000/100`. `TEST` + `UAT`
+
+- Note: rebuild complet rejoué avec succès le 2026-04-25 après refill quota OpenAI. Le refresh OCR/CSV (`14,008` pages; `5,952` captions relues; `5,851` artefacts enrichis régénérés), `dataprep-tech-docs` (`12,227` vecteurs; `12,227` docs FTS; `45` ATA; `856` pages wiki), `dataprep-knowledge-tech-docs`, l'audit de servabilité (`0` doc manquant dans `vector-export`, `0` doc manquant dans `wiki`, `0` alias FCOM longs restants) et `make api-smoke` sont passés. Le lot reste ouvert uniquement pour l'UAT `000/100`.
 
 ## Lot 6.2 - UAT couche connaissance
 
-- [ ] L6U.1 Verifier en UAT la presence visible du canal `Entities` au meme niveau que `tech docs` et `similar NC`. Recette: sur un cas `000` et un cas `100`, le runtime affiche une etape `Entities retrieved` et le bloc `Sources` contient un groupe distinct `Entities`. `UAT`
-- [ ] L6U.2 Verifier en UAT le rendu des cartes `Entities`. Recette: au moins une carte affiche un titre canonique, un type metier (`ATA`, `part`, `zone` ou `entity`), un resume/extrait et un compteur ou lien de documents support quand disponible. `UAT`
-- [ ] L6U.3 Verifier en UAT la navigation chat -> rail/drawer `Entities`. Recette: depuis une carte `Sources > Entities`, basculer sur l'onglet rail `Entities`, voir le drawer gauche et lire la fiche dans le paneau principal. `UAT`
-- [ ] L6U.4 Verifier en UAT la pertinence des liens `entity -> doc technique primaire`. Recette: au moins 3 parcours reels ou l'ouverture depuis `Entities` aide reellement l'analyse et ouvre le viewer `/doc` sans 404. `UAT`
-- [ ] L6U.5 Verifier en UAT que les fiches `part / sous-ensemble / zone` ameliorent la resolution de probleme, et pas seulement la navigation. Recette: retour utilisateur explicite sur au moins 2 cas, avec jugement `utile / neutre / inutile`. `UAT`
-- [ ] L6U.6 Verifier en UAT la coherence `sources RAG -> /doc`: toutes les sources `tech docs` affichees doivent ouvrir une page servie, sans filtrage runtime qui reduise artificiellement le top-k. Recette: sur un cas `000` et un cas `100`, ouvrir les sources techniques retournees; aucun 404 et aucune disparition de sources attendues. `UAT`
+- [x] L6U.1 Verifier en UAT la presence visible du canal `Entities` au meme niveau que `tech docs` et `similar NC`. Recette: sur un cas `000` et un cas `100`, le runtime affiche une etape `Entities retrieved` et le bloc `Sources` contient un groupe distinct `Entities`. `UAT`
+- [x] L6U.2 Verifier en UAT le rendu des cartes `Entities`. Recette: au moins une carte affiche un titre canonique, un type metier (`ATA`, `part`, `zone` ou `entity`), un resume/extrait et un compteur ou lien de documents support quand disponible. `UAT`
+- [x] L6U.3 Verifier en UAT la navigation chat -> rail/drawer `Entities`. Recette: depuis une carte `Sources > Entities`, basculer sur l'onglet rail `Entities`, voir le drawer gauche et lire la fiche dans le paneau principal. `UAT`
+- [x] L6U.4 Verifier en UAT la pertinence des liens `entity -> doc technique primaire`. Recette: au moins 3 parcours reels ou l'ouverture depuis `Entities` aide reellement l'analyse et ouvre le viewer `/doc` sans 404. `UAT`
+- [x] L6U.5 Verifier en UAT que les fiches `part / sous-ensemble / zone` ameliorent la resolution de probleme, et pas seulement la navigation. Recette: retour utilisateur explicite sur au moins 2 cas, avec jugement `utile / neutre / inutile`. `UAT`
+- [x] L6U.6 Verifier en UAT la coherence `sources RAG -> /doc`: toutes les sources `tech docs` affichees doivent ouvrir une page servie, sans filtrage runtime qui reduise artificiellement le top-k. Recette: sur un cas `000` et un cas `100`, ouvrir les sources techniques retournees; aucun 404 et aucune disparition de sources attendues. `UAT`
 - Gate: cette UAT ne demarre qu'apres un full rebuild TS des artefacts `vector-export / lexical / ontology / wiki` sur le corpus canonique, afin d'eviter une validation sur un etat hybride.
 
 ## Lot 6.3 - Fix post-UAT couche connaissance
@@ -138,19 +152,34 @@
 - [x] L6F.2 Ajuster l'ontologie minimale `ATA / part / zone / alias` si l'UAT révèle des trous bloquants. Recette: spec et artefacts réalignés, IDs stables préservés. `TEST`
 - [x] L6F.3 Implementer la spec UI `Entities`. Recette: rendu compact dans `Sources`, action `Open entity`, bascule vers l'onglet rail `Entities`, drawer gauche liste des entites, action `Open primary document`. `TEST`
 - [x] L6F.3a Ajouter une fiche entite lisible hors du chat. Recette: onglet rail `Entities` + drawer gauche + paneau principal permettant de lire les notes d'entite et d'ouvrir ses documents support. `TEST`
-- [ ] L6F.3b Ajouter les tests UI du canal `Entities`. Recette: couverture des cartes completes, champs partiels, bascule rail/drawer, ouverture document primaire, et non-regression des sources `tech docs` / `similar NC`. `TEST`
+- [x] L6F.3b Ajouter les tests UI du canal `Entities`. Recette: couverture des cartes completes, champs partiels, bascule rail/drawer, ouverture document primaire, et non-regression des sources `tech docs` / `similar NC`. `TEST`
 - [x] L6F.4 Corriger la cohérence corpus/RAG si l'UAT révèle des sources techniques non servies par `/doc`. Recette: audit reproductible `managed_dataset / pages / vector-export / lexical / wiki`, correction à la source des données ou de la préparation, puis rebuild complet sans filtre runtime masquant le top-k. `TEST`
 - [x] L6F.4a Spécifier la préparation canonique du CSV tech docs avant indexation. Recette: spec dédiée décrivant entrée amont, sortie canonique, audit et garantie de diff caractère par caractère sur les lignes conservées. `AUTO`
 - [x] L6F.4b Implémenter `dataprep-prepare-tech-docs`. Recette: génération de `a220_tech_docs_content_canonical.csv.gz` + audit JSON, lignes conservées recopiées sans re-sérialisation, lignes sans page servie exclues du corpus canonique. `TEST`
 - [x] L6F.4c Brancher le RAG TS sur le CSV canonique. Recette: `dataprep`, `dataprep-tech-docs`, `dataprep-knowledge*` et `api-prepare-data-ci` consomment le canonique sans filtre runtime. `TEST`
 - [x] L6F.4d Rebuilder les artefacts tech docs depuis le CSV canonique. Recette: `vector-export / lexical / ontology / wiki` régénérés et audit local montrant zéro source technique non servable dans les artefacts. `TEST`
+- [x] L6F.4e Dédupliquer les pages techniques equivalentes avant indexation. Recette: le CSV canonique remappe les alias FCOM `long / court` vers un seul document court, puis supprime ces doublons jusque dans `vector-export`, `lexical`, `supporting_docs`, `primary_doc` et les artefacts publics image/wiki. `TEST`
 - [x] L6F.5 Injecter les entites knowledge dans la synthese du rapport `100`. Recette: `search_entities_wiki` est consomme par le prompt `100`, contient un resume exploitable, et un test prouve que le contexte entites atteint la generation d'analyse. `TEST`
+- [x] L6F.6 Spécifier `Wiki Image Intelligence` comme extension de la fiche `Entities`. Recette: spec dédiée validant `Linked images` avant `Supporting documents`, artefacts publics dérivés, absence de drawer image, et regroupement simple des related entities par classes. `AUTO`
+- [x] L6F.7 Générer les artefacts publics image/entity. Recette: `ontology/images.json`, `ontology/image_relations.json` et `wiki/images/*` sont produits depuis les OCR/captions existants sans exposer les sidecars batch bruts. `TEST`
+- [x] L6F.8 Brancher les images liées dans le wiki. Recette: `wiki/index.json` expose `linked_images`, les articles `wiki/parts/*.md` ajoutent une section `Linked images`, et le tri limite le bruit par score déterministe. `TEST`
+- [x] L6F.9 Afficher `Linked images` dans `EntityDetail`. Recette: section située avant `Supporting documents`, cartes image compactes, miniature si disponible, caption utile, action `Open document`, et aucun nouveau drawer. `TEST`
+- [x] L6F.9a Refaire le rendu `Linked images` en preuve lisible. Recette: image pleine largeur dans `EntityDetail`, caption sous l'image, clic ouvrant un modal lisible, sans nouveau niveau de navigation. `TEST`
+- [x] L6F.10 Grouper les related entities par classes simples. Recette: `Same answer`, `Image-linked`, `Same document`, `Same ATA`, `Same zone` sont affichés en chips cliquables sans canvas graphe complet. `TEST`
+- [x] L6F.11 Brancher le CI/CD data associé. Recette: les artefacts publics image/wiki sont rebuild/uploadés avec les targets dataprep existantes sans relancer automatiquement les batches OpenAI caption. `TEST`
+- [x] L6F.11a Corriger le rebuild CI des images wiki. Recette: la cible CI télécharge aussi les artefacts source `ocr/` enrichis depuis Scaleway, nettoie les images générées périmées, et échoue si `tech_docs` produit zéro image/relation liée. `TEST`
 
 ## Lot 6.4 - Smoke tests UAT couche connaissance
 
-- [ ] L6S.1 Rejouer un smoke test `000` après les fixes post-UAT. Recette: `Entities` present, liens ouvrables, aucune régression chat/réponse/rapport. `TEST` + `UAT`
-- [ ] L6S.2 Rejouer un smoke test `100` après les fixes post-UAT. Recette: même validation sur un cas d'analyse plus riche. `TEST` + `UAT`
+- [x] L6S.1 Rejouer un smoke test `000` après les fixes post-UAT. Recette: `Entities` present, liens ouvrables, aucune régression chat/réponse/rapport. `TEST` + `UAT`
+- [x] L6S.2 Rejouer un smoke test `100` après les fixes post-UAT. Recette: même validation sur un cas d'analyse plus riche. `TEST` + `UAT`
 - [x] L6S.3 Vérifier qu'aucune dépendance `graphify` ou `lancedb` n'a été réintroduite pendant les fixes. Recette: grep repo-local propre + checks backend verts. `TEST`
+- [x] L6S.4 Rejouer un smoke test `Linked images`. Recette: une entité issue d'un schéma technique affiche des images liées, ouvre le document source sans 404, et conserve une fiche `Entities` lisible. `TEST` + `UAT`
+- [x] L6S.4a Rejouer un smoke test `Linked images` sans doublons documentaires. Recette: sur une entité issue d'un schéma FCOM, ni `Supporting documents` ni `Linked images` ne montrent de couple `long / court` pour la meme page. `TEST` + `UAT`
+
+- Note: smoke technique repo-local rejoué le 2026-04-24 sur `000`, `100` et `Linked images`; les items `TEST + UAT` restent volontairement ouverts jusqu'à validation utilisateur explicite.
+- Note: replay technique complémentaire du 2026-04-25: le smoke `100` a révélé une fuite de JSON brut dans la bulle assistant, et le retour vers `000` une propagation incomplète de `currentTask`; les deux régressions ont été corrigées et couvertes par tests UI ciblés, sans cocher les items UAT correspondants.
+- Note: replay live complémentaire du 2026-04-25 après rebuild complet + fix runtime: `000` et `100` retournent de nouveau des payloads structurés même en `gpt-5.4-nano + auto`, donc le blocage `task 100` n'est plus un problème de format. En revanche, la pertinence retrieval reste perfectible: sur des cas ESD / fuel, les `Entities` top-rankées restent souvent hors sujet. Le critère de sortie `pertinence retrieval` reste donc ouvert malgré le fix de structuration.
 
 - Note: un bloqueur pré-UAT du lot 6 a été corrigé: si `ontology/` ou `wiki/` manque, le backend TS bootstrap désormais la couche connaissance en mode déterministe sans embeddings, et filtre les faux concepts documentaires génériques (`1. Scope`, `Reference`, etc.).
 - Note: ce bootstrap local sert uniquement à débloquer le runtime et les checks techniques; il ne remplace pas le full rebuild TS attendu avant l'UAT utilisateur du lot 6.

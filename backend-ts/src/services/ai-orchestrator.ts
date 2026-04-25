@@ -76,6 +76,7 @@ interface PreparedRequestContext {
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME?.trim() || "nc_session_id";
 const SESSION_COOKIE_MAX_AGE = Number(process.env.SESSION_COOKIE_MAX_AGE ?? 7 * 24 * 60 * 60);
 const PROVIDERS = new Set(["openai"]);
+const STRUCTURED_REPAIR_MIN_OUTPUT_TOKENS = 4000;
 
 function jsonStringify(value: unknown): string {
   return JSON.stringify(value ?? null);
@@ -206,13 +207,17 @@ function parseFinalPayload(responseText: string): {
 } {
   try {
     const parsed = JSON.parse(responseText) as Record<string, unknown>;
+    const label = typeof parsed.label === "string" ? parsed.label : null;
+    const description =
+      typeof parsed.description === "string" || (parsed.description && typeof parsed.description === "object")
+        ? (parsed.description as Record<string, unknown> | string)
+        : null;
+    const comment = typeof parsed.comment === "string" ? parsed.comment : null;
+
     return {
-      text: typeof parsed.comment === "string" ? parsed.comment : responseText,
-      label: typeof parsed.label === "string" ? parsed.label : null,
-      description:
-        typeof parsed.description === "string" || (parsed.description && typeof parsed.description === "object")
-          ? (parsed.description as Record<string, unknown> | string)
-          : null,
+      text: comment ?? (label || description ? null : responseText),
+      label,
+      description,
     };
   } catch {
     return {
@@ -221,6 +226,21 @@ function parseFinalPayload(responseText: string): {
       description: null,
     };
   }
+}
+
+function needsStructuredRepair(
+  prompt: PromptTemplate | undefined,
+  finalPayload: {
+    readonly text: string | null;
+    readonly label: string | null;
+    readonly description: Record<string, unknown> | string | null;
+  },
+): boolean {
+  if (!prompt?.jsonMode) {
+    return false;
+  }
+
+  return !finalPayload.label && finalPayload.description == null;
 }
 
 function buildResponsePayload(
@@ -353,6 +373,47 @@ export class NativeAiOrchestrator implements AiRuntime {
     };
   }
 
+  async #repairStructuredPrompt(
+    promptName: string,
+    variables: Record<string, unknown>,
+    providerId: string,
+    resolvedModel: RuntimeModel,
+    maxOutputTokens: number,
+  ): Promise<{
+    readonly payload: {
+      readonly text: string | null;
+      readonly label: string | null;
+      readonly description: Record<string, unknown> | string | null;
+    };
+    readonly responseText: string;
+  } | null> {
+    const prompt = this.#prompts[promptName];
+    if (!prompt?.jsonMode) {
+      return null;
+    }
+
+    const rendered = prompt.render(variables);
+    const messages = [];
+    if (rendered.system) {
+      messages.push({ role: "system" as const, content: rendered.system });
+    }
+    messages.push({ role: "user" as const, content: rendered.user });
+
+    const repaired = await this.#llmRuntime.invoke({
+      providerId,
+      model: resolvedModel,
+      messages,
+      reasoning: { effort: null },
+      jsonMode: true,
+      maxOutputTokens: Math.max(maxOutputTokens, STRUCTURED_REPAIR_MIN_OUTPUT_TOKENS),
+    });
+
+    return {
+      payload: parseFinalPayload(repaired.text),
+      responseText: repaired.text,
+    };
+  }
+
   #prepareRequest(request: AiRuntimeRequest): PreparedRequestContext {
     const lastMessage = request.body.messages.at(-1);
     if (!lastMessage) {
@@ -460,19 +521,21 @@ export class NativeAiOrchestrator implements AiRuntime {
       };
     }
 
+    const finalPromptVariables = {
+      role: context.role,
+      user_message: context.userMessage,
+      description: context.description,
+      search_docs: jsonStringify(sources.tech_docs),
+      search_nc: jsonStringify(sources.non_conformities),
+      search_entities_wiki: jsonStringify(sources.entities_wiki),
+      history: jsonStringify(history),
+      modelSelection: context.modelSelection,
+      complexitySelection: context.complexitySelection,
+    };
+
     const finalResult = await this.#runPrompt(
       context.role,
-      {
-        role: context.role,
-        user_message: context.userMessage,
-        description: context.description,
-        search_docs: jsonStringify(sources.tech_docs),
-        search_nc: jsonStringify(sources.non_conformities),
-        search_entities_wiki: jsonStringify(sources.entities_wiki),
-        history: jsonStringify(history),
-        modelSelection: context.modelSelection,
-        complexitySelection: context.complexitySelection,
-      },
+      finalPromptVariables,
       {
         stage: "assistant_response",
         role: context.role,
@@ -485,7 +548,19 @@ export class NativeAiOrchestrator implements AiRuntime {
       context.providerId,
     );
 
-    const finalPayload = parseFinalPayload(finalResult.text);
+    let finalPayload = parseFinalPayload(finalResult.text);
+    if (needsStructuredRepair(this.#prompts[context.role], finalPayload)) {
+      const repaired = await this.#repairStructuredPrompt(
+        context.role,
+        finalPromptVariables,
+        context.providerId,
+        finalResult.routing.resolvedModel,
+        finalResult.routing.profile.maxOutputTokens,
+      );
+      if (repaired && !needsStructuredRepair(this.#prompts[context.role], repaired.payload)) {
+        finalPayload = repaired.payload;
+      }
+    }
     const responsePayload = buildResponsePayload(context, finalPayload, sources);
     this.#memoryStore.rememberWorkingMemory({
       sessionId: context.sessionId,
@@ -706,19 +781,21 @@ export class NativeAiOrchestrator implements AiRuntime {
           metadata: context.role,
         });
 
+        const finalPromptVariables = {
+          role: context.role,
+          user_message: context.userMessage,
+          description: context.description,
+          search_docs: jsonStringify(activeSources.tech_docs),
+          search_nc: jsonStringify(activeSources.non_conformities),
+          search_entities_wiki: jsonStringify(activeSources.entities_wiki),
+          history: jsonStringify(history),
+          modelSelection: context.modelSelection,
+          complexitySelection: context.complexitySelection,
+        };
+
         const finalResult = await self.#runPrompt(
           context.role,
-          {
-            role: context.role,
-            user_message: context.userMessage,
-            description: context.description,
-            search_docs: jsonStringify(activeSources.tech_docs),
-            search_nc: jsonStringify(activeSources.non_conformities),
-            search_entities_wiki: jsonStringify(activeSources.entities_wiki),
-            history: jsonStringify(history),
-            modelSelection: context.modelSelection,
-            complexitySelection: context.complexitySelection,
-          },
+          finalPromptVariables,
           {
             stage: "assistant_response",
             role: context.role,
@@ -767,7 +844,29 @@ export class NativeAiOrchestrator implements AiRuntime {
           }
         }
 
-        const parsed = parseFinalPayload(fullResponseText);
+        let parsed = parseFinalPayload(fullResponseText);
+        if (needsStructuredRepair(self.#prompts[context.role], parsed)) {
+          yield sseEncode("status", {
+            state: "repairing_structured_response",
+            metadata: context.role,
+          });
+          yield sseEncode(null, {
+            type: "action",
+            text: "Repair final structured answer",
+            metadata: context.role,
+          });
+          const repaired = await self.#repairStructuredPrompt(
+            context.role,
+            finalPromptVariables,
+            context.providerId,
+            finalResult.routing.resolvedModel,
+            finalResult.routing.profile.maxOutputTokens,
+          );
+          if (repaired && !needsStructuredRepair(self.#prompts[context.role], repaired.payload)) {
+            fullResponseText = repaired.responseText;
+            parsed = repaired.payload;
+          }
+        }
         const responsePayload = buildResponsePayload(context, parsed, activeSources);
         self.#memoryStore.rememberWorkingMemory({
           sessionId: context.sessionId,

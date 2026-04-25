@@ -20,6 +20,7 @@
   import Drawer from "./Drawer.svelte";
   import Icon from "@iconify/svelte";
   import { getApiBaseUrl } from "$lib/api-base";
+  import { chooseSelectedEntity, entitySelectionKey } from "$lib/entities/entity-ui";
   import {
     askForHelp,
     referencesList,
@@ -35,7 +36,8 @@
     selectDoc,
     selectEntity,
     activeTabValue,
-    resetCreatedItem
+    resetCreatedItem,
+    setCreatedItemCurrentTask
   } from "./store";
 
   if (typeof Promise.withResolvers !== "function") {
@@ -142,26 +144,6 @@
   let chatWidth = "25rem";
   let chatHeight = "70vh";
   let isChatDocked = false;
-
-  function entitySelectionKey(item: ReferenceSourceItem | null | undefined): string | null {
-    if (!item) {
-      return null;
-    }
-
-    const candidate = item as ReferenceSourceItem & {
-      readonly path?: unknown;
-      readonly title?: unknown;
-      readonly slug?: unknown;
-    };
-
-    for (const value of [candidate.path, candidate.slug, candidate.doc, candidate.title, candidate.chunk_id]) {
-      if (typeof value === "string" && value.trim()) {
-        return value.trim();
-      }
-    }
-
-    return null;
-  }
 
   function clearRetrievedSources() {
     clearReferenceSourceGroup("non_conformities");
@@ -281,7 +263,7 @@
     expand = true;
     const role = $askForHelp as ChatTaskRole;
     $askForHelp = false;
-    $createdItem.currentTask = role as typeof $createdItem.currentTask;
+    setCreatedItemCurrentTask(role as typeof $createdItem.currentTask);
     setTimeout(() => {
       $chatElementRef?.clearMessages?.();
     }, 200);
@@ -339,7 +321,7 @@
       : false;
 
     if (entity_num > 0 && !selectedStillPresent) {
-      selectEntity.set(entitiesFilter[0]);
+      selectEntity.set(chooseSelectedEntity(entitiesFilter, get(selectEntity)));
     }
 
     if (entity_num === 0) {

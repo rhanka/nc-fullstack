@@ -17,6 +17,8 @@ const TECH_DOCS_DIR = process.env.TECH_DOCS_DIR?.trim() || "a220-tech-docs";
 const RAW_TECH_DOCS_CSV = "a220_tech_docs_content_prepared.csv.gz";
 export const CANONICAL_TECH_DOCS_CSV = "a220_tech_docs_content_canonical.csv.gz";
 export const CANONICAL_TECH_DOCS_AUDIT = "a220_tech_docs_content_canonical.audit.json";
+const LONG_FCOM_V1_PAGE_RE =
+  /^611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_(\d+)\.pdf$/iu;
 
 export interface RawDelimitedRecord {
   readonly row: readonly string[];
@@ -42,8 +44,15 @@ export interface PrepareTechDocsCanonicalResult {
   readonly droppedMalformedRows: number;
   readonly droppedMissingPageRows: number;
   readonly droppedDuplicateChunkRows: number;
+  readonly droppedEquivalentDocRows: number;
   readonly missingPageRoots: readonly { readonly docRoot: string; readonly count: number }[];
   readonly duplicateChunkIds: readonly string[];
+  readonly equivalentDocGroups: readonly {
+    readonly contentSha256: string;
+    readonly canonicalDoc: string;
+    readonly aliasDocs: readonly string[];
+    readonly rowsDropped: number;
+  }[];
   readonly keptRowsCharExact: boolean;
   readonly sourceKeptRowsSha256: string;
   readonly canonicalRowsSha256: string;
@@ -67,6 +76,25 @@ function sortCounts(counts: ReadonlyMap<string, number>): { readonly docRoot: st
   return [...counts.entries()]
     .map(([docRoot, count]) => ({ docRoot, count }))
     .sort((left, right) => right.count - left.count || left.docRoot.localeCompare(right.docRoot));
+}
+
+function buildDocContentSha256(records: readonly RawDelimitedRecord[]): string {
+  return sha256(
+    JSON.stringify(
+      records
+        .slice()
+        .sort((left, right) => left.index - right.index)
+        .map((record) => (record.row[3] ?? "").replace(/\s+/gu, " ").trim()),
+    ),
+  );
+}
+
+function canonicalAliasTargetDoc(doc: string): string | null {
+  const longFcomV1Match = doc.match(LONG_FCOM_V1_PAGE_RE);
+  if (longFcomV1Match) {
+    return `a220-300-FCOM-1-1-13_page_${longFcomV1Match[1]}.pdf`;
+  }
+  return null;
 }
 
 export function getDefaultTechDocsCanonicalPaths(): PrepareTechDocsCanonicalOptions {
@@ -183,7 +211,7 @@ export function prepareTechDocsCanonicalDataset(
   const seenChunkIds = new Set<string>();
   const missingPageRoots = new Map<string, number>();
   const duplicateChunkIds = new Set<string>();
-  const keptRecords: RawDelimitedRecord[] = [header];
+  const keptRecordsByDoc = new Map<string, RawDelimitedRecord[]>();
   let droppedMalformedRows = 0;
   let droppedMissingPageRows = 0;
   let droppedDuplicateChunkRows = 0;
@@ -211,8 +239,42 @@ export function prepareTechDocsCanonicalDataset(
     }
 
     seenChunkIds.add(chunkId);
-    keptRecords.push(record);
+    const docRecords = keptRecordsByDoc.get(doc) ?? [];
+    docRecords.push(record);
+    keptRecordsByDoc.set(doc, docRecords);
   }
+
+  const equivalentDocGroups: PrepareTechDocsCanonicalResult["equivalentDocGroups"] = [];
+  const keptRecords: RawDelimitedRecord[] = [header];
+  let droppedEquivalentDocRows = 0;
+  const droppedAliasDocs = new Set<string>();
+  for (const [doc, docRecords] of keptRecordsByDoc.entries()) {
+    const canonicalDoc = canonicalAliasTargetDoc(doc);
+    if (!canonicalDoc || !keptRecordsByDoc.has(canonicalDoc)) {
+      continue;
+    }
+
+    const rowsDropped = docRecords.length;
+    droppedEquivalentDocRows += rowsDropped;
+    droppedAliasDocs.add(doc);
+    equivalentDocGroups.push({
+      contentSha256: buildDocContentSha256(docRecords),
+      canonicalDoc,
+      aliasDocs: [doc],
+      rowsDropped,
+    });
+  }
+
+  for (const [doc, docRecords] of keptRecordsByDoc.entries()) {
+    if (!droppedAliasDocs.has(doc)) {
+      keptRecords.push(...docRecords);
+    }
+  }
+  keptRecords.splice(
+    1,
+    keptRecords.length - 1,
+    ...keptRecords.slice(1).sort((left, right) => left.index - right.index),
+  );
 
   const canonicalText = `${keptRecords.map((record) => record.raw).join("\n")}\n`;
   ensureParentDir(options.outputFile);
@@ -234,8 +296,13 @@ export function prepareTechDocsCanonicalDataset(
     droppedMalformedRows,
     droppedMissingPageRows,
     droppedDuplicateChunkRows,
+    droppedEquivalentDocRows,
     missingPageRoots: sortCounts(missingPageRoots),
     duplicateChunkIds: [...duplicateChunkIds].sort().slice(0, 50),
+    equivalentDocGroups: equivalentDocGroups
+      .slice()
+      .sort((left, right) => left.canonicalDoc.localeCompare(right.canonicalDoc))
+      .slice(0, 100),
     keptRowsCharExact: canonicalRoundTripText === canonicalText,
     sourceKeptRowsSha256,
     canonicalRowsSha256,

@@ -2,7 +2,7 @@
   import Input from "./Input.svelte";
   import Dropzone from "svelte-file-dropzone";
   import { isUpdating, askForHelp } from "$lib/chat/stores";
-  import { taskLabel, createdItem } from "./store";
+  import { taskLabel, createdItem, setCreatedItemCurrentTask } from "./store";
   import Icon from "@iconify/svelte";
 
   export let aiHelp = false;
@@ -77,7 +77,7 @@
   function handleClick() {
     expand = !expand;
     if (expand) {
-      $createdItem.currentTask = task;
+      setCreatedItemCurrentTask(task);
     }
   }
 </script>

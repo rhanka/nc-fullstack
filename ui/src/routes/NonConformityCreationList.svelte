@@ -2,6 +2,7 @@
   import {
     createdItem,
     resetCreatedItem,
+    setCreatedItemCurrentTask,
     taskLabel
   } from "./store";
   import { ripple } from "svelte-ripple-action";
@@ -35,11 +36,11 @@
             duration: 0.6,
           }}
           on:click={() => {
-            $createdItem.currentTask = task;
+            setCreatedItemCurrentTask(task);
           }}
           on:keypress={(e) => {
             if (e.key === "Enter") {
-              $createdItem.currentTask = task;
+              setCreatedItemCurrentTask(task);
             }
           }}
           style="cursor: pointer; padding: 8px; width: 100%; text-align: left; border: none; background: none;border-bottom: 1px solid rgba(0,0,0,.1)"
