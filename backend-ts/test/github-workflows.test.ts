@@ -12,6 +12,8 @@ test("API deploy workflow uses dedicated dataprep S3 secrets for cache upload", 
   assert.doesNotMatch(deployApiWorkflow, /S3_DATAPREP_SECRET_KEY:\s+\$\{\{\s*secrets\.SCW_SECRET_KEY\s*\}\}/u);
 });
 
-test("PR CI workflow passes OPENAI_API_KEY to the API build step", () => {
-  assert.match(prCiWorkflow, /- name: Build API container[\s\S]*OPENAI_API_KEY:\s+\$\{\{\s*secrets\.OPENAI_API_KEY\s*\}\}/u);
+test("PR CI workflow keeps the gate on check plus API smoke without release image build", () => {
+  assert.match(prCiWorkflow, /- name: Run build and tests[\s\S]*make check/u);
+  assert.match(prCiWorkflow, /- name: Run backend smoke test[\s\S]*make api-smoke/u);
+  assert.doesNotMatch(prCiWorkflow, /- name: Build API container/u);
 });
