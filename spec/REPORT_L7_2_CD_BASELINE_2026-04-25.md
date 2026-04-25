@@ -122,16 +122,16 @@ Observed step durations support this:
 
 ## Immediate Optimization Priority
 
-Order of execution retained in `PLAN.md`:
+Order of execution updated after `L7.4` validation:
 
 1. `L7.1` sequence `API -> UI`
 2. `L7.2` establish this baseline
-3. `L7.3` remove runtime data from the API image
+3. `L7.2a` remove duplicate retrieval download from the API CD path
 4. `L7.4` replace multi-object hydration with a versioned `tar.zst` bundle + manifest/hash
-
-Only after these quick wins:
-
-5. `L7.5+` decide and implement a true persistent-volume hosting target for the API
+5. `L7.5` lock the infrastructure decision for runtime data
+6. `L7.6` move the API to a Scaleway target with mounted persistent storage
+7. `L7.3` remove runtime data from the API image once mounted runtime storage exists
+8. `L7.7+` add manifest-driven refresh and rollback/smoke gating
 
 ## Source Notes
 
