@@ -37,7 +37,7 @@ jobs:
 
       - name: Check if API image is up to date
         id: image-check
-        run: make api-image-check
+        run: make api-image-check-ci
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
           DOCKER_USERNAME: nologin
