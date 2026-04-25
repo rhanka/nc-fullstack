@@ -175,7 +175,7 @@
 - [ ] L6S.2 Rejouer un smoke test `100` après les fixes post-UAT. Recette: même validation sur un cas d'analyse plus riche. `TEST` + `UAT`
 - [x] L6S.3 Vérifier qu'aucune dépendance `graphify` ou `lancedb` n'a été réintroduite pendant les fixes. Recette: grep repo-local propre + checks backend verts. `TEST`
 - [ ] L6S.4 Rejouer un smoke test `Linked images`. Recette: une entité issue d'un schéma technique affiche des images liées, ouvre le document source sans 404, et conserve une fiche `Entities` lisible. `TEST` + `UAT`
-- [ ] L6S.4a Rejouer un smoke test `Linked images` sans doublons documentaires. Recette: sur une entité issue d'un schéma FCOM, ni `Supporting documents` ni `Linked images` ne montrent de couple `long / court` pour la meme page. `TEST` + `UAT`
+- [x] L6S.4a Rejouer un smoke test `Linked images` sans doublons documentaires. Recette: sur une entité issue d'un schéma FCOM, ni `Supporting documents` ni `Linked images` ne montrent de couple `long / court` pour la meme page. `TEST` + `UAT`
 
 - Note: smoke technique repo-local rejoué le 2026-04-24 sur `000`, `100` et `Linked images`; les items `TEST + UAT` restent volontairement ouverts jusqu'à validation utilisateur explicite.
 - Note: replay technique complémentaire du 2026-04-25: le smoke `100` a révélé une fuite de JSON brut dans la bulle assistant, et le retour vers `000` une propagation incomplète de `currentTask`; les deux régressions ont été corrigées et couvertes par tests UI ciblés, sans cocher les items UAT correspondants.
