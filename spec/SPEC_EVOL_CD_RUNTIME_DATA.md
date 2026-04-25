@@ -2,10 +2,14 @@
 
 ## Scope
 
-This note formalizes the runtime-data hosting decision for `Lot 7`.
-It is attached to the active AI architecture refresh initiative and narrows one specific question:
+This note formalizes the **short-term** runtime-data decision for `Lot 7`.
+The active target is to reduce API CD time **without** changing hosting yet.
 
-- how to decouple API code from runtime data without regressing deploy time or cold-start behavior
+The chosen path is therefore:
+
+- keep the current Scaleway `Serverless Containers` hosting
+- replace flat-file multi-object hydration with a versioned runtime bundle
+- use `tar.zst + manifest/hash` in the existing CI/CD path
 
 ## Current State
 
@@ -27,97 +31,94 @@ Measured local bundle output on the current corpus:
 
 Official Scaleway docs checked on 2026-04-25:
 
-- Serverless Containers are described as **stateless web applications**.
-- Serverless Containers only provide **ephemeral storage** for the duration of the execution.
-- That storage **disappears once the execution is complete**.
-- Serverless Containers publish a **recommended maximum uncompressed image size of 1 GB** and a **temporary disk size max of 24,000 MiB**.
-- Block Storage volumes are attached to **Instances**.
-- File Storage is **Public Beta** and is attached to **Instances**; the quickstart explicitly requires a **POP2 Instance**.
+- Serverless Containers are described as **stateless web applications**
+- Serverless Containers only provide **ephemeral storage**
+- that storage disappears after execution
+- Object Storage performance guidance favors fewer/larger transfers over many small objects
 
 Implication:
 
 - there is no documented persistent mounted volume model for the current `Serverless Containers` runtime
-- `Object Storage` is useful for bundles, but it is **not** a mounted persistent volume
+- but this does **not** block the current lot, because the short-term target is bundle-based CI hydration, not mounted runtime persistence
 
 ## Decision
 
-### Rejected as target architecture
+### Selected short-term architecture
 
-1. Keep runtime data inside the API image.
-- Reject.
-- Reason: deploy time stays dominated by data hydration and image build; image size pressure remains high.
+1. Stay on `Serverless Containers`.
+- Accept.
+- Reason: no infra migration is needed to capture the quick wins requested in `Lot 7`.
 
-2. Stay on Serverless Containers and hydrate the bundle on every cold start into ephemeral storage.
-- Reject as target architecture.
-- Reason: technically possible, but it reintroduces repeated download/extract cost per instance lifecycle and does not create durable runtime state.
+2. Keep runtime corpus embedded in the built API image for now.
+- Accept.
+- Reason: on the current hosting, this remains the simplest deploy/runtime contract.
 
-3. Use File Storage as the default persistent-volume answer.
-- Reject as default.
-- Reason: current docs position it on Instances, in Public Beta, and restricted to POP2 Instances in the quickstart.
-
-### Selected target architecture
-
-4. Migrate the API to a Scaleway compute target that supports mounted persistent storage, with **Instance + Block Storage** as the default recommendation.
+3. Replace multi-object runtime hydration in CI with a single versioned bundle.
 - Accept.
 - Reason:
-  - directly aligned with the user need for a true persistent volume
-  - officially documented attach/mount workflow
-  - simplest durable model for a single API service
-  - compatible with bundle hydration only when the manifest/hash changes
+  - aligns with the requested `1 / 2 / 4` sequence
+  - removes the worst small-file transfer pattern
+  - keeps the deploy path compatible with the existing hosting model
+
+4. Use `tar.zst` as the default runtime bundle format, with manifest/hash sidecars.
+- Accept.
+- Reason:
+  - good compression/decompression tradeoff
+  - deterministic integrity check
+  - explicit change detection for later skip logic
+
+### Deferred architecture
+
+5. Migrate to a mounted persistent volume target.
+- Defer.
+- Reason: this is **not** the active plan anymore.
+- It remains an optional future path only if the gains from bundle-based CI hydration are insufficient.
 
 ## Resulting Execution Order
 
-The practical order for `Lot 7` becomes:
+The practical order for `Lot 7` is now:
 
 1. `L7.1` sequence `API -> UI`
 2. `L7.2` baseline the current CD
 3. `L7.2a` remove duplicate retrieval download
 4. `L7.4` package runtime data as one versioned bundle
-5. `L7.5` lock the hosting decision
-6. `L7.6` migrate the API to a Scaleway target with persistent mounted storage
-7. `L7.3` remove runtime data from the API image once the mounted storage exists
-8. `L7.7` refresh runtime data only when the manifest/hash changes
-9. `L7.8` add rollback + smoke gate before UI publication
+5. `L7.5` lock the short-term architecture decision
+6. `L7.3` switch the API CD from flat-file sync to bundle download/extract
+7. `L7.7` skip bundle refresh when the manifest/hash is unchanged
+8. `L7.8` add rollback + smoke gate before UI publication
+9. `L7.6` only if the previous steps still leave the CD too slow
 
-`L7.3` is intentionally gated by `L7.5/L7.6`.
-Doing `L7.3` first on Serverless Containers would only move the hydration penalty from CI build time to container start time.
+## Target CD Principle
 
-## Target Runtime Layout
+On the current hosting target:
 
-On the future mounted volume:
+1. build the runtime bundle from prepared corpus artifacts
+2. publish the bundle and sidecars to Object Storage
+3. in API CI, download the single bundle instead of syncing thousands of files
+4. verify checksum
+5. extract before Docker build
+6. build/publish the API image with the extracted runtime data
+7. deploy API
+8. deploy UI only after API succeeds
 
-- `/srv/nc-data/a220-tech-docs/...`
-- `/srv/nc-data/a220-non-conformities/...`
-- `/srv/nc-data/runtime-bundles/api-runtime-data.tar.zst`
-- `/srv/nc-data/runtime-bundles/api-runtime-data.manifest.json`
+## Non-Goals For This Lot
 
-The API image becomes code-only and reads corpus paths from the mounted volume.
+- no API hosting migration
+- no mounted persistent volume
+- no runtime cold-start extraction inside the live serverless container
 
-## CD Principle After Migration
+## Future Decision Gate
 
-1. Build and publish the API image independently of runtime data.
-2. Compare desired runtime manifest/hash with the manifest present on the mounted volume.
-3. If unchanged:
-- skip data refresh
-- deploy/restart the API only
-4. If changed:
-- download the bundle from Object Storage
-- verify checksum
-- extract on the mounted volume
-- switch manifest atomically
-- run API smoke
-- only then allow UI deploy
+If, after `L7.3` and `L7.7`, the measured API CD budget is still not acceptable, then reopen the infra branch:
 
-## Risks
+- `Instance + Block Storage`
+- or another Scaleway target with mounted persistent storage
 
-- `Instance + Block Storage` adds infra management that Serverless previously hid.
-- `File Storage` may become attractive later for shared multi-instance access, but it is not the default path now.
-- A future Scaleway feature change could alter the recommendation; the note should be revisited if Serverless Containers add mounted persistent storage.
+That is explicitly a **later** decision, not the current target.
 
 ## Sources
 
 - Scaleway Serverless Containers overview: https://www.scaleway.com/en/docs/serverless-containers/
 - Scaleway Serverless Containers concepts: https://www.scaleway.com/en/docs/serverless-containers/concepts/
 - Scaleway Serverless Containers limitations: https://www.scaleway.com/en/docs/serverless-containers/reference-content/containers-limitations/
-- Scaleway Block Storage quickstart: https://www.scaleway.com/en/docs/block-storage/quickstart/
-- Scaleway File Storage quickstart: https://www.scaleway.com/en/docs/file-storage/quickstart/
+- Scaleway Object Storage performance guidance: https://www.scaleway.com/en/docs/object-storage/reference-content/optimize-object-storage-performance/
