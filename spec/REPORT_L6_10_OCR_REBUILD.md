@@ -58,3 +58,41 @@ Manual UAT must cover:
 - `000`: response quality, sources, entities, and document links.
 - `100`: entity context contribution to deeper analysis, sources, and document links.
 - `/doc` links: no 404 on technical sources returned by the assistant.
+
+## Addendum 2026-04-25
+
+The OCR/caption sidecar refresh path is now operationalized through:
+
+```bash
+make dataprep-ocr-caption-batch-create
+make dataprep-ocr-caption-batch-status
+make dataprep-ocr-caption-batch-import
+make dataprep-ocr-caption-batch-refresh
+```
+
+A manual GitHub workflow `OCR Caption Batch` also exists for the same explicit operator flow, without coupling it to API deploys.
+
+### Attempted Rebuild
+
+Commands executed:
+
+```bash
+make dataprep-ocr-caption-batch-refresh
+make dataprep-tech-docs
+make dataprep-knowledge-tech-docs
+```
+
+Observed results:
+
+| Step | Result |
+| --- | --- |
+| OCR refresh from imported captions | 14,008 pages considered; 5,952 caption sidecars read; 5,851 enriched OCR JSON/Markdown artifacts rewritten; 0 errors |
+| Canonical CSV | 14,933 source rows -> 12,227 canonical rows; 2,706 equivalent-doc rows dropped; character parity preserved on kept rows |
+| Retrieval full rebuild | Blocked during embeddings with `OpenAI embeddings request failed: 429 insufficient_quota` |
+| Knowledge-only rebuild | Completed from the refreshed canonical CSV: 12,227 records; 45 ATA; 856 wiki pages |
+
+### Current Status
+
+- `L6.10e` is implemented and verified.
+- `L6.10` remains open because the full retrieval rebuild did not complete under the current OpenAI embeddings quota.
+- The local repository stayed clean after the refresh and knowledge-only rebuild, which means the regenerated artifacts were stable versus the current checked-in/ignored state.

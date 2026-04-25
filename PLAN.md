@@ -134,6 +134,8 @@
 - [x] L6.10e Basculer le traitement image OCR sur OpenAI Batch au moins pour la passe primaire `gpt-5.4-nano`, avec deep pass `gpt-5.4` sur le sous-ensemble routé. Recette: cibles Make `create/status/import`, requêtes Batch `/v1/responses`, images OCR référencées par `file_id` vision, manifest de batch versionné, import des captions/audits, mode sync conservé seulement comme fallback/debug petit volume. `TEST`
 - [ ] L6.10 Exécuter le rebuild complet RAG/wiki depuis la sortie OCR TS. Recette: génération complète `ocr/` + CSV préparé, `dataprep-prepare-tech-docs`, `dataprep-tech-docs`, `dataprep-knowledge-tech-docs`, audit zéro incohérence source servable, puis smoke UAT `000/100`. `TEST` + `UAT`
 
+- Note: tentative de rebuild complet rejouée le 2026-04-25. Le refresh OCR/CSV (`14,008` pages; `5,952` captions relues; `5,851` artefacts enrichis régénérés) et le rebuild knowledge-only (`12,227` records; `856` pages wiki) sont passés, mais `dataprep-tech-docs` reste bloqué sur `OpenAI embeddings request failed: 429 insufficient_quota`. Le lot reste donc ouvert tant que le rebuild vector/lexical complet n'a pas pu finir.
+
 ## Lot 6.2 - UAT couche connaissance
 
 - [ ] L6U.1 Verifier en UAT la presence visible du canal `Entities` au meme niveau que `tech docs` et `similar NC`. Recette: sur un cas `000` et un cas `100`, le runtime affiche une etape `Entities retrieved` et le bloc `Sources` contient un groupe distinct `Entities`. `UAT`
