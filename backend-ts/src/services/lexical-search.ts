@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
@@ -180,6 +180,17 @@ export function ensureLexicalIndexExists(config: LexicalCorpusConfig): {
   const row = db.prepare(`SELECT COUNT(*) AS count FROM lexical_documents`).get() as { count: number };
   const fingerprint = readMeta(db, "fingerprint");
   db.close();
+
+  if (row.count === 0 && !existsSync(config.sourceRoot)) {
+    return {
+      corpus: config.name,
+      dbPath: config.dbPath,
+      sourceRoot: config.sourceRoot,
+      documentCount: 0,
+      fingerprint,
+      rebuilt: false,
+    };
+  }
 
   if (row.count === 0) {
     return rebuildLexicalIndex(config);
