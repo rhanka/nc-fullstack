@@ -184,6 +184,19 @@
 - Note: un bloqueur pré-UAT du lot 6 a été corrigé: si `ontology/` ou `wiki/` manque, le backend TS bootstrap désormais la couche connaissance en mode déterministe sans embeddings, et filtre les faux concepts documentaires génériques (`1. Scope`, `Reference`, etc.).
 - Note: ce bootstrap local sert uniquement à débloquer le runtime et les checks techniques; il ne remplace pas le full rebuild TS attendu avant l'UAT utilisateur du lot 6.
 
+## Lot 7 - CD ordonné et data runtime persistante
+
+- [ ] L7.1 Ordonner le CD `API -> UI` au lieu de deux workflows parallèles indépendants. Recette: un merge `master` déploie l'API en premier, valide un smoke minimal API/version, puis seulement l'UI; aucun état prod ne sert une UI plus récente que l'API attendue. `TEST`
+- [ ] L7.2 Mesurer précisément le budget temps du CD API actuel et isoler le coût `image check / data download / image build / publish / deploy`. Recette: rapport versionné avec temps par étape sur au moins un run `master`, plus baseline cible après optimisation. `TEST`
+- [ ] L7.3 Formaliser la décision d'infrastructure runtime data. Recette: note d'architecture versionnée actant que `Scaleway Serverless Containers` n'offre qu'un stockage éphémère, donc qu'un vrai volume persistant impose une migration vers un support Scaleway compatible volume monté (`Instance + Block Storage` ou équivalent). `AUTO`
+- [ ] L7.4 Sortir les données runtime de l'image API. Recette: l'image API ne contient plus `pages/`, `json/`, `vector-export/`, `lexical/`, `ontology/` ni `wiki/`; elle devient une image applicative versionnée par le code seulement. `TEST`
+- [ ] L7.5 Introduire un bundle runtime data versionné par manifest/hash. Recette: artefacts corpus empaquetés en archive unique (`tar.zst` par défaut, `tar.gz` acceptable seulement si contrainte outillage), avec `knowledge-manifest.json`/hash explicite pour décider si une hydratation est nécessaire. `TEST`
+- [ ] L7.6 Déployer l'API sur un support Scaleway avec volume persistant monté pour la data runtime. Recette: le conteneur applicatif lit les artefacts depuis un volume durable, la première hydratation remplit ce volume, puis les déploiements backend sans changement de données n'ont plus à retélécharger/réextraire les corpus. `TEST`
+- [ ] L7.7 N'hydrater ou rafraîchir la data runtime que si le manifest/hash change. Recette: si le code API change sans changement de données, le CD saute l'étape de refresh data et redéploie seulement l'image; si le manifest change, le refresh du volume est exécuté avant le restart applicatif. `TEST`
+- [ ] L7.8 Ajouter rollback et smoke post-déploiement pour l'API avant publication UI. Recette: en cas d'échec hydratation ou smoke API, l'UI n'est pas déployée et la version précédente continue de servir. `TEST` + `UAT`
+- Note: tant que l'API reste sur `scw container container update` (`Serverless Containers`), un vrai volume persistant n'est pas disponible; `L7.6` implique donc une migration d'hébergement API, pas seulement un tweak du workflow.
+- Note: l'archive runtime ne sert pas à remplacer le volume; elle sert à accélérer/fiabiliser l'hydratation initiale et les refresh quand le manifest change.
+
 ## Critères de sortie
 
 - [x] Le choix modèle / reasoning est explicite et observable. `TEST`
@@ -198,3 +211,5 @@
 - [ ] Le chat ne dépend plus d'un parsing ad hoc dans `Chatbot.svelte`. `TEST`
 - [ ] La pertinence retrieval progresse sur benchmark et en revue utilisateur. `TEST` + `UAT`
 - [x] L'API TS est protégée par contrats et contrôles répétables. `TEST`
+- [ ] Le CD produit n'expose jamais une UI plus récente qu'une API non encore déployée. `TEST`
+- [ ] Un déploiement backend sans changement de data runtime ne réhydrate pas les corpus et reste dans un budget temps court explicite. `TEST`
