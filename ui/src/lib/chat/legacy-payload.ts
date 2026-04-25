@@ -80,11 +80,21 @@ function parseEmbeddedJsonObject(value: string | undefined): Record<string, unkn
 }
 
 export function normalizeLegacyFinalPayload(payload: LegacyFinalPayload): LegacyFinalPayload {
-  if (payload.label || payload.description) {
-    return payload;
-  }
-
   const embeddedPayload = parseEmbeddedJsonObject(payload.text);
+
+  if (payload.label || payload.description) {
+    if (!embeddedPayload) {
+      return payload;
+    }
+
+    return {
+      ...payload,
+      text:
+        typeof embeddedPayload.comment === 'string'
+          ? embeddedPayload.comment
+          : undefined,
+    };
+  }
 
   if (!embeddedPayload) {
     return payload;
@@ -95,7 +105,9 @@ export function normalizeLegacyFinalPayload(payload: LegacyFinalPayload): Legacy
     text:
       typeof embeddedPayload.comment === 'string'
         ? embeddedPayload.comment
-        : payload.text,
+        : embeddedPayload.label !== undefined || embeddedPayload.description !== undefined
+          ? undefined
+          : payload.text,
     label:
       typeof embeddedPayload.label === 'string'
         ? embeddedPayload.label

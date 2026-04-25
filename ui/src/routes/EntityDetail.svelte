@@ -3,6 +3,20 @@
   import Icon from "@iconify/svelte";
   import { getApiBaseUrl } from "$lib/api-base";
   import type { ReferenceSourceItem } from "$lib/chat/contracts";
+  import {
+    buildEntityRelationshipGroups,
+    type EntityRelationshipSource,
+  } from "$lib/entities/entity-relationship-groups";
+  import {
+    getEntityAliasLine,
+    getEntityMetadata,
+    getEntityPartNumberLine,
+    getEntityPrimaryDoc,
+    getEntitySupportingDocs,
+    getEntityTitle,
+    getLinkedImages,
+    type EntityLinkedImageRecord,
+  } from "$lib/entities/entity-ui";
   import { activeTabValue, selectDoc, selectEntity } from "./store";
 
   type EntitySourceItem = ReferenceSourceItem & {
@@ -15,6 +29,17 @@
     readonly part_numbers?: unknown;
     readonly supporting_docs?: unknown;
     readonly primary_doc?: unknown;
+    readonly linked_images?: unknown;
+  };
+
+  type EntityLinkedImage = EntityLinkedImageRecord & {
+    readonly caption?: unknown;
+    readonly technical_description?: unknown;
+    readonly page_category?: unknown;
+    readonly figure_or_table_refs?: unknown;
+    readonly visible_identifiers?: unknown;
+    readonly score?: unknown;
+    readonly reasons?: unknown;
   };
 
   type EntityArticle = {
@@ -32,6 +57,7 @@
   let articlePath: string | null = null;
   let articleError: string | null = null;
   let articleLoading = false;
+  let selectedImage: EntityLinkedImage | null = null;
 
   function asEntity(item: ReferenceSourceItem): EntitySourceItem {
     return item as EntitySourceItem;
@@ -52,38 +78,6 @@
     return single ? [single] : [];
   }
 
-  function compact(values: string[], limit = 4): string {
-    if (values.length <= limit) {
-      return values.join(", ");
-    }
-
-    return values.slice(0, limit).join(", ") + " +" + String(values.length - limit);
-  }
-
-  function entityKey(item: ReferenceSourceItem | null): string | null {
-    if (!item) {
-      return null;
-    }
-
-    const entity = asEntity(item);
-    for (const value of [entity.path, entity.slug, entity.doc, entity.title, entity.chunk_id]) {
-      if (typeof value === "string" && value.trim()) {
-        return value.trim();
-      }
-    }
-
-    return null;
-  }
-
-  function titleFor(item: ReferenceSourceItem | null): string {
-    if (!item) {
-      return "No entity selected";
-    }
-
-    const entity = asEntity(item);
-    return textValue(entity.title) ?? textValue(entity.doc) ?? textValue(entity.chunk_id) ?? "Untitled entity";
-  }
-
   function pathFor(item: ReferenceSourceItem | null): string | null {
     if (!item) {
       return null;
@@ -93,33 +87,6 @@
     return textValue(entity.path) ?? textValue(entity.slug);
   }
 
-  function primaryDocFor(item: ReferenceSourceItem | null): string | null {
-    return item ? textValue(asEntity(item).primary_doc) : null;
-  }
-
-  function supportingDocsFor(item: ReferenceSourceItem | null): string[] {
-    return item ? textArray(asEntity(item).supporting_docs) : [];
-  }
-
-  function metadataFor(item: ReferenceSourceItem | null): string {
-    if (!item) {
-      return "";
-    }
-
-    const entity = asEntity(item);
-    const ataCodes = textArray(entity.ata_codes);
-    const zones = textArray(entity.zones).map((zone) => "Zone " + zone);
-    return [...ataCodes, ...zones].join(" / ");
-  }
-
-  function aliasFor(item: ReferenceSourceItem | null): string {
-    return item ? compact(textArray(asEntity(item).aliases), 4) : "";
-  }
-
-  function partNumbersFor(item: ReferenceSourceItem | null): string {
-    return item ? compact(textArray(asEntity(item).part_numbers), 5) : "";
-  }
-
   function articleBody(markdown: string | undefined): string {
     if (!markdown) {
       return "";
@@ -127,7 +94,7 @@
 
     return markdown
       .replace(/^# .*(\r?\n)+/u, "")
-      .replace(/\r?\n## Technical documents[\s\S]*$/u, "")
+      .replace(/\r?\n## (?:Linked images|Technical documents)[\s\S]*$/u, "")
       .trim();
   }
 
@@ -147,6 +114,46 @@
   function openRelated(entity: ReferenceSourceItem): void {
     selectEntity.set(entity);
     activeTabValue.set(4);
+  }
+
+  function openRelatedSource(entity: EntityRelationshipSource): void {
+    openRelated(entity as ReferenceSourceItem);
+  }
+
+  function imageAssetUrl(image: EntityLinkedImage): string | null {
+    const assetPath = textValue(image.asset_path)?.replace(/^wiki\//u, "");
+    if (!assetPath) {
+      return null;
+    }
+
+    return apiBaseUrl + "/wiki/" + encodeURIComponent(assetPath);
+  }
+
+  function imageTitleFor(image: EntityLinkedImage): string {
+    return textArray(image.figure_or_table_refs)[0] ?? textValue(image.doc) ?? textValue(image.id) ?? "Linked image";
+  }
+
+  function imageCaptionFor(image: EntityLinkedImage): string {
+    return textValue(image.caption) ?? textValue(image.technical_description) ?? "";
+  }
+
+  function imageCategoryFor(image: EntityLinkedImage): string | null {
+    const category = textValue(image.page_category);
+    return category?.replace(/^technical_/u, "").replace(/_/gu, " ") ?? null;
+  }
+
+  function openImageModal(image: EntityLinkedImage): void {
+    selectedImage = image;
+  }
+
+  function closeImageModal(): void {
+    selectedImage = null;
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent): void {
+    if (event.key === "Escape" && selectedImage) {
+      closeImageModal();
+    }
   }
 
   async function loadArticle(nextPath: string): Promise<void> {
@@ -173,10 +180,14 @@
   }
 
   $: selectedPath = pathFor(selectedEntity);
-  $: selectedPrimaryDoc = primaryDocFor(selectedEntity);
-  $: selectedSupportingDocs = supportingDocsFor(selectedEntity);
-  $: selectedEntityKey = entityKey(selectedEntity);
-  $: relatedEntities = entitiesList.filter((entity) => entityKey(entity) !== selectedEntityKey).slice(0, 10);
+  $: selectedPrimaryDoc = getEntityPrimaryDoc(selectedEntity);
+  $: selectedSupportingDocs = getEntitySupportingDocs(selectedEntity);
+  $: selectedLinkedImages = getLinkedImages(selectedEntity) as EntityLinkedImage[];
+  $: relatedEntityGroups = buildEntityRelationshipGroups(
+    selectedEntity as EntityRelationshipSource | null,
+    entitiesList as readonly EntityRelationshipSource[],
+  );
+  $: relatedEntityCount = relatedEntityGroups.find((group) => group.key === "same_answer")?.items.length ?? 0;
 
   $: if (selectedPath && selectedPath !== articlePath) {
     void loadArticle(selectedPath);
@@ -190,6 +201,8 @@
   }
 </script>
 
+<svelte:window on:keydown={handleWindowKeydown} />
+
 <section class="entity-detail">
   {#if !selectedEntity}
     <div class="entity-detail__empty">
@@ -200,19 +213,19 @@
   {:else}
     <header class="entity-detail__header">
       <p class="entity-detail__eyebrow">Entity</p>
-      <h1>{titleFor(selectedEntity)}</h1>
+      <h1>{getEntityTitle(selectedEntity)}</h1>
       <span class="entity-detail__badge">Used in current answer</span>
 
-      {#if metadataFor(selectedEntity)}
-        <p class="entity-detail__meta">{metadataFor(selectedEntity)}</p>
+      {#if getEntityMetadata(selectedEntity, 99)}
+        <p class="entity-detail__meta">{getEntityMetadata(selectedEntity, 99)}</p>
       {/if}
 
-      {#if aliasFor(selectedEntity)}
-        <p class="entity-detail__line"><strong>Aliases:</strong> {aliasFor(selectedEntity)}</p>
+      {#if getEntityAliasLine(selectedEntity, 4)}
+        <p class="entity-detail__line"><strong>Aliases:</strong> {getEntityAliasLine(selectedEntity, 4)}</p>
       {/if}
 
-      {#if partNumbersFor(selectedEntity)}
-        <p class="entity-detail__line"><strong>Part numbers:</strong> {partNumbersFor(selectedEntity)}</p>
+      {#if getEntityPartNumberLine(selectedEntity, 5)}
+        <p class="entity-detail__line"><strong>Part numbers:</strong> {getEntityPartNumberLine(selectedEntity, 5)}</p>
       {/if}
 
       {#if selectedPrimaryDoc}
@@ -238,6 +251,47 @@
       {/if}
     </section>
 
+    {#if selectedLinkedImages.length > 0}
+      <details class="entity-detail__card" open={selectedLinkedImages.length <= 3}>
+        <summary>Linked images ({selectedLinkedImages.length})</summary>
+        <div class="entity-detail__image-list">
+          {#each selectedLinkedImages as image}
+            <article class="entity-detail__image-card">
+              {#if imageAssetUrl(image)}
+                <button
+                  type="button"
+                  class="entity-detail__image-figure-button"
+                  aria-label={`Open image ${imageTitleFor(image)}`}
+                  on:click={() => openImageModal(image)}
+                >
+                  <img src={imageAssetUrl(image) ?? ""} alt={imageTitleFor(image)} loading="lazy" />
+                </button>
+              {/if}
+
+              <div class="entity-detail__image-body">
+                <span class="entity-detail__image-title">{imageTitleFor(image)}</span>
+
+                {#if imageCaptionFor(image)}
+                  <p>{imageCaptionFor(image)}</p>
+                {/if}
+
+                <div class="entity-detail__image-meta">
+                  {#if imageCategoryFor(image)}
+                    <span>{imageCategoryFor(image)}</span>
+                  {/if}
+                  {#if textValue(image.doc)}
+                    <button type="button" on:click={() => openDocument(textValue(image.doc))}>
+                      Open document
+                    </button>
+                  {/if}
+                </div>
+              </div>
+            </article>
+          {/each}
+        </div>
+      </details>
+    {/if}
+
     {#if selectedSupportingDocs.length > 0}
       <details class="entity-detail__card" open>
         <summary>Supporting documents ({selectedSupportingDocs.length})</summary>
@@ -249,12 +303,19 @@
       </details>
     {/if}
 
-    {#if relatedEntities.length > 0}
+    {#if relatedEntityGroups.length > 0}
       <details class="entity-detail__card">
-        <summary>Related entities found in this answer ({relatedEntities.length})</summary>
-        <div class="entity-detail__related-list">
-          {#each relatedEntities as entity}
-            <button type="button" on:click={() => openRelated(entity)}>{titleFor(entity)}</button>
+        <summary>Related entities found in this answer ({relatedEntityCount})</summary>
+        <div class="entity-detail__related-groups">
+          {#each relatedEntityGroups as group}
+            <section class="entity-detail__related-group">
+              <h3>{group.label}</h3>
+              <div class="entity-detail__related-list">
+                {#each group.items as item (group.key + item.key)}
+                  <button type="button" on:click={() => openRelatedSource(item.source)}>{item.title}</button>
+                {/each}
+              </div>
+            </section>
           {/each}
         </div>
       </details>
@@ -262,6 +323,59 @@
 
   {/if}
 </section>
+
+{#if selectedImage}
+  <div
+    class="entity-image-modal__backdrop"
+    role="presentation"
+    tabindex="-1"
+    on:click={closeImageModal}
+    on:keydown={(event) => event.key === "Escape" && closeImageModal()}
+  >
+    <div
+      class="entity-image-modal"
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+      aria-label={imageTitleFor(selectedImage)}
+      on:click|stopPropagation
+      on:keydown={(event) => event.key === "Escape" && closeImageModal()}
+    >
+      <div class="entity-image-modal__header">
+        <div>
+          <p class="entity-image-modal__eyebrow">Linked image</p>
+          <h3>{imageTitleFor(selectedImage)}</h3>
+        </div>
+        <button type="button" class="entity-image-modal__close" aria-label="Close image" on:click={closeImageModal}>
+          <Icon icon="mdi:close" height="1.2rem" />
+        </button>
+      </div>
+
+      {#if imageAssetUrl(selectedImage)}
+        <div class="entity-image-modal__figure">
+          <img src={imageAssetUrl(selectedImage) ?? ""} alt={imageTitleFor(selectedImage)} loading="eager" />
+        </div>
+      {/if}
+
+      <div class="entity-image-modal__body">
+        {#if imageCaptionFor(selectedImage)}
+          <p>{imageCaptionFor(selectedImage)}</p>
+        {/if}
+
+        <div class="entity-image-modal__actions">
+          {#if imageCategoryFor(selectedImage)}
+            <span>{imageCategoryFor(selectedImage)}</span>
+          {/if}
+          {#if textValue(selectedImage.doc)}
+            <button type="button" on:click={() => openDocument(textValue(selectedImage.doc))}>
+              Open document
+            </button>
+          {/if}
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .entity-detail {
@@ -353,7 +467,8 @@
 
   .entity-detail__primary-action,
   .entity-detail__doc-list button,
-  .entity-detail__related-list button {
+  .entity-detail__related-list button,
+  .entity-detail__image-meta button {
     border: 1px solid rgba(37, 99, 235, 0.18);
     border-radius: 999px;
     background: #eff6ff;
@@ -383,11 +498,104 @@
     margin-top: 0.85rem;
   }
 
+  .entity-detail__related-groups {
+    display: grid;
+    gap: 0.9rem;
+    margin-top: 0.85rem;
+  }
+
+  .entity-detail__related-group h3 {
+    margin: 0;
+    color: #475467;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .entity-detail__related-group .entity-detail__related-list {
+    margin-top: 0.45rem;
+  }
+
   .entity-detail__doc-list button,
-  .entity-detail__related-list button {
+  .entity-detail__related-list button,
+  .entity-detail__image-meta button {
     padding: 0.42rem 0.65rem;
     max-width: 100%;
     overflow-wrap: anywhere;
+  }
+
+  .entity-detail__image-list {
+    display: grid;
+    gap: 1rem;
+    margin-top: 0.85rem;
+  }
+
+  .entity-detail__image-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.9rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 0.9rem;
+    background: #f8fafc;
+  }
+
+  .entity-detail__image-figure-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0.8rem;
+    background: linear-gradient(180deg, #eff4ff 0%, #f8fafc 100%);
+    cursor: zoom-in;
+    overflow: hidden;
+  }
+
+  .entity-detail__image-card img {
+    display: block;
+    width: 100%;
+    max-height: 28rem;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 0.8rem;
+    background: transparent;
+    object-fit: contain;
+  }
+
+  .entity-detail__image-body {
+    min-width: 0;
+  }
+
+  .entity-detail__image-title {
+    display: block;
+    color: #101828;
+    font-size: 0.84rem;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .entity-detail__image-body p {
+    margin: 0.45rem 0 0;
+    color: #475467;
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+
+  .entity-detail__image-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.55rem;
+  }
+
+  .entity-detail__image-meta span {
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #334155;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
   }
 
   .entity-detail__markdown {
@@ -404,6 +612,121 @@
     margin-bottom: 0;
   }
 
+  .entity-image-modal__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(15, 23, 42, 0.58);
+    backdrop-filter: blur(6px);
+  }
+
+  .entity-image-modal {
+    width: min(94vw, 84rem);
+    max-height: 92vh;
+    display: grid;
+    gap: 1rem;
+    padding: 1.1rem;
+    overflow: auto;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 28px 80px rgba(15, 23, 42, 0.24);
+  }
+
+  .entity-image-modal__header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .entity-image-modal__eyebrow {
+    margin: 0 0 0.2rem;
+    color: #667085;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .entity-image-modal__header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    color: #101828;
+  }
+
+  .entity-image-modal__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 999px;
+    background: #f8fafc;
+    color: #1d4ed8;
+    cursor: pointer;
+  }
+
+  .entity-image-modal__figure {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 16rem;
+    padding: 0.75rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 0.95rem;
+    background: linear-gradient(180deg, #eff4ff 0%, #f8fafc 100%);
+  }
+
+  .entity-image-modal__figure img {
+    max-width: 100%;
+    max-height: 68vh;
+    object-fit: contain;
+    border-radius: 0.5rem;
+  }
+
+  .entity-image-modal__body {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  .entity-image-modal__body p {
+    margin: 0;
+    color: #475467;
+    line-height: 1.55;
+  }
+
+  .entity-image-modal__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .entity-image-modal__actions span,
+  .entity-image-modal__actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .entity-image-modal__actions button {
+    cursor: pointer;
+  }
+
   @media (max-width: 768px) {
     .entity-detail {
       padding: 1rem;
@@ -411,6 +734,15 @@
 
     .entity-detail__empty {
       margin-top: 3rem;
+    }
+
+    .entity-detail__image-card {
+      padding: 0.8rem;
+    }
+
+    .entity-detail__image-card img {
+      width: 100%;
+      max-height: 15rem;
     }
   }
 </style>

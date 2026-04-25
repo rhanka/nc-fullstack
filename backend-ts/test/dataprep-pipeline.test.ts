@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { gzipSync } from "node:zlib";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -21,6 +21,7 @@ import {
   type PartCanonicalizer,
   type PartCanonicalizerInput,
 } from "../src/dataprep/pipeline.ts";
+import { prepareTechDocsCanonicalDataset } from "../src/dataprep/tech-docs-canonical.ts";
 
 class FakeEmbeddingProvider implements EmbeddingProvider {
   readonly model = "fake-embedding-model";
@@ -446,4 +447,340 @@ test("runKnowledgeDataprepForCorpus filters generic section headings from wiki p
   const titles = wikiIndex.map((entry) => String(entry.title ?? ""));
   assert.ok(titles.includes("Door Frame"));
   assert.ok(!titles.includes("1. Scope"));
+});
+
+test("runKnowledgeDataprepForCorpus builds public image/entity artifacts from OCR captions", async () => {
+  const root = buildTestRoot();
+  const techSource = path.join(root, "tech_docs.csv.gz");
+  const techOutputRoot = path.join(root, "tech");
+  mkdirSync(path.join(techOutputRoot, "ocr"), { recursive: true });
+  mkdirSync(path.join(techOutputRoot, "ontology", "image-assets"), { recursive: true });
+  mkdirSync(path.join(techOutputRoot, "wiki", "images"), { recursive: true });
+  writeFileSync(path.join(techOutputRoot, "ontology", "image-assets", "stale.png"), Buffer.from("stale"));
+  writeFileSync(path.join(techOutputRoot, "wiki", "images", "stale.png"), Buffer.from("stale"));
+
+  writeGzipTsv(techSource, [
+    ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"],
+    [
+      "A220-bleed-system_page_0001.pdf",
+      "A220-bleed-system.pdf",
+      "A220-bleed-system_page_0001.json",
+      "# Starter Air Valve\nBleed air diagram showing Starter Air Valve control with Bleed Temperature Sensor feedback.",
+      "122",
+      "A220-bleed-system_page_0001.pdf 0",
+      "ATA 36",
+      "Starter Air Valve; Bleed Temperature Sensor",
+      "diagram",
+    ],
+  ]);
+
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "A220-bleed-system_page_0001__with_img_desc.json"),
+    JSON.stringify({
+      pages: [
+        {
+          markdown: "![bleed diagram](img-1.png)\n\nStarter Air Valve schematic.",
+          images: [{ id: "img-1", imageBase64: "data:image/png;base64,aGVsbG8=" }],
+        },
+      ],
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "A220-bleed-system_page_0001.image-caption.json"),
+    JSON.stringify({
+      page_category: "technical_diagram",
+      page_category_confidence: 0.98,
+      is_non_content_page: false,
+      retrieval_action: "index",
+      retrieval_weight: 1,
+      short_summary: "Bleed air schematic with starter air valve and temperature sensor.",
+      technical_description:
+        "Figure 02-02-4 shows the Starter Air Valve connected to the Bleed Temperature Sensor in the bleed air control loop.",
+      visible_text: ["STARTER AIR VALVE", "BLEED TEMPERATURE SENSOR"],
+      visible_identifiers: ["Starter Air Valve", "Bleed Temperature Sensor", "Figure 02-02-4"],
+      ata_candidates: ["ATA-36"],
+      part_or_zone_candidates: ["Starter Air Valve", "Bleed Temperature Sensor"],
+      diagram_elements: ["valve", "sensor", "control loop"],
+      relationships_or_flows: ["Starter Air Valve feeds bleed air through the control loop."],
+      warnings_or_limits: [],
+      figure_or_table_refs: ["Figure 02-02-4"],
+      uncertainties: [],
+    }),
+    "utf8",
+  );
+
+  const techConfig: DataprepCorpusConfig = {
+    corpus: "tech_docs",
+    sourceFile: techSource,
+    outputRoot: techOutputRoot,
+    hasHeader: true,
+    normalizeRow: normalizeTechDocsPreparedRow,
+  };
+
+  const result = await runKnowledgeDataprepForCorpus(techConfig);
+
+  const images = JSON.parse(
+    readFileSync(path.join(result.ontology.root, "images.json"), "utf8"),
+  ) as Array<Record<string, unknown>>;
+  assert.equal(images.length, 1);
+  assert.equal(images[0]?.doc, "A220-bleed-system_page_0001.pdf");
+  assert.equal(images[0]?.asset_path, "wiki/images/a220-bleed-system-page-0001-1.png");
+  assert.ok(existsSync(path.join(result.ontology.root, "image-assets", "a220-bleed-system-page-0001-1.png")));
+  assert.ok(existsSync(path.join(result.wiki.root, "images", "a220-bleed-system-page-0001-1.png")));
+  assert.equal(existsSync(path.join(result.ontology.root, "image-assets", "stale.png")), false);
+  assert.equal(existsSync(path.join(result.wiki.root, "images", "stale.png")), false);
+
+  const imageRelations = JSON.parse(
+    readFileSync(path.join(result.ontology.root, "image_relations.json"), "utf8"),
+  ) as Array<Record<string, unknown>>;
+  assert.ok(
+    imageRelations.some(
+      (relation) =>
+        relation.from === "part:starter-air-valve" &&
+        relation.to === "image:a220-bleed-system-page-0001-1" &&
+        Array.isArray(relation.reasons) &&
+        relation.reasons.includes("caption_candidate"),
+    ),
+  );
+
+  const wikiIndex = JSON.parse(readFileSync(result.wiki.indexPath, "utf8")) as Array<Record<string, unknown>>;
+  const starterValve = wikiIndex.find((entry) => entry.slug === "starter-air-valve");
+  assert.ok(starterValve);
+  const linkedImages = starterValve.linked_images as Array<Record<string, unknown>>;
+  assert.equal(linkedImages.length, 1);
+  assert.equal(linkedImages[0]?.asset_path, "images/a220-bleed-system-page-0001-1.png");
+
+  const wikiMarkdown = readFileSync(path.join(result.wiki.root, "parts", "starter-air-valve.md"), "utf8");
+  assert.match(wikiMarkdown, /## Linked images/u);
+  assert.match(wikiMarkdown, /Figure 02-02-4/u);
+  assert.match(wikiMarkdown, /\.\.\/images\/a220-bleed-system-page-0001-1\.png/u);
+});
+
+test("runKnowledgeDataprepForCorpus keeps one canonical supporting document and one linked image for long/short FCOM duplicates", async () => {
+  const root = buildTestRoot();
+  const pagesDir = path.join(root, "pages");
+  const managedDatasetDir = path.join(root, "managed_dataset");
+  const techOutputRoot = path.join(root, "tech");
+  const preparedSource = path.join(managedDatasetDir, "tech_docs_prepared.csv.gz");
+  const canonicalSource = path.join(managedDatasetDir, "tech_docs_canonical.csv.gz");
+  mkdirSync(pagesDir, { recursive: true });
+  mkdirSync(managedDatasetDir, { recursive: true });
+  mkdirSync(path.join(techOutputRoot, "ocr"), { recursive: true });
+
+  const longDoc = "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529.pdf";
+  const shortDoc = "a220-300-FCOM-1-1-13_page_1529.pdf";
+  writeFileSync(path.join(pagesDir, longDoc), "");
+  writeFileSync(path.join(pagesDir, shortDoc), "");
+
+  writeGzipTsv(preparedSource, [
+    ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"],
+    [
+      longDoc,
+      "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped.pdf",
+      "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529.json",
+      "Fuel Tank Inerting System (FTIS) diagram with nitrogen-enriched air, ram air and heat exchangers.",
+      "99",
+      `${longDoc} 0`,
+      "ATA 28",
+      "Fuel Tank Inerting System",
+      "technical_diagram",
+    ],
+    [
+      longDoc,
+      "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped.pdf",
+      "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529.json",
+      "Fuel Tank Inerting System (FTIS) diagram with nitrogen-enriched air, ram air and heat exchangers.\nFlow continues toward the separation module.",
+      "139",
+      `${longDoc} 1`,
+      "ATA 28",
+      "Fuel Tank Inerting System",
+      "technical_diagram",
+    ],
+    [
+      shortDoc,
+      "a220-300-FCOM-1-1-13.pdf",
+      "a220-300-FCOM-1-1-13_page_1529.json",
+      "Fuel Tank Inerting System (FTIS) diagram with nitrogen-enriched air, ram air and heat exchangers.",
+      "99",
+      `${shortDoc} 0`,
+      "ATA 28",
+      "Fuel Tank Inerting System",
+      "technical_diagram",
+    ],
+    [
+      shortDoc,
+      "a220-300-FCOM-1-1-13.pdf",
+      "a220-300-FCOM-1-1-13_page_1529.json",
+      "Fuel Tank Inerting System (FTIS) diagram with nitrogen-enriched air, ram air and heat exchangers.\nFlow continues toward the separation module.",
+      "139",
+      `${shortDoc} 1`,
+      "ATA 28",
+      "Fuel Tank Inerting System",
+      "technical_diagram",
+    ],
+  ]);
+
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529__with_img_desc.json"),
+    JSON.stringify({
+      pages: [
+        {
+          markdown: "![ftis](img-1.png)\n\nFTIS diagram.",
+          images: [{ id: "img-1", imageBase64: "data:image/png;base64,aGVsbG8=" }],
+        },
+      ],
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529.image-caption.json"),
+    JSON.stringify({
+      page_category: "technical_diagram",
+      page_category_confidence: 0.99,
+      is_non_content_page: false,
+      retrieval_action: "index",
+      retrieval_weight: 1,
+      short_summary: "FTIS flow diagram.",
+      technical_description:
+        "Fuel Tank Inerting System (FTIS) flow diagram showing nitrogen-enriched air, ram air and heat exchangers.",
+      visible_text: ["FTIS", "NITROGEN ENRICHED AIR"],
+      visible_identifiers: ["Figure 28-10-1"],
+      ata_candidates: ["ATA 28"],
+      part_or_zone_candidates: ["Fuel Tank Inerting System"],
+      diagram_elements: ["heat exchanger", "separator module"],
+      relationships_or_flows: ["Nitrogen-enriched air flows through the FTIS path."],
+      warnings_or_limits: [],
+      figure_or_table_refs: ["Figure 28-10-1"],
+      uncertainties: [],
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "a220-300-FCOM-1-1-13_page_1529__with_img_desc.json"),
+    JSON.stringify({
+      pages: [
+        {
+          markdown: "![ftis](img-1.png)\n\nFTIS diagram.",
+          images: [{ id: "img-1", imageBase64: "data:image/png;base64,aGVsbG8=" }],
+        },
+      ],
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "a220-300-FCOM-1-1-13_page_1529.image-caption.json"),
+    JSON.stringify({
+      page_category: "technical_diagram",
+      page_category_confidence: 0.99,
+      is_non_content_page: false,
+      retrieval_action: "index",
+      retrieval_weight: 1,
+      short_summary: "FTIS flow diagram.",
+      technical_description:
+        "Fuel Tank Inerting System (FTIS) flow diagram showing nitrogen-enriched air, ram air and heat exchangers.",
+      visible_text: ["FTIS", "NITROGEN ENRICHED AIR"],
+      visible_identifiers: ["Figure 28-10-1"],
+      ata_candidates: ["ATA 28"],
+      part_or_zone_candidates: ["Fuel Tank Inerting System"],
+      diagram_elements: ["heat exchanger", "separator module"],
+      relationships_or_flows: ["Nitrogen-enriched air flows through the FTIS path."],
+      warnings_or_limits: [],
+      figure_or_table_refs: ["Figure 28-10-1"],
+      uncertainties: [],
+    }),
+    "utf8",
+  );
+
+  prepareTechDocsCanonicalDataset({
+    sourceFile: preparedSource,
+    outputFile: canonicalSource,
+    pagesDir,
+  });
+
+  const techConfig: DataprepCorpusConfig = {
+    corpus: "tech_docs",
+    sourceFile: canonicalSource,
+    outputRoot: techOutputRoot,
+    hasHeader: true,
+    normalizeRow: normalizeTechDocsPreparedRow,
+  };
+
+  const result = await runKnowledgeDataprepForCorpus(techConfig);
+  const wikiIndex = JSON.parse(readFileSync(result.wiki.indexPath, "utf8")) as Array<Record<string, unknown>>;
+  const ftis = wikiIndex.find((entry) => entry.slug === "fuel-tank-inerting-system");
+  assert.ok(ftis);
+  assert.deepEqual(ftis.supporting_docs, [shortDoc]);
+
+  const linkedImages = ftis.linked_images as Array<Record<string, unknown>>;
+  assert.equal(linkedImages.length, 1);
+  assert.equal(linkedImages[0]?.doc, shortDoc);
+  assert.equal(linkedImages[0]?.asset_path, "images/a220-300-fcom-1-1-13-page-1529-1.png");
+
+  const publicImages = JSON.parse(
+    readFileSync(path.join(result.ontology.root, "images.json"), "utf8"),
+  ) as Array<Record<string, unknown>>;
+  assert.equal(publicImages.length, 1);
+  assert.equal(publicImages[0]?.doc, shortDoc);
+});
+
+test("runKnowledgeDataprepForCorpus derives public image artifacts from enriched OCR markdown without caption sidecars", async () => {
+  const root = buildTestRoot();
+  const techSource = path.join(root, "tech_docs.csv.gz");
+  const techOutputRoot = path.join(root, "tech");
+  mkdirSync(path.join(techOutputRoot, "ocr"), { recursive: true });
+
+  writeGzipTsv(techSource, [
+    ["doc", "doc_root", "json_data", "chunk", "length", "chunk_id", "ata", "parts", "doc_type"],
+    [
+      "A220-door-system_page_0002.pdf",
+      "A220-door-system.pdf",
+      "A220-door-system_page_0002.json",
+      "Door proximity sensor technical diagram.",
+      "64",
+      "A220-door-system_page_0002.pdf 0",
+      "ATA 52",
+      "Door Proximity Sensor",
+      "diagram",
+    ],
+  ]);
+
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "A220-door-system_page_0002__with_img_desc.json"),
+    JSON.stringify({
+      pages: [
+        {
+          markdown: "![img-0.jpeg](img-0.jpeg)",
+          images: [{ id: "img-0.jpeg", image_base64: "data:image/png;base64,aGVsbG8=" }],
+        },
+      ],
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    path.join(techOutputRoot, "ocr", "A220-door-system_page_0002__with_img_desc.md"),
+    "![Door Proximity Sensor installation diagram showing the sensor bracket](img-0.jpeg)\n",
+    "utf8",
+  );
+
+  const techConfig: DataprepCorpusConfig = {
+    corpus: "tech_docs",
+    sourceFile: techSource,
+    outputRoot: techOutputRoot,
+    hasHeader: true,
+    normalizeRow: normalizeTechDocsPreparedRow,
+  };
+
+  const result = await runKnowledgeDataprepForCorpus(techConfig);
+  const images = JSON.parse(
+    readFileSync(path.join(result.ontology.root, "images.json"), "utf8"),
+  ) as Array<Record<string, unknown>>;
+  assert.equal(images.length, 1);
+  assert.equal(images[0]?.caption, "Door Proximity Sensor installation diagram showing the sensor bracket");
+
+  const wikiIndex = JSON.parse(readFileSync(result.wiki.indexPath, "utf8")) as Array<Record<string, unknown>>;
+  const doorSensor = wikiIndex.find((entry) => entry.slug === "door-proximity-sensor");
+  assert.ok(doorSensor);
+  const linkedImages = doorSensor.linked_images as Array<Record<string, unknown>>;
+  assert.equal(linkedImages.length, 1);
 });

@@ -154,3 +154,20 @@ test("handleWikiRoute serves wiki markdown and rejects invalid paths", async () 
   const missing = await handleWikiRoute("/wiki/parts%2Fmissing.md", { wikiRoot });
   assert.equal(missing?.statusCode, 404);
 });
+
+test("handleWikiRoute serves linked wiki image assets", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "nc-backend-ts-wiki-route-image-"));
+  const wikiRoot = path.join(root, "wiki");
+  await mkdir(path.join(wikiRoot, "images"), { recursive: true });
+  await writeFile(path.join(wikiRoot, "images", "door-diagram.png"), Buffer.from("png-content"));
+
+  const ok = await handleWikiRoute("/wiki/images%2Fdoor-diagram.png", { wikiRoot });
+  assert.ok(ok);
+  assert.equal(ok!.statusCode, 200);
+  assert.equal(ok!.headers["content-type"], "image/png");
+  assert.ok(Buffer.isBuffer(ok!.body));
+  assert.equal((ok!.body as Buffer).toString("utf8"), "png-content");
+
+  const invalid = await handleWikiRoute("/wiki/parts%2Fdoor.png", { wikiRoot });
+  assert.equal(invalid?.statusCode, 400);
+});

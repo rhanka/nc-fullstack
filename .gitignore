@@ -26,6 +26,7 @@ ui/build/
 .playwright-mcp/
 .codex
 .codex/
+.superpowers/
 .deploy_output.json
 .deploy_output.log
 .env-root

@@ -38,7 +38,20 @@ function createPrompt(system: string, user: string, jsonMode: boolean): PromptTe
   } as PromptTemplate;
 }
 
-function createDependencies(dependencyOptions: { readonly finalSystemPrompts?: string[] } = {}) {
+function createDependencies(
+  dependencyOptions: {
+    readonly finalSystemPrompts?: string[];
+    readonly finalResponse?: Record<string, unknown>;
+  } = {},
+) {
+  const finalResponse = dependencyOptions.finalResponse ?? {
+    label: "Windshield rivet flushness out of tolerance",
+    description: {
+      observation: "Measured rivet flushness below tolerance on right windshield frame.",
+    },
+    comment: "Draft updated with similar cases and technical references.",
+  };
+
   const llmRuntime: LlmRuntime = {
     async invoke(options) {
       const system = options.messages[0]?.content ?? "";
@@ -57,13 +70,7 @@ function createDependencies(dependencyOptions: { readonly finalSystemPrompts?: s
       return {
         providerId: "openai",
         model: options.model,
-        text: JSON.stringify({
-          label: "Windshield rivet flushness out of tolerance",
-          description: {
-            observation: "Measured rivet flushness below tolerance on right windshield frame.",
-          },
-          comment: "Draft updated with similar cases and technical references.",
-        }),
+        text: JSON.stringify(finalResponse),
         jsonMode: true,
         responseId: "final-1",
         reasoningSummary: "Cross-checked technical docs and one similar NC.",
@@ -82,17 +89,14 @@ function createDependencies(dependencyOptions: { readonly finalSystemPrompts?: s
         },
         {
           type: "delta",
-          delta: "\"description\":{\"observation\":\"Measured rivet flushness below tolerance on right windshield frame.\"},\"comment\":\"Draft updated with similar cases and technical references.\"}",
+          delta: JSON.stringify(finalResponse).slice(
+            "{\"label\":\"Windshield rivet flushness out of tolerance\",".length,
+            -1,
+          ),
         },
         {
           type: "completed",
-          text: JSON.stringify({
-            label: "Windshield rivet flushness out of tolerance",
-            description: {
-              observation: "Measured rivet flushness below tolerance on right windshield frame.",
-            },
-            comment: "Draft updated with similar cases and technical references.",
-          }),
+          text: JSON.stringify(finalResponse),
           responseId: "final-stream-1",
           reasoningSummary: "Cross-checked technical docs and one similar NC.",
         },
@@ -258,6 +262,27 @@ test("NativeAiOrchestrator.compute injects entity context into task 100 analysis
   assert.match(finalPrompt, /Supporting doc: tech-window\.md/u);
 });
 
+test("NativeAiOrchestrator.compute clears raw JSON text when structured payload has no comment", async () => {
+  const orchestrator = new NativeAiOrchestrator(
+    createDependencies({
+      finalResponse: {
+        label: "Windshield rivet flushness out of tolerance",
+        description: {
+          synthesis: "Structured task 100 payload without chat comment.",
+        },
+      },
+    }),
+  );
+
+  const result = await orchestrator.compute(buildRequest("100"));
+
+  assert.equal(result.payload.text, null);
+  assert.equal(result.payload.label, "Windshield rivet flushness out of tolerance");
+  assert.deepEqual(result.payload.description, {
+    synthesis: "Structured task 100 payload without chat comment.",
+  });
+});
+
 test("NativeAiOrchestrator.openStream emits legacy SSE blocks without Python runtime", async () => {
   const orchestrator = new NativeAiOrchestrator(createDependencies());
 
@@ -280,4 +305,157 @@ test("NativeAiOrchestrator.openStream emits legacy SSE blocks without Python run
   assert.ok(chunks.some((chunk) => chunk.includes("event: content_delta")));
   assert.ok(chunks.some((chunk) => chunk.includes('"metadata":"final"')));
   await execution.completed;
+});
+
+test("NativeAiOrchestrator.compute retries structured responses without reasoning when the first JSON payload is truncated", async () => {
+  const finalCallOptions: Array<{ readonly reasoning: string | null | undefined; readonly maxOutputTokens: number | null | undefined }> =
+    [];
+
+  const llmRuntime: LlmRuntime = {
+    async invoke(options) {
+      const system = options.messages[0]?.content ?? "";
+      if (system.includes("QUERY-PROMPT")) {
+        return {
+          providerId: "openai",
+          model: options.model,
+          text: "ATA 56 windshield frame rivet flushness",
+          jsonMode: false,
+          responseId: "query-1",
+          reasoningSummary: null,
+        };
+      }
+
+      finalCallOptions.push({
+        reasoning: options.reasoning?.effort,
+        maxOutputTokens: options.maxOutputTokens,
+      });
+
+      if (options.reasoning?.effort) {
+        return {
+          providerId: "openai",
+          model: options.model,
+          text: "{\n  \"label\": \"Truncated",
+          jsonMode: true,
+          responseId: "final-1",
+          reasoningSummary: "Spent the budget on reasoning first.",
+        };
+      }
+
+      return {
+        providerId: "openai",
+        model: options.model,
+        text: JSON.stringify({
+          label: "Fuel transfer suction strainer low flow",
+          description: {
+            synthesis: "Confirmed structured retry output.",
+          },
+          comment: "Recovered valid task 100 payload after truncation.",
+        }),
+        jsonMode: true,
+        responseId: "final-2",
+        reasoningSummary: null,
+      };
+    },
+    stream() {
+      throw new Error("stream should not be used in compute retry test");
+    },
+  };
+
+  const orchestrator = new NativeAiOrchestrator({
+    ...createDependencies(),
+    llmRuntime,
+  });
+
+  const result = await orchestrator.compute(buildRequest("100"));
+
+  assert.equal(result.payload.label, "Fuel transfer suction strainer low flow");
+  assert.deepEqual(result.payload.description, {
+    synthesis: "Confirmed structured retry output.",
+  });
+  assert.equal(result.payload.text, "Recovered valid task 100 payload after truncation.");
+  assert.equal(finalCallOptions.length, 2);
+  assert.equal(finalCallOptions[0]?.reasoning, "high");
+  assert.equal(finalCallOptions[1]?.reasoning, null);
+  assert.equal(finalCallOptions[1]?.maxOutputTokens, 4000);
+});
+
+test("NativeAiOrchestrator.openStream repairs invalid structured JSON after the initial stream completes", async () => {
+  const repairInvokeCalls: Array<{ readonly reasoning: string | null | undefined; readonly maxOutputTokens: number | null | undefined }> =
+    [];
+
+  const llmRuntime: LlmRuntime = {
+    async invoke(options) {
+      const system = options.messages[0]?.content ?? "";
+      if (system.includes("QUERY-PROMPT")) {
+        return {
+          providerId: "openai",
+          model: options.model,
+          text: "ATA 56 windshield frame rivet flushness",
+          jsonMode: false,
+          responseId: "query-1",
+          reasoningSummary: null,
+        };
+      }
+
+      repairInvokeCalls.push({
+        reasoning: options.reasoning?.effort,
+        maxOutputTokens: options.maxOutputTokens,
+      });
+      return {
+        providerId: "openai",
+        model: options.model,
+        text: JSON.stringify({
+          label: "Fuel transfer suction strainer low flow",
+          description: {
+            synthesis: "Recovered after streamed truncation.",
+          },
+          comment: "Structured payload repaired after streamed truncation.",
+        }),
+        jsonMode: true,
+        responseId: "repair-1",
+        reasoningSummary: null,
+      };
+    },
+    stream(options) {
+      const system = options.messages[0]?.content ?? "";
+      if (system.includes("QUERY-PROMPT")) {
+        throw new Error("query prompt should not stream in openStream repair test");
+      }
+
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: "delta" as const,
+            delta: "{\n  \"label\": \"Fuel transfer suction strainer low flow\",",
+          };
+          yield {
+            type: "completed" as const,
+            text: "{\n  \"label\": \"Fuel transfer suction strainer low flow\",",
+            responseId: "final-stream-1",
+            reasoningSummary: "Initial stream exhausted the structured output budget.",
+          };
+        },
+      };
+    },
+  };
+
+  const orchestrator = new NativeAiOrchestrator({
+    ...createDependencies(),
+    llmRuntime,
+  });
+
+  const execution = await orchestrator.openStream(buildRequest("100"));
+  const chunks: string[] = [];
+  for await (const chunk of execution.chunks) {
+    chunks.push(chunk);
+  }
+  await execution.completed;
+
+  assert.equal(repairInvokeCalls.length, 1);
+  assert.equal(repairInvokeCalls[0]?.reasoning, null);
+  assert.equal(repairInvokeCalls[0]?.maxOutputTokens, 4000);
+  assert.ok(chunks.some((chunk) => chunk.includes("Repair final structured answer")));
+  assert.ok(chunks.some((chunk) => chunk.includes('"metadata":"final"')));
+  assert.ok(chunks.some((chunk) => chunk.includes("Fuel transfer suction strainer low flow")));
+  assert.ok(chunks.some((chunk) => chunk.includes("Structured payload repaired after streamed truncation.")));
 });

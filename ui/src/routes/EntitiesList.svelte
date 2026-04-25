@@ -1,92 +1,12 @@
 <script lang="ts">
   import type { ReferenceSourceItem } from "$lib/chat/contracts";
+  import { buildEntityListEntry, entitySelectionKey } from "$lib/entities/entity-ui";
   import { activeTabValue, selectEntity } from "./store";
-
-  type EntitySourceItem = ReferenceSourceItem & {
-    readonly title?: unknown;
-    readonly ata_codes?: unknown;
-    readonly zones?: unknown;
-    readonly aliases?: unknown;
-    readonly part_numbers?: unknown;
-    readonly supporting_docs?: unknown;
-    readonly primary_doc?: unknown;
-  };
 
   export let entitiesList: ReferenceSourceItem[] = [];
 
-  function asEntity(item: ReferenceSourceItem): EntitySourceItem {
-    return item as EntitySourceItem;
-  }
-
-  function textValue(value: unknown): string | null {
-    return typeof value === "string" && value.trim() ? value.trim() : null;
-  }
-
-  function textArray(value: unknown): string[] {
-    if (Array.isArray(value)) {
-      return value
-        .map((entry) => textValue(entry))
-        .filter((entry): entry is string => Boolean(entry));
-    }
-
-    const single = textValue(value);
-    return single ? [single] : [];
-  }
-
-  function compact(values: string[], limit = 2): string {
-    if (values.length <= limit) {
-      return values.join(", ");
-    }
-
-    return values.slice(0, limit).join(", ") + " +" + String(values.length - limit);
-  }
-
-  function entityKey(item: ReferenceSourceItem | null): string | null {
-    if (!item) {
-      return null;
-    }
-
-    const entity = asEntity(item) as EntitySourceItem & { readonly path?: unknown; readonly slug?: unknown };
-    for (const value of [entity.path, entity.slug, entity.doc, entity.title, entity.chunk_id]) {
-      if (typeof value === "string" && value.trim()) {
-        return value.trim();
-      }
-    }
-
-    return null;
-  }
-
   function isSelected(item: ReferenceSourceItem): boolean {
-    return entityKey($selectEntity) === entityKey(item);
-  }
-
-  function titleFor(item: ReferenceSourceItem): string {
-    const entity = asEntity(item);
-    return textValue(entity.title) ?? textValue(entity.doc) ?? textValue(entity.chunk_id) ?? "Untitled entity";
-  }
-
-  function metaFor(item: ReferenceSourceItem): string {
-    const entity = asEntity(item);
-    const ataCodes = textArray(entity.ata_codes);
-    const zones = textArray(entity.zones).map((zone) => "Zone " + zone);
-    return [...ataCodes, ...zones].slice(0, 3).join(" / ");
-  }
-
-  function aliasFor(item: ReferenceSourceItem): string {
-    return compact(textArray(asEntity(item).aliases), 2);
-  }
-
-  function docsFor(item: ReferenceSourceItem): string {
-    const entity = asEntity(item);
-    const supportingDocs = textArray(entity.supporting_docs);
-    const hasPrimary = Boolean(textValue(entity.primary_doc));
-    const total = supportingDocs.length + (hasPrimary ? 1 : 0);
-
-    if (total === 0) {
-      return "";
-    }
-
-    return String(total) + " doc" + (total === 1 ? "" : "s");
+    return entitySelectionKey($selectEntity) === entitySelectionKey(item);
   }
 
   function select(item: ReferenceSourceItem): void {
@@ -101,27 +21,32 @@
   {:else}
     <ul>
       {#each entitiesList as entity, index}
+        {@const entry = buildEntityListEntry(entity, index)}
         <li class:selected={isSelected(entity)}>
           <button
             type="button"
             on:click={() => select(entity)}
-            aria-label={"Open entity " + titleFor(entity)}
+            aria-label={entry.ariaLabel}
           >
             <span class="entities-list__header">
-              <strong>{titleFor(entity)}</strong>
-              <span>#{index + 1}</span>
+              <strong>{entry.title}</strong>
+              <span>{entry.rankLabel}</span>
             </span>
 
-            {#if metaFor(entity)}
-              <span class="entities-list__meta">{metaFor(entity)}</span>
+            {#if entry.meta}
+              <span class="entities-list__meta">{entry.meta}</span>
             {/if}
 
-            {#if aliasFor(entity)}
-              <span class="entities-list__line">Alias: {aliasFor(entity)}</span>
+            {#if entry.alias}
+              <span class="entities-list__line">Alias: {entry.alias}</span>
             {/if}
 
-            {#if docsFor(entity)}
-              <span class="entities-list__docs">{docsFor(entity)}</span>
+            {#if entry.docsLabel}
+              <span class="entities-list__docs">{entry.docsLabel}</span>
+            {/if}
+
+            {#if entry.imagesLabel}
+              <span class="entities-list__images">{entry.imagesLabel}</span>
             {/if}
           </button>
         </li>
@@ -192,7 +117,8 @@
 
   .entities-list__meta,
   .entities-list__line,
-  .entities-list__docs {
+  .entities-list__docs,
+  .entities-list__images {
     display: block;
     margin-top: 0.25rem;
     color: #475467;
@@ -202,6 +128,11 @@
 
   .entities-list__docs {
     color: #2563eb;
+    font-weight: 600;
+  }
+
+  .entities-list__images {
+    color: #0f766e;
     font-weight: 600;
   }
 </style>

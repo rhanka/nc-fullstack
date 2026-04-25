@@ -13,6 +13,15 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { DatabaseSync } from "node:sqlite";
 import { resolveDefaultTechDocsSourceFile } from "./tech-docs-canonical.ts";
+import {
+  buildPublicWikiImageArtifacts,
+  copyPublicWikiImageAssets,
+  linkedImagesForPart,
+  readPublicWikiImageRelations,
+  readPublicWikiImages,
+  type LinkedWikiImage,
+  type WikiImagePart,
+} from "./wiki-image-artifacts.ts";
 
 export type DataprepCorpusName = "tech_docs" | "non_conformities";
 
@@ -952,11 +961,23 @@ export function buildOntologyArtifacts(
     }
   }
 
+  const parts = Array.from(partMap.values());
   writeFileSync(path.join(tmpRoot, "atas.json"), JSON.stringify(Array.from(ataMap.values()), null, 2) + "\n", "utf8");
-  writeFileSync(path.join(tmpRoot, "parts.json"), JSON.stringify(Array.from(partMap.values()), null, 2) + "\n", "utf8");
+  writeFileSync(path.join(tmpRoot, "parts.json"), JSON.stringify(parts, null, 2) + "\n", "utf8");
   writeFileSync(path.join(tmpRoot, "zones.json"), JSON.stringify(Array.from(zoneMap.values()), null, 2) + "\n", "utf8");
   writeFileSync(path.join(tmpRoot, "relations.json"), JSON.stringify(relations, null, 2) + "\n", "utf8");
   writeFileSync(path.join(tmpRoot, "occurrences.json"), JSON.stringify(occurrences, null, 2) + "\n", "utf8");
+  if (config.corpus === "tech_docs") {
+    buildPublicWikiImageArtifacts({
+      outputRoot: config.outputRoot,
+      ontologyRoot: tmpRoot,
+      records,
+      parts: parts as readonly WikiImagePart[],
+    });
+  } else {
+    writeFileSync(path.join(tmpRoot, "images.json"), "[]\n", "utf8");
+    writeFileSync(path.join(tmpRoot, "image_relations.json"), "[]\n", "utf8");
+  }
   writeFileSync(
     path.join(tmpRoot, "index.json"),
     JSON.stringify(
@@ -1002,6 +1023,9 @@ export function buildWikiArtifacts(
   const occurrences = existsSync(occurrencesPath)
     ? (JSON.parse(readFileSync(occurrencesPath, "utf8")) as Array<Record<string, unknown>>)
     : [];
+  const publicImages = readPublicWikiImages(ontologyRoot);
+  const publicImageRelations = readPublicWikiImageRelations(ontologyRoot);
+  copyPublicWikiImageAssets(ontologyRoot, tmpRoot);
 
   const indexEntries: Array<Record<string, unknown>> = [];
   let pageCount = 0;
@@ -1017,6 +1041,7 @@ export function buildWikiArtifacts(
     const ataCodes = Array.isArray(part.ata_codes) ? part.ata_codes.map(String) : [];
     const partNumbers = Array.isArray(part.part_numbers) ? part.part_numbers.map(String) : [];
     const shortDescription = String(part.short_description ?? "");
+    const linkedImages = linkedImagesForPart(slug, publicImages, publicImageRelations);
 
     const markdown = [
       `# ${title}`,
@@ -1031,6 +1056,7 @@ export function buildWikiArtifacts(
       ...(aliases.length > 0 ? [`- Aliases: ${aliases.join(", ")}`] : []),
       ...(partNumbers.length > 0 ? [`- Part numbers: ${partNumbers.join(", ")}`] : []),
       "",
+      ...buildLinkedImagesMarkdown(linkedImages),
       "## Technical documents",
       "",
       ...(docs.length > 0
@@ -1059,6 +1085,7 @@ export function buildWikiArtifacts(
       part_numbers: partNumbers,
       supporting_docs: docs,
       supporting_chunks: Array.isArray(part.supporting_chunks) ? part.supporting_chunks.map(String) : [],
+      linked_images: linkedImages,
     });
     pageCount += 1;
   }
@@ -1070,6 +1097,25 @@ export function buildWikiArtifacts(
     pageCount,
     indexPath: path.join(targetRoot, "index.json"),
   };
+}
+
+function buildLinkedImagesMarkdown(images: readonly LinkedWikiImage[]): string[] {
+  if (images.length === 0) {
+    return [];
+  }
+  return [
+    "## Linked images",
+    "",
+    ...images.flatMap((image) => {
+      const title = image.figure_or_table_refs[0] || image.doc;
+      return [
+        `- ![${title}](../${image.asset_path})`,
+        `  - Source: [${image.doc}](../../pages/${image.doc})`,
+        ...(image.caption ? [`  - Summary: ${image.caption}`] : []),
+      ];
+    }),
+    "",
+  ];
 }
 
 function buildKnowledgeManifest(

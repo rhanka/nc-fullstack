@@ -77,3 +77,38 @@ test("prepareTechDocsCanonicalDataset drops non-servable pages and preserves kep
   assert.equal(audit.keptRowsCharExact, true);
   assert.equal(audit.sourceKeptRowsSha256, result.sourceKeptRowsSha256);
 });
+
+test("prepareTechDocsCanonicalDataset keeps the short canonical FCOM page when long and short variants share the same content", () => {
+  const root = buildTestRoot();
+  const pagesDir = path.join(root, "pages");
+  const managedDatasetDir = path.join(root, "managed_dataset");
+  mkdirSync(pagesDir, { recursive: true });
+  mkdirSync(managedDatasetDir, { recursive: true });
+
+  const longDoc = "611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529.pdf";
+  const shortDoc = "a220-300-FCOM-1-1-13_page_1529.pdf";
+  writeFileSync(path.join(pagesDir, longDoc), "");
+  writeFileSync(path.join(pagesDir, shortDoc), "");
+
+  const header = "doc\tdoc_root\tjson_data\tchunk\tlength\tchunk_id\tata\tparts\tdoc_type";
+  const longRow =
+    `${longDoc}\t611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped.pdf\t611795195-a220-300-Cs300-Bd500-1a11-Flight-Crew-Operating-Manual-Volume-1-1-13nbsped_page_1529.json\tFuel Tank Inerting System (FTIS) diagram with ram air, nitrogen-enriched air and air separation module.\t118\t${longDoc} 0\tATA 28\tFuel Tank Inerting System\ttechnical_diagram`;
+  const shortRow =
+    `${shortDoc}\ta220-300-FCOM-1-1-13.pdf\ta220-300-FCOM-1-1-13_page_1529.json\tFuel Tank Inerting System (FTIS) diagram with ram air, nitrogen-enriched air and air separation module.\t118\t${shortDoc} 0\tATA 28\tFuel Tank Inerting System\ttechnical_diagram`;
+  const sourceText = `${header}\n${longRow}\n${shortRow}\n`;
+  const sourceFile = path.join(managedDatasetDir, "a220_tech_docs_content_prepared.csv.gz");
+  const outputFile = path.join(managedDatasetDir, "a220_tech_docs_content_canonical.csv.gz");
+  writeFileSync(sourceFile, gzipSync(sourceText));
+
+  const result = prepareTechDocsCanonicalDataset({
+    sourceFile,
+    outputFile,
+    pagesDir,
+  });
+
+  const canonicalText = gunzipSync(readFileSync(outputFile)).toString("utf8");
+  assert.equal(canonicalText, `${header}\n${shortRow}\n`);
+  assert.equal(result.sourceRows, 2);
+  assert.equal(result.keptRows, 1);
+  assert.equal(result.droppedRows, 1);
+});

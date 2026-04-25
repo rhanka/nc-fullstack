@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-runtime-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-upload-retrieval-cache dataprep-download-retrieval-inputs dataprep-download-runtime-assets
+.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-runtime-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-upload-retrieval-cache dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
 
 # ----------------------------
 # Helpers
@@ -27,6 +27,10 @@ export API_PORT        ?= 8000
 export UI_PORT         ?= 5177
 export NGINX_PORT      ?= 8080
 export DC_OPTS         ?= --build --force-recreate
+export TECH_DOCS_S3_UPLOAD_DIRS ?= managed_dataset vector-export lexical ontology wiki pages ocr
+export TECH_DOCS_S3_UPLOAD_FILES ?= knowledge-manifest.json
+export NC_S3_UPLOAD_DIRS ?= managed_dataset json md vector-export lexical ontology wiki
+export NC_S3_UPLOAD_FILES ?= knowledge-manifest.json
 
 # ----------------------------
 # Main targets
@@ -76,6 +80,10 @@ ui-build: ui-install
 ui-check: ui-install
 	@echo "▶ Checking UI..."
 	cd $(UI_DIR) && npm run check
+
+ui-test:
+	@echo "▶ Running UI logic tests..."
+	node --experimental-strip-types --test ui/test/*.test.ts
 
 # ----------------------------
 # Containerisation
@@ -135,9 +143,13 @@ dataprep-knowledge-tech-docs: api-install
 	@echo "▶ Running knowledge-only dataprep for tech docs..."
 	cd backend-ts && npm run dataprep:knowledge:tech-docs
 
-dataprep-knowledge-ci: dataprep-download-retrieval-inputs api-install
+dataprep-ocr-tech-docs: api-install
+	@echo "▶ Running OCR dataprep for tech docs..."
+	cd backend-ts && npm run dataprep:ocr-tech-docs
+
+dataprep-knowledge-ci: dataprep-download-retrieval-inputs dataprep-download-tech-docs-ocr api-install
 	@echo "▶ Preparing knowledge artifacts for API image..."
-	cd backend-ts && npm run dataprep:knowledge:ci
+	cd backend-ts && npm run dataprep:knowledge:ci && KNOWLEDGE_PUBLIC_CHECK_REQUIRE_TECH_DOC_IMAGES=1 npm run dataprep:knowledge:public-check
 
 dataprep-retrieval-ci: dataprep-download-retrieval-inputs api-install
 	@rm -f .dataprep-retrieval-rebuilt
@@ -149,8 +161,32 @@ dataprep-retrieval-ci: dataprep-download-retrieval-inputs api-install
 		echo "↷ Retrieval artifacts fresh; retrieval cache upload skipped."; \
 	fi
 
-check: ui-build api-test api-contracts
-	@echo "✔️ UI build and backend checks completed."
+dataprep-ocr-caption-benchmark: api-install
+	@echo "▶ Running OCR caption benchmark..."
+	cd backend-ts && npm run dataprep:ocr-caption-benchmark
+
+dataprep-ocr-routing-calibration: api-install
+	@echo "▶ Running OCR routing calibration replay..."
+	cd backend-ts && npm run dataprep:ocr-routing-calibration
+
+dataprep-ocr-caption-batch-create: api-install
+	@echo "▶ Creating OCR caption OpenAI batch..."
+	cd backend-ts && npm run dataprep:ocr-caption-batch:create
+
+dataprep-ocr-caption-batch-status: api-install
+	@echo "▶ Checking OCR caption OpenAI batch..."
+	cd backend-ts && npm run dataprep:ocr-caption-batch:status
+
+dataprep-ocr-caption-batch-import: api-install
+	@echo "▶ Importing OCR caption OpenAI batch results..."
+	cd backend-ts && npm run dataprep:ocr-caption-batch:import
+
+dataprep-ocr-caption-batch-refresh: api-install
+	@echo "▶ Refreshing OCR-enriched artifacts from imported caption sidecars..."
+	cd backend-ts && npm run dataprep:ocr-caption-batch:refresh
+
+check: ui-build ui-test api-test api-contracts
+	@echo "✔️ UI build, UI tests and backend checks completed."
 
 docker-login:
 	@echo "▶ Logging in to registry"
@@ -231,10 +267,19 @@ dataprep-upload-nc-data: check-s5cmd
 		exit 1; \
 	fi
 	@echo "▶ Uploading non-conformities data to Scaleway..."
-	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY} &&\
-	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY} &&\
-	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
-		cp --acl "public-read" 'api/data/${S3_BUCKET_NC}/*' s3://${S3_BUCKET_NC}/
+	@set -eu; \
+	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY}; \
+	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY}; \
+	for dir in ${NC_S3_UPLOAD_DIRS}; do \
+		test -d "api/data/${NC_DIR}/$$dir" || { echo "❌ Missing upload directory: api/data/${NC_DIR}/$$dir"; exit 1; }; \
+		echo "  - $$dir"; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "api/data/${NC_DIR}/$$dir/*" "s3://${S3_BUCKET_NC}/$$dir/"; \
+	done; \
+	for file in ${NC_S3_UPLOAD_FILES}; do \
+		test -f "api/data/${NC_DIR}/$$file" || { echo "❌ Missing upload file: api/data/${NC_DIR}/$$file"; exit 1; }; \
+		echo "  - $$file"; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "api/data/${NC_DIR}/$$file" "s3://${S3_BUCKET_NC}/$$file"; \
+	done
 
 dataprep-upload-tech-docs: check-s5cmd
 	@if [ -z "${S3_DATAPREP_ACCESS_KEY}" ] || [ -z "${S3_DATAPREP_SECRET_KEY}" ]; then \
@@ -242,10 +287,19 @@ dataprep-upload-tech-docs: check-s5cmd
 		exit 1; \
 	fi
 	@echo "▶ Uploading technical documentation to Scaleway..."
-	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY} &&\
-	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY} &&\
-	s5cmd --endpoint-url ${S3_ENDPOINT_URL} \
-		cp --acl "public-read" 'api/data/${S3_BUCKET_DOCS}/*' s3://${S3_BUCKET_DOCS}/
+	@set -eu; \
+	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY}; \
+	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY}; \
+	for dir in ${TECH_DOCS_S3_UPLOAD_DIRS}; do \
+		test -d "api/data/${TECH_DOCS_DIR}/$$dir" || { echo "❌ Missing upload directory: api/data/${TECH_DOCS_DIR}/$$dir"; exit 1; }; \
+		echo "  - $$dir"; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "api/data/${TECH_DOCS_DIR}/$$dir/*" "s3://${S3_BUCKET_DOCS}/$$dir/"; \
+	done; \
+	for file in ${TECH_DOCS_S3_UPLOAD_FILES}; do \
+		test -f "api/data/${TECH_DOCS_DIR}/$$file" || { echo "❌ Missing upload file: api/data/${TECH_DOCS_DIR}/$$file"; exit 1; }; \
+		echo "  - $$file"; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "api/data/${TECH_DOCS_DIR}/$$file" "s3://${S3_BUCKET_DOCS}/$$file"; \
+	done
 
 dataprep-upload-retrieval-cache: check-s5cmd
 	@if [ "${DATAPREP_UPLOAD_RETRIEVAL_CACHE}" = "0" ]; then \
@@ -281,16 +335,35 @@ dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
 
 dataprep-download-nc-data: check-s5cmd
 	@echo "▶ Downloading non-conformities data from Scaleway..."
-	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_NC}/* 'api/data/${NC_DIR}/'
+	@set -eu; \
+	for dir in ${NC_S3_UPLOAD_DIRS}; do \
+		mkdir -p "api/data/${NC_DIR}/$$dir"; \
+		s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} sync "s3://${S3_BUCKET_NC}/$$dir/*" "api/data/${NC_DIR}/$$dir/"; \
+	done; \
+	for file in ${NC_S3_UPLOAD_FILES}; do \
+		s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_NC}/$$file" "api/data/${NC_DIR}/$$file"; \
+	done
 
 dataprep-download-tech-docs: check-s5cmd
 	@echo "▶ Downloading technical documentation from Scaleway..."
-	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_DOCS}/* 'api/data/${TECH_DOCS_DIR}/'
+	@set -eu; \
+	for dir in ${TECH_DOCS_S3_UPLOAD_DIRS}; do \
+		mkdir -p "api/data/${TECH_DOCS_DIR}/$$dir"; \
+		s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} sync "s3://${S3_BUCKET_DOCS}/$$dir/*" "api/data/${TECH_DOCS_DIR}/$$dir/"; \
+	done; \
+	for file in ${TECH_DOCS_S3_UPLOAD_FILES}; do \
+		s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$$file" "api/data/${TECH_DOCS_DIR}/$$file"; \
+	done
 
 dataprep-download-all: dataprep-download-nc-data dataprep-download-tech-docs
 	@echo "✔️  All data download completed."
+
+dataprep-download-tech-docs-ocr: check-s5cmd
+	@echo "▶ Downloading OCR and enriched image source artifacts from Scaleway..."
+	@mkdir -p 'api/data/${TECH_DOCS_DIR}/ocr/' &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_DOCS}/ocr/* 'api/data/${TECH_DOCS_DIR}/ocr/' >/dev/null
+	@echo "✔️  OCR source artifacts present: $$(find 'api/data/${TECH_DOCS_DIR}/ocr' -maxdepth 1 -type f | wc -l) files"
 
 dataprep-download-retrieval-inputs: check-s5cmd
 	@echo "▶ Downloading retrieval input data from Scaleway..."
@@ -363,6 +436,9 @@ help:
 	@echo "  down          Stop and remove containers, networks"
 	@echo "  logs          Follow log output"
 	@echo "  shell         Access the api container shell"
+	@echo "  ui-build      Build the UI"
+	@echo "  ui-check      Run Svelte UI checks"
+	@echo "  ui-test       Run UI logic tests"
 	@echo "  dataprep-prepare-tech-docs  Build canonical tech docs CSV"
 	@echo "  dataprep      Rebuild retrieval and knowledge artifacts"
 	@echo "  dataprep-knowledge  Rebuild ontology and wiki artifacts"
