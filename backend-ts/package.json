@@ -25,7 +25,8 @@
     "dataprep:ocr-routing-calibration": "node --experimental-strip-types scripts/run_ocr_caption_routing_calibration.ts",
     "dataprep:ocr-caption-batch:create": "node --experimental-strip-types scripts/run_ocr_caption_batch_create.ts",
     "dataprep:ocr-caption-batch:status": "node --experimental-strip-types scripts/run_ocr_caption_batch_status.ts",
-    "dataprep:ocr-caption-batch:import": "node --experimental-strip-types scripts/run_ocr_caption_batch_import.ts"
+    "dataprep:ocr-caption-batch:import": "node --experimental-strip-types scripts/run_ocr_caption_batch_import.ts",
+    "dataprep:ocr-caption-batch:refresh": "node --experimental-strip-types scripts/run_ocr_caption_batch_refresh.ts"
   },
   "dependencies": {
     "mistral-ocr": "^0.1.0"

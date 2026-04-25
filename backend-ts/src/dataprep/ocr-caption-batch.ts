@@ -9,6 +9,7 @@ import {
 } from "./ocr-caption-routing-calibration.ts";
 import {
   atomicWriteFile,
+  buildPreparedTechDocsCsvFromOcrArtifacts,
   captionAuditJsonPath,
   captionJsonPath,
   extractImageDataUrls,
@@ -120,6 +121,17 @@ export interface OcrCaptionBatchImportResult {
   readonly routedNano: number;
   readonly routedDeep: number;
   readonly errors: readonly string[];
+}
+
+export interface OcrCaptionBatchRefreshResult {
+  readonly ocr: {
+    readonly pagesConsidered: number;
+    readonly ocrJsonWritten: number;
+    readonly ocrJsonSkipped: number;
+    readonly captionJsonWritten: number;
+    readonly captionJsonSkipped: number;
+  };
+  readonly csv: Awaited<ReturnType<typeof buildPreparedTechDocsCsvFromOcrArtifacts>>;
 }
 
 function ensureDir(dirPath: string): void {
@@ -527,6 +539,22 @@ export async function getOcrCaptionBatchStatus(input: {
   };
   atomicWriteFile(input.manifestPath, JSON.stringify(updated, null, 2) + "\n");
   return updated;
+}
+
+export async function refreshOcrTechDocsAfterBatchImport(
+  options: BuildPreparedTechDocsCsvOptions,
+): Promise<OcrCaptionBatchRefreshResult> {
+  const csv = await buildPreparedTechDocsCsvFromOcrArtifacts(options);
+  return {
+    ocr: {
+      pagesConsidered: csv.pagesDiscovered,
+      ocrJsonWritten: 0,
+      ocrJsonSkipped: csv.pagesDiscovered,
+      captionJsonWritten: 0,
+      captionJsonSkipped: csv.pagesDiscovered,
+    },
+    csv,
+  };
 }
 
 export class OpenAIBatchApiClient implements OcrCaptionBatchApiClient {
