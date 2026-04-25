@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr dataprep-knowledge-ci
+.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-runtime-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-upload-retrieval-cache dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
 
 # ----------------------------
 # Helpers
@@ -11,7 +11,7 @@
 # ----------------------------
 export UI_DIR          ?= ui
 export API_IMAGE_NAME  ?= nc-chatbot-api
-export API_VERSION     ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/package-lock.json backend-ts/Dockerfile shared api/src api/requirements.txt api/data/${TECH_DOCS_DIR}/ontology api/data/${TECH_DOCS_DIR}/wiki api/data/${NC_DIR}/ontology api/data/${NC_DIR}/wiki" | tr ' ' '\n' | xargs -I '{}' sh -c 'test -e "$$1" && find "$$1" -type f || true' sh '{}' | egrep -v '(__pycache__|/ontology/index\.json)' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION     ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/package-lock.json backend-ts/Dockerfile shared api/src api/requirements.txt api/data/${TECH_DOCS_DIR}/lexical api/data/${TECH_DOCS_DIR}/ontology api/data/${TECH_DOCS_DIR}/vector-export api/data/${TECH_DOCS_DIR}/wiki api/data/${TECH_DOCS_DIR}/knowledge-manifest.json api/data/${NC_DIR}/lexical api/data/${NC_DIR}/ontology api/data/${NC_DIR}/vector-export api/data/${NC_DIR}/wiki api/data/${NC_DIR}/knowledge-manifest.json" | tr ' ' '\n' | xargs -I '{}' sh -c 'test -e "$$1" && find "$$1" -type f || true' sh '{}' | egrep -v '(__pycache__|/ontology/index\.json)' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_CPU_LIMIT   ?= 250
 export API_MEM_LIMIT   ?= 512
 export UI_VERSION      ?= $(shell echo "ui/src ui/static ui/package.json ui/Dockerfile ui/vite.config.ts ui/svelte.config.js ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
@@ -89,10 +89,13 @@ ui-test:
 # Containerisation
 # ----------------------------
 
-api-prepare-data-ci: dataprep-knowledge-ci
+api-prepare-data-ci: dataprep-retrieval-ci
 	@echo "✔️ API data artifacts ready for CI image build."
 
-api-build: api-prepare-data-ci
+api-runtime-data-ci: dataprep-download-runtime-assets
+	@echo "✔️ API runtime data artifacts ready for CI image build."
+
+api-build: api-prepare-data-ci api-runtime-data-ci
 	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
 	docker compose build api
 
@@ -144,6 +147,20 @@ dataprep-ocr-tech-docs: api-install
 	@echo "▶ Running OCR dataprep for tech docs..."
 	cd backend-ts && npm run dataprep:ocr-tech-docs
 
+dataprep-knowledge-ci: dataprep-download-retrieval-inputs dataprep-download-tech-docs-ocr api-install
+	@echo "▶ Preparing knowledge artifacts for API image..."
+	cd backend-ts && npm run dataprep:knowledge:ci && KNOWLEDGE_PUBLIC_CHECK_REQUIRE_TECH_DOC_IMAGES=1 npm run dataprep:knowledge:public-check
+
+dataprep-retrieval-ci: dataprep-download-retrieval-inputs api-install
+	@rm -f .dataprep-retrieval-rebuilt
+	@echo "▶ Ensuring retrieval artifacts for API image..."
+	cd backend-ts && DATAPREP_REBUILD_MARKER=../.dataprep-retrieval-rebuilt npm run dataprep:ensure-retrieval:ci
+	@if [ -f .dataprep-retrieval-rebuilt ]; then \
+		$(MAKE) dataprep-upload-retrieval-cache; \
+	else \
+		echo "↷ Retrieval artifacts fresh; retrieval cache upload skipped."; \
+	fi
+
 dataprep-ocr-caption-benchmark: api-install
 	@echo "▶ Running OCR caption benchmark..."
 	cd backend-ts && npm run dataprep:ocr-caption-benchmark
@@ -168,10 +185,6 @@ dataprep-ocr-caption-batch-refresh: api-install
 	@echo "▶ Refreshing OCR-enriched artifacts from imported caption sidecars..."
 	cd backend-ts && npm run dataprep:ocr-caption-batch:refresh
 
-dataprep-knowledge-ci: dataprep-download-minimal dataprep-download-tech-docs-ocr api-install
-	@echo "▶ Preparing knowledge artifacts for API image..."
-	cd backend-ts && npm run dataprep:knowledge && KNOWLEDGE_PUBLIC_CHECK_REQUIRE_TECH_DOC_IMAGES=1 npm run dataprep:knowledge:public-check
-
 check: ui-build ui-test api-test api-contracts
 	@echo "✔️ UI build, UI tests and backend checks completed."
 
@@ -179,7 +192,7 @@ docker-login:
 	@echo "▶ Logging in to registry"
 	@echo "$(DOCKER_PASSWORD)" | docker login $(REGISTRY) -u $(DOCKER_USERNAME) --password-stdin
 
-api-image-check: api-prepare-data-ci docker-login
+api-image-check: dataprep-download-retrieval-inputs docker-login
 	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
 	docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
 
@@ -288,6 +301,31 @@ dataprep-upload-tech-docs: check-s5cmd
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "api/data/${TECH_DOCS_DIR}/$$file" "s3://${S3_BUCKET_DOCS}/$$file"; \
 	done
 
+dataprep-upload-retrieval-cache: check-s5cmd
+	@if [ "${DATAPREP_UPLOAD_RETRIEVAL_CACHE}" = "0" ]; then \
+		echo "↷ Retrieval cache upload disabled."; \
+	elif [ -z "${S3_DATAPREP_ACCESS_KEY}" ] || [ -z "${S3_DATAPREP_SECRET_KEY}" ]; then \
+		echo "↷ S3_DATAPREP_ACCESS_KEY/S3_DATAPREP_SECRET_KEY missing; retrieval cache upload skipped."; \
+	else \
+		echo "▶ Uploading retrieval cache artifacts to Scaleway..."; \
+		export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY}; \
+		export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY}; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/managed_dataset/a220_tech_docs_content_canonical.csv.gz' s3://${S3_BUCKET_DOCS}/managed_dataset/a220_tech_docs_content_canonical.csv.gz && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/managed_dataset/a220_tech_docs_content_canonical.audit.json' s3://${S3_BUCKET_DOCS}/managed_dataset/a220_tech_docs_content_canonical.audit.json && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/lexical/*' s3://${S3_BUCKET_DOCS}/lexical/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/vector-export/*' s3://${S3_BUCKET_DOCS}/vector-export/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/ontology/*' s3://${S3_BUCKET_DOCS}/ontology/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/wiki/index.json' s3://${S3_BUCKET_DOCS}/wiki/index.json && \
+		if [ -d 'api/data/${TECH_DOCS_DIR}/wiki/parts' ] && find 'api/data/${TECH_DOCS_DIR}/wiki/parts' -type f -name '*.md' | grep -q .; then s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/wiki/parts/*' s3://${S3_BUCKET_DOCS}/wiki/parts/; fi && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${TECH_DOCS_DIR}/knowledge-manifest.json' s3://${S3_BUCKET_DOCS}/knowledge-manifest.json && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/lexical/*' s3://${S3_BUCKET_NC}/lexical/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/vector-export/*' s3://${S3_BUCKET_NC}/vector-export/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/ontology/*' s3://${S3_BUCKET_NC}/ontology/ && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/wiki/index.json' s3://${S3_BUCKET_NC}/wiki/index.json && \
+		if [ -d 'api/data/${NC_DIR}/wiki/parts' ] && find 'api/data/${NC_DIR}/wiki/parts' -type f -name '*.md' | grep -q .; then s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/wiki/parts/*' s3://${S3_BUCKET_NC}/wiki/parts/; fi && \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/knowledge-manifest.json' s3://${S3_BUCKET_NC}/knowledge-manifest.json; \
+	fi
+
 dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
 	@echo "✔️  All data upload completed."
 
@@ -327,8 +365,8 @@ dataprep-download-tech-docs-ocr: check-s5cmd
 		sync s3://${S3_BUCKET_DOCS}/ocr/* 'api/data/${TECH_DOCS_DIR}/ocr/' >/dev/null
 	@echo "✔️  OCR source artifacts present: $$(find 'api/data/${TECH_DOCS_DIR}/ocr' -maxdepth 1 -type f | wc -l) files"
 
-dataprep-download-minimal: check-s5cmd
-	@echo "▶ Downloading minimal data from Scaleway..."
+dataprep-download-retrieval-inputs: check-s5cmd
+	@echo "▶ Downloading retrieval input data from Scaleway..."
 	@mkdir -p 'api/data/${TECH_DOCS_DIR}/managed_dataset/' &&\
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_DOCS}/managed_dataset/* 'api/data/${TECH_DOCS_DIR}/managed_dataset/'
@@ -346,9 +384,6 @@ dataprep-download-minimal: check-s5cmd
 		sync s3://${S3_BUCKET_DOCS}/wiki/* 'api/data/${TECH_DOCS_DIR}/wiki/' 2>/dev/null || true
 	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		cp s3://${S3_BUCKET_DOCS}/knowledge-manifest.json 'api/data/${TECH_DOCS_DIR}/knowledge-manifest.json' 2>/dev/null || true
-	@mkdir -p 'api/data/${TECH_DOCS_DIR}/pages/' &&\
-	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
-		sync s3://${S3_BUCKET_DOCS}/pages/* 'api/data/${TECH_DOCS_DIR}/pages/'
 	@mkdir -p 'api/data/${NC_DIR}/managed_dataset/' && \
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_NC}/managed_dataset/* 'api/data/${NC_DIR}/managed_dataset/'
@@ -366,9 +401,19 @@ dataprep-download-minimal: check-s5cmd
 		sync s3://${S3_BUCKET_NC}/wiki/* 'api/data/${NC_DIR}/wiki/' 2>/dev/null || true
 	@s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		cp s3://${S3_BUCKET_NC}/knowledge-manifest.json 'api/data/${NC_DIR}/knowledge-manifest.json' 2>/dev/null || true
+	@echo "✔️  Retrieval input data download completed."
+
+dataprep-download-runtime-assets: check-s5cmd
+	@echo "▶ Downloading API runtime assets from Scaleway..."
+	@mkdir -p 'api/data/${TECH_DOCS_DIR}/pages/' &&\
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
+		sync s3://${S3_BUCKET_DOCS}/pages/* 'api/data/${TECH_DOCS_DIR}/pages/'
 	@mkdir -p 'api/data/${NC_DIR}/json/' && \
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} \
 		sync s3://${S3_BUCKET_NC}/json/* 'api/data/${NC_DIR}/json/'
+	@echo "✔️  API runtime assets download completed."
+
+dataprep-download-minimal: dataprep-download-retrieval-inputs dataprep-download-runtime-assets
 	@echo "✔️  Minimal data download completed."
 
 .PHONY: deps env config clean

@@ -118,13 +118,25 @@ type MutablePartCanonicalizerInput = {
   sampleSnippets: string[];
 };
 
+type ProgressFieldValue = string | number | boolean | null | undefined;
+type DataprepProgressLogger = (
+  phase: string,
+  message: string,
+  fields?: Readonly<Record<string, ProgressFieldValue>>,
+) => void;
+
 const API_ROOT = fileURLToPath(new URL("../../../api/", import.meta.url));
-const DEFAULT_EMBEDDING_MODEL = process.env.DATAPREP_EMBEDDING_MODEL?.trim() || "text-embedding-3-large";
+export const DEFAULT_EMBEDDING_MODEL = process.env.DATAPREP_EMBEDDING_MODEL?.trim() || "text-embedding-3-large";
+export const RETRIEVAL_ARTIFACT_CACHE_VERSION = "retrieval-artifacts-v1";
 const DEFAULT_PART_CANONICALIZATION_MODEL =
   process.env.DATAPREP_LLM_MODEL?.trim() || "gpt-5.4-nano";
 
 const TECH_DOCS_DIR = process.env.TECH_DOCS_DIR?.trim() || "a220-tech-docs";
 const NC_DIR = process.env.NC_DIR?.trim() || "a220-non-conformities";
+const DATAPREP_CODE_FINGERPRINT_FILES = [
+  fileURLToPath(import.meta.url),
+  fileURLToPath(new URL("./tech-docs-canonical.ts", import.meta.url)),
+];
 
 const ZONE_PATTERNS: readonly [RegExp, string][] = [
   [/\bRH\b/giu, "RH"],
@@ -187,6 +199,23 @@ function uniqueSorted(values: Iterable<string>): string[] {
         .filter(Boolean),
     ),
   ).sort((left, right) => left.localeCompare(right));
+}
+
+function formatProgressFields(fields: Readonly<Record<string, ProgressFieldValue>> = {}): string {
+  const parts = Object.entries(fields)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => {
+      const rendered = typeof value === "string" && /\s/u.test(value) ? JSON.stringify(value) : String(value);
+      return `${key}=${rendered}`;
+    });
+  return parts.length > 0 ? ` ${parts.join(" ")}` : "";
+}
+
+function createConsoleProgressLogger(corpus: DataprepCorpusName): DataprepProgressLogger {
+  return (phase, message, fields) => {
+    const label = message ? `${phase} ${message}` : phase;
+    console.log(`[dataprep] ${corpus} ${label}${formatProgressFields(fields)}`);
+  };
 }
 
 function isPartCandidate(value: string): boolean {
@@ -440,14 +469,37 @@ export function readPreparedRecords(config: DataprepCorpusConfig): PreparedRecor
   return normalized;
 }
 
+export function buildDataprepCodeFingerprint(): string {
+  const hash = createHash("sha256");
+  for (const filePath of DATAPREP_CODE_FINGERPRINT_FILES) {
+    hash.update(path.basename(filePath));
+    hash.update("\n");
+    hash.update(readFileSync(filePath));
+    hash.update("\n");
+  }
+  return hash.digest("hex");
+}
+
+function stableMetadataString(metadata: Readonly<Record<string, unknown>>): string {
+  return JSON.stringify(
+    Object.fromEntries(Object.keys(metadata).sort().map((key) => [key, metadata[key]])),
+  );
+}
+
 export function buildSourceFingerprint(config: DataprepCorpusConfig, records: readonly PreparedRecord[]): string {
   const hash = createHash("sha256");
-  hash.update(config.sourceFile);
+  hash.update(config.corpus);
   hash.update("\n");
   for (const record of records) {
     hash.update(record.doc);
     hash.update("\n");
     hash.update(record.chunk_id);
+    hash.update("\n");
+    hash.update(record.source_path);
+    hash.update("\n");
+    hash.update(record.content);
+    hash.update("\n");
+    hash.update(stableMetadataString(record.metadata));
     hash.update("\n");
   }
   return hash.digest("hex");
@@ -468,6 +520,7 @@ async function buildVectorExport(
   records: readonly PreparedRecord[],
   embeddingProvider: EmbeddingProvider,
   batchSize: number,
+  progress?: DataprepProgressLogger,
 ): Promise<RunDataprepResult["vectorExport"]> {
   if (records.length === 0) {
     throw new Error(`No prepared records found for ${config.corpus}`);
@@ -483,10 +536,19 @@ async function buildVectorExport(
   const squaredNormChunks: Buffer[] = [];
   const itemLines: string[] = [];
   let dimensions: number | null = null;
+  const totalBatches = Math.ceil(records.length / batchSize);
 
   for (let offset = 0; offset < records.length; offset += batchSize) {
     const batch = records.slice(offset, offset + batchSize);
+    const batchNumber = Math.floor(offset / batchSize) + 1;
+    const completedRecords = Math.min(offset + batch.length, records.length);
+    progress?.("vector-export", `embedding batch ${batchNumber}/${totalBatches} start`, {
+      records: `${completedRecords}/${records.length}`,
+    });
     const embeddings = await embeddingProvider.embed(batch.map((record) => record.content));
+    progress?.("vector-export", `embedding batch ${batchNumber}/${totalBatches} done`, {
+      records: `${Math.min(offset + batch.length, records.length)}/${records.length}`,
+    });
     if (embeddings.length !== batch.length) {
       throw new Error(
         `Embedding batch size mismatch for ${config.corpus}: expected ${batch.length}, got ${embeddings.length}`,
@@ -611,6 +673,135 @@ function buildLexicalIndex(
   return {
     dbPath: path.join(targetRoot, "fts.sqlite3"),
     documentCount: records.length,
+  };
+}
+
+export interface RetrievalArtifactStatus {
+  readonly corpus: DataprepCorpusName;
+  readonly fresh: boolean;
+  readonly reasons: readonly string[];
+}
+
+function fileExists(filePath: string): boolean {
+  return existsSync(filePath);
+}
+
+function readJsonFile(filePath: string): Record<string, unknown> | null {
+  if (!fileExists(filePath)) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function readLexicalDocumentCount(dbPath: string): number | null {
+  if (!fileExists(dbPath)) {
+    return null;
+  }
+  try {
+    const db = new DatabaseSync(dbPath);
+    const row = db.prepare("SELECT COUNT(*) AS count FROM lexical_documents").get() as
+      | { count: number }
+      | undefined;
+    db.close();
+    return typeof row?.count === "number" ? row.count : null;
+  } catch {
+    return null;
+  }
+}
+
+export function inspectRetrievalArtifacts(
+  config: DataprepCorpusConfig,
+  expected: {
+    readonly fingerprint: string;
+    readonly codeFingerprint: string;
+    readonly recordCount: number;
+    readonly embeddingModel: string;
+  },
+): RetrievalArtifactStatus {
+  const reasons: string[] = [];
+  const manifestPath = path.join(config.outputRoot, "knowledge-manifest.json");
+  const manifest = readJsonFile(manifestPath);
+  if (!manifest) {
+    reasons.push("knowledge-manifest.json missing or invalid");
+  } else {
+    if (manifest.corpus !== config.corpus) {
+      reasons.push("knowledge manifest corpus mismatch");
+    }
+    if (manifest.mode === "knowledge-only") {
+      reasons.push("knowledge manifest is knowledge-only");
+    }
+    if (manifest.retrievalArtifactCacheVersion !== RETRIEVAL_ARTIFACT_CACHE_VERSION) {
+      reasons.push("retrieval artifact cache version mismatch");
+    }
+    if (manifest.fingerprint !== expected.fingerprint) {
+      reasons.push("knowledge manifest fingerprint mismatch");
+    }
+    if (manifest.retrievalArtifactCodeFingerprint !== expected.codeFingerprint) {
+      reasons.push("retrieval artifact code fingerprint mismatch");
+    }
+    if (manifest.embeddingModel !== expected.embeddingModel) {
+      reasons.push("embedding model mismatch");
+    }
+    if (manifest.recordCount !== expected.recordCount) {
+      reasons.push("knowledge manifest record count mismatch");
+    }
+    if (!manifest.vectorExport) {
+      reasons.push("knowledge manifest missing vectorExport section");
+    }
+    if (!manifest.lexical) {
+      reasons.push("knowledge manifest missing lexical section");
+    }
+  }
+
+  const vectorRoot = path.join(config.outputRoot, "vector-export");
+  const vectorManifest = readJsonFile(path.join(vectorRoot, "manifest.json"));
+  for (const filename of ["items.jsonl", "vectors.f32", "squared_norms.f32"]) {
+    if (!fileExists(path.join(vectorRoot, filename))) {
+      reasons.push(`vector-export/${filename} missing`);
+    }
+  }
+  if (!vectorManifest) {
+    reasons.push("vector-export/manifest.json missing or invalid");
+  } else {
+    if (vectorManifest.corpus !== config.corpus) {
+      reasons.push("vector manifest corpus mismatch");
+    }
+    if (vectorManifest.embeddingModel !== expected.embeddingModel) {
+      reasons.push("vector manifest embedding model mismatch");
+    }
+    if (vectorManifest.count !== expected.recordCount) {
+      reasons.push("vector manifest count mismatch");
+    }
+  }
+
+  const lexicalDbPath = path.join(config.outputRoot, "lexical", "fts.sqlite3");
+  const lexicalCount = readLexicalDocumentCount(lexicalDbPath);
+  if (lexicalCount === null) {
+    reasons.push("lexical/fts.sqlite3 missing or invalid");
+  } else if (lexicalCount !== expected.recordCount) {
+    reasons.push("lexical document count mismatch");
+  }
+
+  const ontologyRoot = path.join(config.outputRoot, "ontology");
+  for (const filename of ["atas.json", "parts.json", "zones.json", "relations.json", "occurrences.json", "index.json"]) {
+    if (!fileExists(path.join(ontologyRoot, filename))) {
+      reasons.push(`ontology/${filename} missing`);
+    }
+  }
+
+  const wikiRoot = path.join(config.outputRoot, "wiki");
+  if (!fileExists(path.join(wikiRoot, "index.json"))) {
+    reasons.push("wiki/index.json missing");
+  }
+
+  return {
+    corpus: config.corpus,
+    fresh: reasons.length === 0,
+    reasons,
   };
 }
 
@@ -942,6 +1133,9 @@ function buildKnowledgeManifest(
         generatedAt: new Date().toISOString(),
         sourceFile: config.sourceFile,
         fingerprint,
+        mode: "full",
+        retrievalArtifactCacheVersion: RETRIEVAL_ARTIFACT_CACHE_VERSION,
+        retrievalArtifactCodeFingerprint: buildDataprepCodeFingerprint(),
         llmAssistMode: options.llmAssistMode ?? "off",
         embeddingModel: options.embeddingProvider.model,
         partCanonicalizerModel: options.partCanonicalizer?.model ?? null,
@@ -1150,18 +1344,75 @@ export async function runDataprepForCorpus(
   config: DataprepCorpusConfig,
   options: RunDataprepOptions,
 ): Promise<RunDataprepResult> {
+  const startedAt = Date.now();
+  const logProgress = createConsoleProgressLogger(config.corpus);
+  logProgress("start", "", { source: config.sourceFile, output: config.outputRoot });
+
+  const readStartedAt = Date.now();
   const records = readPreparedRecords(config);
+  logProgress("records", "loaded", {
+    count: records.length,
+    durationMs: Date.now() - readStartedAt,
+  });
+
+  const fingerprintStartedAt = Date.now();
   const fingerprint = buildSourceFingerprint(config, records);
+  logProgress("fingerprint", "computed", {
+    sha256: fingerprint.slice(0, 12),
+    durationMs: Date.now() - fingerprintStartedAt,
+  });
+
+  const canonicalizationStartedAt = Date.now();
   const partCanonicalizations = await canonicalizeParts(records, options);
+  logProgress("canonicalization", "done", {
+    mode: options.llmAssistMode ?? "off",
+    parts: partCanonicalizations.size,
+    durationMs: Date.now() - canonicalizationStartedAt,
+  });
+
+  const vectorStartedAt = Date.now();
+  logProgress("vector-export", "start", {
+    records: records.length,
+    batchSize: options.embeddingBatchSize ?? 64,
+    model: options.embeddingProvider.model,
+  });
   const vectorExport = await buildVectorExport(
     config,
     records,
     options.embeddingProvider,
     options.embeddingBatchSize ?? 64,
+    logProgress,
   );
+  logProgress("vector-export", "done", {
+    records: vectorExport.count,
+    dimensions: vectorExport.dimensions,
+    durationMs: Date.now() - vectorStartedAt,
+  });
+
+  const lexicalStartedAt = Date.now();
   const lexical = buildLexicalIndex(config, records, fingerprint);
+  logProgress("lexical", "done", {
+    records: lexical.documentCount,
+    durationMs: Date.now() - lexicalStartedAt,
+  });
+
+  const ontologyStartedAt = Date.now();
   const ontology = buildOntologyArtifacts(config, records, fingerprint, partCanonicalizations);
+  logProgress("ontology", "done", {
+    ata: ontology.ataCount,
+    parts: ontology.partCount,
+    zones: ontology.zoneCount,
+    occurrences: ontology.occurrenceCount,
+    durationMs: Date.now() - ontologyStartedAt,
+  });
+
+  const wikiStartedAt = Date.now();
   const wiki = buildWikiArtifacts(config, ontology.root);
+  logProgress("wiki", "done", {
+    pages: wiki.pageCount,
+    durationMs: Date.now() - wikiStartedAt,
+  });
+
   const partialResult = {
     recordCount: records.length,
     vectorExport,
@@ -1170,6 +1421,11 @@ export async function runDataprepForCorpus(
     wiki,
   };
   const knowledgeManifestPath = buildKnowledgeManifest(config, fingerprint, partialResult, options);
+  logProgress("manifest", "written", { path: knowledgeManifestPath });
+  logProgress("done", "", {
+    records: records.length,
+    durationMs: Date.now() - startedAt,
+  });
   return {
     corpus: config.corpus,
     ...partialResult,
