@@ -35,3 +35,5 @@ jobs:
 
       - name: Build API container
         run: make api-build
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
