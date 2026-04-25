@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-runtime-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-upload-retrieval-cache dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
+.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-runtime-data-ci api-build api-build-ci api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-retrieval-ci-local dataprep-upload-retrieval-cache dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
 
 # ----------------------------
 # Helpers
@@ -89,14 +89,18 @@ ui-test:
 # Containerisation
 # ----------------------------
 
-api-prepare-data-ci: dataprep-retrieval-ci
+api-prepare-data-ci: dataprep-retrieval-ci-local
 	@echo "✔️ API data artifacts ready for CI image build."
 
 api-runtime-data-ci: dataprep-download-runtime-assets
 	@echo "✔️ API runtime data artifacts ready for CI image build."
 
-api-build: api-prepare-data-ci api-runtime-data-ci
+api-build: dataprep-retrieval-ci api-runtime-data-ci
 	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
+	docker compose build api
+
+api-build-ci: api-prepare-data-ci api-runtime-data-ci
+	@echo "▶ Building Docker image for API (CI reuse): $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
 	docker compose build api
 
 api-install:
@@ -151,7 +155,7 @@ dataprep-knowledge-ci: dataprep-download-retrieval-inputs dataprep-download-tech
 	@echo "▶ Preparing knowledge artifacts for API image..."
 	cd backend-ts && npm run dataprep:knowledge:ci && KNOWLEDGE_PUBLIC_CHECK_REQUIRE_TECH_DOC_IMAGES=1 npm run dataprep:knowledge:public-check
 
-dataprep-retrieval-ci: dataprep-download-retrieval-inputs api-install
+dataprep-retrieval-ci-local: api-install
 	@rm -f .dataprep-retrieval-rebuilt
 	@echo "▶ Ensuring retrieval artifacts for API image..."
 	cd backend-ts && DATAPREP_REBUILD_MARKER=../.dataprep-retrieval-rebuilt npm run dataprep:ensure-retrieval:ci
@@ -160,6 +164,8 @@ dataprep-retrieval-ci: dataprep-download-retrieval-inputs api-install
 	else \
 		echo "↷ Retrieval artifacts fresh; retrieval cache upload skipped."; \
 	fi
+
+dataprep-retrieval-ci: dataprep-download-retrieval-inputs dataprep-retrieval-ci-local
 
 dataprep-ocr-caption-benchmark: api-install
 	@echo "▶ Running OCR caption benchmark..."
