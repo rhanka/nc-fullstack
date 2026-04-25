@@ -1,8 +1,8 @@
 import { get, writable, type Writable } from 'svelte/store';
 
-import { chatElementRef } from '../lib/chat/stores';
-import type { ReferenceSourceItem } from '../lib/chat/contracts';
-import { resetReferenceSources } from '../lib/chat/stores';
+import { chatElementRef } from '../lib/chat/stores.ts';
+import type { ReferenceSourceItem } from '../lib/chat/contracts.ts';
+import { resetReferenceSources } from '../lib/chat/stores.ts';
 
 export const TASK_IDS = ['000', '100', '200', '300', '400', '500'] as const;
 
@@ -131,6 +131,12 @@ export function resetCreatedItem(): void {
 }
 
 export const createdItem = createLocalStorageStore<CreatedItem>('createdItem', initialCreatedItem());
+export function setCreatedItemCurrentTask(task: TaskId): void {
+  createdItem.update((current) => ({
+    ...current,
+    currentTask: task,
+  }));
+}
 export const updateCreatedItem = writable<UpdateCreatedItemPayload>(null);
 export const taskLabel: Record<TaskId, string> = {
   '000': 'Non-Conformity Report',
