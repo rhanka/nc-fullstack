@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-runtime-data-ci api-build api-build-ci api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-retrieval-ci-local dataprep-upload-retrieval-cache dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
+.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-runtime-data-ci api-build api-build-ci api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-retrieval-ci-local dataprep-upload-retrieval-cache dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-package-runtime-bundle dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
 
 # ----------------------------
 # Helpers
@@ -23,6 +23,8 @@ export S3_ENDPOINT_URL ?= https://s3.fr-par.scw.cloud
 export VITE_API_URL    ?=
 export TECH_DOCS_DIR   ?= a220-tech-docs
 export NC_DIR          ?= a220-non-conformities
+export RUNTIME_BUNDLE_DIR ?= api/data/runtime-bundles
+export RUNTIME_BUNDLE_NAME ?= api-runtime-data
 export API_PORT        ?= 8000
 export UI_PORT         ?= 5177
 export NGINX_PORT      ?= 8080
@@ -421,6 +423,29 @@ dataprep-download-runtime-assets: check-s5cmd
 
 dataprep-download-minimal: dataprep-download-retrieval-inputs dataprep-download-runtime-assets
 	@echo "✔️  Minimal data download completed."
+
+dataprep-package-runtime-bundle:
+	@echo "▶ Packaging runtime data bundle..."
+	@mkdir -p '$(RUNTIME_BUNDLE_DIR)'
+	@cd backend-ts && node --experimental-strip-types scripts/build_runtime_bundle_manifest.ts \
+		--repo-root .. \
+		--tech-docs-dir '$(TECH_DOCS_DIR)' \
+		--nc-dir '$(NC_DIR)' \
+		--file-list '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).filelist' \
+		--bundle '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst' \
+		--bundle-sha '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256' \
+		--output '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).manifest.json'
+	@tar -cf - -T '$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).filelist' | zstd -3 -q -c > '$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst'
+	@sha256sum '$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst' > '$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256'
+	@cd backend-ts && node --experimental-strip-types scripts/build_runtime_bundle_manifest.ts \
+		--repo-root .. \
+		--tech-docs-dir '$(TECH_DOCS_DIR)' \
+		--nc-dir '$(NC_DIR)' \
+		--file-list '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).filelist' \
+		--bundle '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst' \
+		--bundle-sha '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256' \
+		--output '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).manifest.json'
+	@echo "✔️  Runtime bundle ready: $(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst"
 
 .PHONY: deps env config clean
 clean:

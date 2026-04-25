@@ -39,6 +39,14 @@ test("CD workflow reuses the retrieval download done by image check", () => {
   assert.match(makefile, /^dataprep-retrieval-ci-local: api-install$/m);
 });
 
+test("runtime bundle packaging target builds a tar.zst bundle plus manifest", () => {
+  assert.match(makefile, /^dataprep-package-runtime-bundle:/m);
+  assert.match(makefile, /build_runtime_bundle_manifest\.ts/u);
+  assert.match(makefile, /zstd -3/u);
+  assert.match(makefile, /\.tar\.zst/u);
+  assert.match(makefile, /\.manifest\.json/u);
+});
+
 test("CI retrieval ensure uses the prepared dataset without requiring PDF pages", () => {
   assert.match(makefile, /npm run dataprep:ensure-retrieval:ci/);
   assert.equal(
