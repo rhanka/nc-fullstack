@@ -179,6 +179,7 @@
 
 - Note: smoke technique repo-local rejoué le 2026-04-24 sur `000`, `100` et `Linked images`; les items `TEST + UAT` restent volontairement ouverts jusqu'à validation utilisateur explicite.
 - Note: replay technique complémentaire du 2026-04-25: le smoke `100` a révélé une fuite de JSON brut dans la bulle assistant, et le retour vers `000` une propagation incomplète de `currentTask`; les deux régressions ont été corrigées et couvertes par tests UI ciblés, sans cocher les items UAT correspondants.
+- Note: replay live complémentaire du 2026-04-25 après rebuild complet + fix runtime: `000` et `100` retournent de nouveau des payloads structurés même en `gpt-5.4-nano + auto`, donc le blocage `task 100` n'est plus un problème de format. En revanche, la pertinence retrieval reste perfectible: sur des cas ESD / fuel, les `Entities` top-rankées restent souvent hors sujet. Le critère de sortie `pertinence retrieval` reste donc ouvert malgré le fix de structuration.
 
 - Note: un bloqueur pré-UAT du lot 6 a été corrigé: si `ontology/` ou `wiki/` manque, le backend TS bootstrap désormais la couche connaissance en mode déterministe sans embeddings, et filtre les faux concepts documentaires génériques (`1. Scope`, `Reference`, etc.).
 - Note: ce bootstrap local sert uniquement à débloquer le runtime et les checks techniques; il ne remplace pas le full rebuild TS attendu avant l'UAT utilisateur du lot 6.
