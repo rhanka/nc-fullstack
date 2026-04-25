@@ -7,6 +7,7 @@ import path from "node:path";
 import {
   createOcrCaptionBatch,
   importOcrCaptionBatchResults,
+  refreshOcrTechDocsAfterBatchImport,
   type OcrCaptionBatchApiClient,
 } from "../src/dataprep/ocr-caption-batch.ts";
 
@@ -252,4 +253,62 @@ test("createOcrCaptionBatch deep phase selects only pending deep-pass pages", as
   assert.equal(result.manifest.requestCount, 1);
   assert.equal(result.manifest.requests[0]?.doc, "A220-fuel_page_0001.pdf");
   assert.match(client.jsonl, /gpt-5.4/u);
+});
+
+test("refreshOcrTechDocsAfterBatchImport rebuilds enriched OCR artifacts from imported caption sidecars", async () => {
+  const root = buildRoot();
+  writeOcrPage(root, "A220-fuel_page_0001.pdf", "# Fuel flow\n\n![img](img.png)");
+  const client = new FakeBatchClient();
+  const created = await createOcrCaptionBatch({
+    pagesDir: path.join(root, "pages"),
+    ocrDir: path.join(root, "ocr"),
+    outputFile: path.join(root, "managed", "prepared.csv.gz"),
+    batchDir: path.join(root, "batch"),
+    phase: "primary",
+    mode: "force",
+    model: "gpt-5.4-nano",
+    reasoning: "low",
+    imageDetail: "original",
+    maxOutputTokens: 6000,
+    client,
+  });
+  const outputPath = path.join(root, "batch", "output.jsonl");
+  writeFileSync(
+    outputPath,
+    JSON.stringify({
+      custom_id: created.manifest.requests[0]?.customId,
+      response: {
+        status_code: 200,
+        body: {
+          output_text: captionPayload("flow_diagram"),
+        },
+      },
+    }) + "\n",
+  );
+  await importOcrCaptionBatchResults({
+    manifestPath: created.manifestPath,
+    outputJsonlPath: outputPath,
+    client,
+  });
+
+  const result = await refreshOcrTechDocsAfterBatchImport({
+    pagesDir: path.join(root, "pages"),
+    ocrDir: path.join(root, "ocr"),
+    outputFile: path.join(root, "managed", "prepared.csv.gz"),
+    auditFile: path.join(root, "managed", "prepared.audit.json"),
+  });
+
+  assert.equal(result.ocr.captionJsonWritten, 0);
+  assert.equal(result.ocr.captionJsonSkipped, 1);
+  assert.equal(result.csv.captionJsonRead, 1);
+  assert.equal(result.csv.enrichedJsonWritten, 1);
+  assert.equal(result.csv.enrichedMarkdownWritten, 1);
+  assert.match(
+    readFileSync(path.join(root, "ocr", "A220-fuel_page_0001__with_img_desc.md"), "utf8"),
+    /Image description:/u,
+  );
+  assert.match(
+    readFileSync(path.join(root, "managed", "prepared.audit.json"), "utf8"),
+    /"captionJsonRead": 1/u,
+  );
 });

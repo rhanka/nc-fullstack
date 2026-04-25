@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-download-tech-docs-ocr dataprep-knowledge-ci
+.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr dataprep-knowledge-ci
 
 # ----------------------------
 # Helpers
@@ -163,6 +163,10 @@ dataprep-ocr-caption-batch-status: api-install
 dataprep-ocr-caption-batch-import: api-install
 	@echo "▶ Importing OCR caption OpenAI batch results..."
 	cd backend-ts && npm run dataprep:ocr-caption-batch:import
+
+dataprep-ocr-caption-batch-refresh: api-install
+	@echo "▶ Refreshing OCR-enriched artifacts from imported caption sidecars..."
+	cd backend-ts && npm run dataprep:ocr-caption-batch:refresh
 
 dataprep-knowledge-ci: dataprep-download-minimal dataprep-download-tech-docs-ocr api-install
 	@echo "▶ Preparing knowledge artifacts for API image..."
