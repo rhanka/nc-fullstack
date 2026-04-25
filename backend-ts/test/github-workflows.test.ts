@@ -33,3 +33,8 @@ test("API deploy workflow uses the CI build target that reuses retrieval inputs"
   assert.match(deployApiWorkflow, /- name: Download data and Build API[\s\S]*make api-build-ci/u);
   assert.doesNotMatch(deployApiWorkflow, /- name: Download data and Build API[\s\S]*make api-build\s*$/mu);
 });
+
+test("API deploy workflow checks image existence through the runtime bundle CI path", () => {
+  assert.match(deployApiWorkflow, /- name: Check if API image is up to date[\s\S]*make api-image-check-ci/u);
+  assert.doesNotMatch(deployApiWorkflow, /- name: Check if API image is up to date[\s\S]*make api-image-check\s*$/mu);
+});

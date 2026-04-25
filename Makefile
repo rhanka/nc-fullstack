@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-runtime-data-ci api-build api-build-ci api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-retrieval-ci-local dataprep-upload-retrieval-cache dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-package-runtime-bundle dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
+.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-image-check-ci api-prepare-data-ci api-runtime-data-ci api-build api-build-ci api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-retrieval-ci-local dataprep-upload-retrieval-cache dataprep-upload-runtime-bundle dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-download-runtime-bundle dataprep-package-runtime-bundle dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
 
 # ----------------------------
 # Helpers
@@ -25,6 +25,7 @@ export TECH_DOCS_DIR   ?= a220-tech-docs
 export NC_DIR          ?= a220-non-conformities
 export RUNTIME_BUNDLE_DIR ?= api/data/runtime-bundles
 export RUNTIME_BUNDLE_NAME ?= api-runtime-data
+export RUNTIME_BUNDLE_S3_PREFIX ?= runtime-bundles
 export API_PORT        ?= 8000
 export UI_PORT         ?= 5177
 export NGINX_PORT      ?= 8080
@@ -91,7 +92,7 @@ ui-test:
 # Containerisation
 # ----------------------------
 
-api-prepare-data-ci: dataprep-retrieval-ci-local
+api-prepare-data-ci: dataprep-download-runtime-bundle dataprep-retrieval-ci-local
 	@echo "✔️ API data artifacts ready for CI image build."
 
 api-runtime-data-ci: dataprep-download-runtime-assets
@@ -101,7 +102,7 @@ api-build: dataprep-retrieval-ci api-runtime-data-ci
 	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
 	docker compose build api
 
-api-build-ci: api-prepare-data-ci api-runtime-data-ci
+api-build-ci: api-prepare-data-ci
 	@echo "▶ Building Docker image for API (CI reuse): $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
 	docker compose build api
 
@@ -201,6 +202,10 @@ docker-login:
 	@echo "$(DOCKER_PASSWORD)" | docker login $(REGISTRY) -u $(DOCKER_USERNAME) --password-stdin
 
 api-image-check: dataprep-download-retrieval-inputs docker-login
+	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
+	docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
+
+api-image-check-ci: dataprep-download-runtime-bundle docker-login
 	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
 	docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
 
@@ -334,7 +339,22 @@ dataprep-upload-retrieval-cache: check-s5cmd
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/knowledge-manifest.json' s3://${S3_BUCKET_NC}/knowledge-manifest.json; \
 	fi
 
-dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
+dataprep-upload-runtime-bundle: dataprep-package-runtime-bundle check-s5cmd
+	@if [ -z "${S3_DATAPREP_ACCESS_KEY}" ] || [ -z "${S3_DATAPREP_SECRET_KEY}" ]; then \
+		echo "❌ Error: S3_DATAPREP_ACCESS_KEY and S3_DATAPREP_SECRET_KEY must be set in env"; \
+		exit 1; \
+	fi
+	@echo "▶ Uploading runtime bundle to Scaleway..."
+	@set -eu; \
+	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY}; \
+	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY}; \
+	for file in "$(RUNTIME_BUNDLE_NAME).tar.zst" "$(RUNTIME_BUNDLE_NAME).tar.zst.sha256" "$(RUNTIME_BUNDLE_NAME).manifest.json" "$(RUNTIME_BUNDLE_NAME).filelist"; do \
+		test -f "$(RUNTIME_BUNDLE_DIR)/$$file" || { echo "❌ Missing runtime bundle artifact: $(RUNTIME_BUNDLE_DIR)/$$file"; exit 1; }; \
+		echo "  - $$file"; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "$(RUNTIME_BUNDLE_DIR)/$$file" "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$$file"; \
+	done
+
+dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs dataprep-upload-runtime-bundle
 	@echo "✔️  All data upload completed."
 
 # ----------------------------
@@ -423,6 +443,27 @@ dataprep-download-runtime-assets: check-s5cmd
 
 dataprep-download-minimal: dataprep-download-retrieval-inputs dataprep-download-runtime-assets
 	@echo "✔️  Minimal data download completed."
+
+dataprep-download-runtime-bundle: check-s5cmd
+	@echo "▶ Downloading API runtime bundle from Scaleway..."
+	@set -eu; \
+	mkdir -p '$(RUNTIME_BUNDLE_DIR)'; \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).tar.zst" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst"; \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"; \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).manifest.json" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).manifest.json"; \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).filelist" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).filelist"; \
+	sha256sum -c "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"; \
+	BUNDLE_SHA=$$(awk '{print $$1}' "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"); \
+	EXTRACT_MARKER="$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).extracted.sha256"; \
+	if [ -f "$$EXTRACT_MARKER" ] && [ "$$(cat "$$EXTRACT_MARKER")" = "$$BUNDLE_SHA" ]; then \
+		echo "↷ Runtime bundle already extracted for $$BUNDLE_SHA."; \
+	else \
+		echo "▶ Extracting API runtime bundle..."; \
+		rm -rf "api/data/${TECH_DOCS_DIR}/managed_dataset" "api/data/${TECH_DOCS_DIR}/vector-export" "api/data/${TECH_DOCS_DIR}/lexical" "api/data/${TECH_DOCS_DIR}/ontology" "api/data/${TECH_DOCS_DIR}/wiki" "api/data/${TECH_DOCS_DIR}/pages" "api/data/${TECH_DOCS_DIR}/knowledge-manifest.json" "api/data/${NC_DIR}/managed_dataset" "api/data/${NC_DIR}/vector-export" "api/data/${NC_DIR}/lexical" "api/data/${NC_DIR}/ontology" "api/data/${NC_DIR}/wiki" "api/data/${NC_DIR}/json" "api/data/${NC_DIR}/knowledge-manifest.json"; \
+		zstd -dc "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst" | tar -xf -; \
+		printf '%s\n' "$$BUNDLE_SHA" > "$$EXTRACT_MARKER"; \
+	fi
+	@echo "✔️  API runtime bundle download completed."
 
 dataprep-package-runtime-bundle:
 	@echo "▶ Packaging runtime data bundle..."
