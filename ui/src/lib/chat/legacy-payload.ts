@@ -105,7 +105,9 @@ export function normalizeLegacyFinalPayload(payload: LegacyFinalPayload): Legacy
     text:
       typeof embeddedPayload.comment === 'string'
         ? embeddedPayload.comment
-        : payload.text,
+        : embeddedPayload.label !== undefined || embeddedPayload.description !== undefined
+          ? undefined
+          : payload.text,
     label:
       typeof embeddedPayload.label === 'string'
         ? embeddedPayload.label

@@ -36,7 +36,8 @@
     selectDoc,
     selectEntity,
     activeTabValue,
-    resetCreatedItem
+    resetCreatedItem,
+    setCreatedItemCurrentTask
   } from "./store";
 
   if (typeof Promise.withResolvers !== "function") {
@@ -262,7 +263,7 @@
     expand = true;
     const role = $askForHelp as ChatTaskRole;
     $askForHelp = false;
-    $createdItem.currentTask = role as typeof $createdItem.currentTask;
+    setCreatedItemCurrentTask(role as typeof $createdItem.currentTask);
     setTimeout(() => {
       $chatElementRef?.clearMessages?.();
     }, 200);

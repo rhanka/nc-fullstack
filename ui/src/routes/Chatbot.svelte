@@ -38,6 +38,7 @@
     selectDoc,
     selectEntity,
     taskLabel,
+    setCreatedItemCurrentTask,
     updateCreatedItem,
   } from "./store";
 
@@ -1529,7 +1530,7 @@
     }
 
     if (role) {
-      $createdItem.currentTask = role as typeof $createdItem.currentTask;
+      setCreatedItemCurrentTask(role as (typeof TASK_IDS)[number]);
     }
 
     const taskContext = buildTaskContext();
