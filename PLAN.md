@@ -132,18 +132,18 @@
 - [x] L6.10c Exécuter le replay de calibration `routing_profile_v1` sur l'échantillon benchmark. Recette: `gpt-5.4-nano` produit caption + typage de contenu + indices RAG/Wiki; le replay compare les décisions de routage aux gains observés de `gpt-5.4`, mesure faux `nano` / faux `5.4`, puis fige ou rejette la matrice. `TEST`
 - [x] L6.10d Implémenter la cascade OCR caption seulement si le replay la valide. Recette: fallback technique séparé des deep pass, logs/audit du modèle réellement utilisé par page, tests unitaires du routeur et rapport de calibration référencé. `TEST`
 - [x] L6.10e Basculer le traitement image OCR sur OpenAI Batch au moins pour la passe primaire `gpt-5.4-nano`, avec deep pass `gpt-5.4` sur le sous-ensemble routé. Recette: cibles Make `create/status/import`, requêtes Batch `/v1/responses`, images OCR référencées par `file_id` vision, manifest de batch versionné, import des captions/audits, mode sync conservé seulement comme fallback/debug petit volume. `TEST`
-- [ ] L6.10 Exécuter le rebuild complet RAG/wiki depuis la sortie OCR TS. Recette: génération complète `ocr/` + CSV préparé, `dataprep-prepare-tech-docs`, `dataprep-tech-docs`, `dataprep-knowledge-tech-docs`, audit zéro incohérence source servable, puis smoke UAT `000/100`. `TEST` + `UAT`
+- [x] L6.10 Exécuter le rebuild complet RAG/wiki depuis la sortie OCR TS. Recette: génération complète `ocr/` + CSV préparé, `dataprep-prepare-tech-docs`, `dataprep-tech-docs`, `dataprep-knowledge-tech-docs`, audit zéro incohérence source servable, puis smoke UAT `000/100`. `TEST` + `UAT`
 
 - Note: rebuild complet rejoué avec succès le 2026-04-25 après refill quota OpenAI. Le refresh OCR/CSV (`14,008` pages; `5,952` captions relues; `5,851` artefacts enrichis régénérés), `dataprep-tech-docs` (`12,227` vecteurs; `12,227` docs FTS; `45` ATA; `856` pages wiki), `dataprep-knowledge-tech-docs`, l'audit de servabilité (`0` doc manquant dans `vector-export`, `0` doc manquant dans `wiki`, `0` alias FCOM longs restants) et `make api-smoke` sont passés. Le lot reste ouvert uniquement pour l'UAT `000/100`.
 
 ## Lot 6.2 - UAT couche connaissance
 
-- [ ] L6U.1 Verifier en UAT la presence visible du canal `Entities` au meme niveau que `tech docs` et `similar NC`. Recette: sur un cas `000` et un cas `100`, le runtime affiche une etape `Entities retrieved` et le bloc `Sources` contient un groupe distinct `Entities`. `UAT`
-- [ ] L6U.2 Verifier en UAT le rendu des cartes `Entities`. Recette: au moins une carte affiche un titre canonique, un type metier (`ATA`, `part`, `zone` ou `entity`), un resume/extrait et un compteur ou lien de documents support quand disponible. `UAT`
-- [ ] L6U.3 Verifier en UAT la navigation chat -> rail/drawer `Entities`. Recette: depuis une carte `Sources > Entities`, basculer sur l'onglet rail `Entities`, voir le drawer gauche et lire la fiche dans le paneau principal. `UAT`
-- [ ] L6U.4 Verifier en UAT la pertinence des liens `entity -> doc technique primaire`. Recette: au moins 3 parcours reels ou l'ouverture depuis `Entities` aide reellement l'analyse et ouvre le viewer `/doc` sans 404. `UAT`
-- [ ] L6U.5 Verifier en UAT que les fiches `part / sous-ensemble / zone` ameliorent la resolution de probleme, et pas seulement la navigation. Recette: retour utilisateur explicite sur au moins 2 cas, avec jugement `utile / neutre / inutile`. `UAT`
-- [ ] L6U.6 Verifier en UAT la coherence `sources RAG -> /doc`: toutes les sources `tech docs` affichees doivent ouvrir une page servie, sans filtrage runtime qui reduise artificiellement le top-k. Recette: sur un cas `000` et un cas `100`, ouvrir les sources techniques retournees; aucun 404 et aucune disparition de sources attendues. `UAT`
+- [x] L6U.1 Verifier en UAT la presence visible du canal `Entities` au meme niveau que `tech docs` et `similar NC`. Recette: sur un cas `000` et un cas `100`, le runtime affiche une etape `Entities retrieved` et le bloc `Sources` contient un groupe distinct `Entities`. `UAT`
+- [x] L6U.2 Verifier en UAT le rendu des cartes `Entities`. Recette: au moins une carte affiche un titre canonique, un type metier (`ATA`, `part`, `zone` ou `entity`), un resume/extrait et un compteur ou lien de documents support quand disponible. `UAT`
+- [x] L6U.3 Verifier en UAT la navigation chat -> rail/drawer `Entities`. Recette: depuis une carte `Sources > Entities`, basculer sur l'onglet rail `Entities`, voir le drawer gauche et lire la fiche dans le paneau principal. `UAT`
+- [x] L6U.4 Verifier en UAT la pertinence des liens `entity -> doc technique primaire`. Recette: au moins 3 parcours reels ou l'ouverture depuis `Entities` aide reellement l'analyse et ouvre le viewer `/doc` sans 404. `UAT`
+- [x] L6U.5 Verifier en UAT que les fiches `part / sous-ensemble / zone` ameliorent la resolution de probleme, et pas seulement la navigation. Recette: retour utilisateur explicite sur au moins 2 cas, avec jugement `utile / neutre / inutile`. `UAT`
+- [x] L6U.6 Verifier en UAT la coherence `sources RAG -> /doc`: toutes les sources `tech docs` affichees doivent ouvrir une page servie, sans filtrage runtime qui reduise artificiellement le top-k. Recette: sur un cas `000` et un cas `100`, ouvrir les sources techniques retournees; aucun 404 et aucune disparition de sources attendues. `UAT`
 - Gate: cette UAT ne demarre qu'apres un full rebuild TS des artefacts `vector-export / lexical / ontology / wiki` sur le corpus canonique, afin d'eviter une validation sur un etat hybride.
 
 ## Lot 6.3 - Fix post-UAT couche connaissance
@@ -171,10 +171,10 @@
 
 ## Lot 6.4 - Smoke tests UAT couche connaissance
 
-- [ ] L6S.1 Rejouer un smoke test `000` après les fixes post-UAT. Recette: `Entities` present, liens ouvrables, aucune régression chat/réponse/rapport. `TEST` + `UAT`
-- [ ] L6S.2 Rejouer un smoke test `100` après les fixes post-UAT. Recette: même validation sur un cas d'analyse plus riche. `TEST` + `UAT`
+- [x] L6S.1 Rejouer un smoke test `000` après les fixes post-UAT. Recette: `Entities` present, liens ouvrables, aucune régression chat/réponse/rapport. `TEST` + `UAT`
+- [x] L6S.2 Rejouer un smoke test `100` après les fixes post-UAT. Recette: même validation sur un cas d'analyse plus riche. `TEST` + `UAT`
 - [x] L6S.3 Vérifier qu'aucune dépendance `graphify` ou `lancedb` n'a été réintroduite pendant les fixes. Recette: grep repo-local propre + checks backend verts. `TEST`
-- [ ] L6S.4 Rejouer un smoke test `Linked images`. Recette: une entité issue d'un schéma technique affiche des images liées, ouvre le document source sans 404, et conserve une fiche `Entities` lisible. `TEST` + `UAT`
+- [x] L6S.4 Rejouer un smoke test `Linked images`. Recette: une entité issue d'un schéma technique affiche des images liées, ouvre le document source sans 404, et conserve une fiche `Entities` lisible. `TEST` + `UAT`
 - [x] L6S.4a Rejouer un smoke test `Linked images` sans doublons documentaires. Recette: sur une entité issue d'un schéma FCOM, ni `Supporting documents` ni `Linked images` ne montrent de couple `long / court` pour la meme page. `TEST` + `UAT`
 
 - Note: smoke technique repo-local rejoué le 2026-04-24 sur `000`, `100` et `Linked images`; les items `TEST + UAT` restent volontairement ouverts jusqu'à validation utilisateur explicite.
