@@ -17,19 +17,49 @@ function targetPrerequisites(target: string): string[] {
   return match[1]!.trim().split(/\s+/).filter(Boolean);
 }
 
-test("API image check only prepares retrieval artifacts, not runtime PDF assets", () => {
-  assert.deepEqual(targetPrerequisites("api-prepare-data-ci"), ["dataprep-retrieval-ci"]);
+test("API CI prepare path restores the runtime bundle before retrieval checks", () => {
+  assert.deepEqual(targetPrerequisites("api-prepare-data-ci"), ["dataprep-download-runtime-bundle", "dataprep-retrieval-ci-local"]);
+  assert.deepEqual(targetPrerequisites("dataprep-retrieval-ci-local"), ["api-install"]);
   assert.ok(targetPrerequisites("dataprep-retrieval-ci").includes("dataprep-download-retrieval-inputs"));
   assert.ok(!targetPrerequisites("dataprep-retrieval-ci").includes("dataprep-download-minimal"));
 });
 
-test("API image check does not install dependencies or regenerate retrieval artifacts", () => {
-  assert.deepEqual(targetPrerequisites("api-image-check"), ["dataprep-download-retrieval-inputs", "docker-login"]);
+test("API image check CI hydrates through the runtime bundle path", () => {
+  assert.deepEqual(targetPrerequisites("api-image-check-ci"), ["dataprep-download-runtime-bundle", "docker-login"]);
 });
 
-test("API build downloads runtime assets after retrieval artifacts are ready", () => {
-  assert.deepEqual(targetPrerequisites("api-build"), ["api-prepare-data-ci", "api-runtime-data-ci"]);
+test("API build CI reuses the already extracted runtime bundle", () => {
+  assert.deepEqual(targetPrerequisites("api-build"), ["dataprep-retrieval-ci", "api-runtime-data-ci"]);
+  assert.deepEqual(targetPrerequisites("api-build-ci"), ["api-prepare-data-ci"]);
   assert.deepEqual(targetPrerequisites("api-runtime-data-ci"), ["dataprep-download-runtime-assets"]);
+});
+
+test("CD workflow reuses the runtime bundle extraction done by image check", () => {
+  assert.match(makefile, /^api-build-ci: api-prepare-data-ci$/m);
+  assert.match(makefile, /^dataprep-retrieval-ci-local: api-install$/m);
+  assert.match(makefile, /Runtime bundle already current/u);
+});
+
+test("runtime bundle packaging target builds a tar.zst bundle plus manifest", () => {
+  assert.match(makefile, /^dataprep-package-runtime-bundle:/m);
+  assert.match(makefile, /build_runtime_bundle_manifest\.ts/u);
+  assert.match(makefile, /zstd -3/u);
+  assert.match(makefile, /\.tar\.zst/u);
+  assert.match(makefile, /\.manifest\.json/u);
+});
+
+test("runtime bundle download target restores the bundle from object storage and verifies checksum", () => {
+  assert.match(makefile, /^dataprep-download-runtime-bundle:/m);
+  assert.match(makefile, /runtime-bundles/u);
+  assert.match(makefile, /Runtime bundle already current/u);
+  assert.match(makefile, /sha256sum -c/u);
+  assert.match(makefile, /zstd -dc .*tar -xf -/u);
+});
+
+test("runtime bundle upload target publishes the bundle sidecars and is part of upload-all", () => {
+  assert.match(makefile, /^dataprep-upload-runtime-bundle: dataprep-package-runtime-bundle check-s5cmd$/m);
+  assert.match(makefile, /\$\(RUNTIME_BUNDLE_NAME\)\.tar\.zst/u);
+  assert.match(makefile, /^dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs dataprep-upload-runtime-bundle$/m);
 });
 
 test("CI retrieval ensure uses the prepared dataset without requiring PDF pages", () => {
@@ -65,4 +95,15 @@ test("retrieval ensure script emits a rebuild marker for CI upload gating", () =
   assert.match(ensureRetrievalScript, /DATAPREP_REBUILD_MARKER/);
   assert.match(ensureRetrievalScript, /writeFileSync\(rebuildMarkerPath/);
   assert.match(ensureRetrievalScript, /rebuiltCorpora/);
+});
+
+test("deploy targets support smoke checks and rollback", () => {
+  assert.match(makefile, /^deploy-api-smoke: check-jq$/m);
+  assert.match(makefile, /^rollback-api-container: check-scw check-jq$/m);
+  assert.match(makefile, /API_PUBLIC_URL\s+\?=\s+https:\/\/nc-api\.sent-tech\.ca/u);
+  assert.match(makefile, /PREVIOUS_API_IMAGE must be set/u);
+});
+
+test("API version hash includes the runtime bundle manifest", () => {
+  assert.match(makefile, /RUNTIME_BUNDLE_DIR\}\/\$\{RUNTIME_BUNDLE_NAME\}\.manifest\.json/u);
 });

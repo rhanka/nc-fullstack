@@ -184,6 +184,19 @@
 - Note: un bloqueur pré-UAT du lot 6 a été corrigé: si `ontology/` ou `wiki/` manque, le backend TS bootstrap désormais la couche connaissance en mode déterministe sans embeddings, et filtre les faux concepts documentaires génériques (`1. Scope`, `Reference`, etc.).
 - Note: ce bootstrap local sert uniquement à débloquer le runtime et les checks techniques; il ne remplace pas le full rebuild TS attendu avant l'UAT utilisateur du lot 6.
 
+## Lot 7 - CD ordonné et data runtime persistante
+
+- [x] L7.1 Ordonner le CD `API -> UI` au lieu de deux workflows parallèles indépendants. Recette: un merge `master` déploie l'API en premier, valide un smoke minimal API/version, puis seulement l'UI; aucun état prod ne sert une UI plus récente que l'API attendue. `TEST`
+- [x] L7.2 Mesurer précisément le budget temps du CD API actuel et isoler le coût `image check / data download / image build / publish / deploy`. Recette: rapport versionné avec temps par étape sur au moins un run `master`, plus baseline cible après optimisation. `TEST`
+- [x] L7.2a Supprimer le double téléchargement retrieval entre `api-image-check` et `api-build`. Recette: le workflow CD API télécharge `retrieval` une seule fois par run, réutilise le workspace pour la préparation d'image, et les tests Makefile/workflow prouvent l'absence de second `dataprep-download-retrieval-inputs`. `TEST`
+- [x] L7.3 Basculer le CD API du sync multi-objets vers le bundle runtime versionné. Recette: le workflow build/deploy télécharge une archive unique `tar.zst` + manifest/hash, l'extrait avant build image, et n'utilise plus les `sync` S3 de milliers de fichiers pour les corpus runtime. `TEST`
+- [x] L7.4 Introduire un bundle runtime data versionné par manifest/hash. Recette: artefacts corpus empaquetés en archive unique (`tar.zst` par défaut, `tar.gz` acceptable seulement si contrainte outillage), avec `knowledge-manifest.json`/hash explicite pour décider si une hydratation est nécessaire. `TEST`
+- [x] L7.5 Formaliser la décision court terme runtime data. Recette: note d'architecture versionnée actant que la cible retenue à ce stade est `Serverless Containers + bundle tar.zst + manifest/hash` dans le CD actuel, sans migration d'hébergement dans ce lot. `AUTO`
+- [x] L7.7 N'hydrater ou rafraîchir la data runtime que si le manifest/hash change. Recette: si le code API change sans changement de données, le CD saute l'étape de refresh bundle/extraction et redéploie seulement l'image; si le manifest change, la préparation data est rejouée avant le build/deploy. `TEST`
+- [x] L7.8 Ajouter rollback et smoke post-déploiement pour l'API avant publication UI. Recette: en cas d'échec hydratation ou smoke API, l'UI n'est pas déployée et la version précédente continue de servir. `TEST` + `UAT`
+- Note: ordre de priorité désormais verrouillé: `L7.1 -> L7.2 -> L7.2a -> L7.4 -> L7.5 -> L7.3 -> L7.7 -> L7.8`.
+- Note: à ce stade on reste volontairement sur `scw container container update` (`Serverless Containers`) et on optimise le CD autour d'un bundle `tar.zst`.
+
 ## Critères de sortie
 
 - [x] Le choix modèle / reasoning est explicite et observable. `TEST`
@@ -198,3 +211,5 @@
 - [ ] Le chat ne dépend plus d'un parsing ad hoc dans `Chatbot.svelte`. `TEST`
 - [ ] La pertinence retrieval progresse sur benchmark et en revue utilisateur. `TEST` + `UAT`
 - [x] L'API TS est protégée par contrats et contrôles répétables. `TEST`
+- [ ] Le CD produit n'expose jamais une UI plus récente qu'une API non encore déployée. `TEST`
+- [ ] Un déploiement backend sans changement de data runtime ne réhydrate pas les corpus et reste dans un budget temps court explicite. `TEST`
