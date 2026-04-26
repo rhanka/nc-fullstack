@@ -170,7 +170,6 @@ dataprep-retrieval-ci-local: api-install
 	fi
 
 dataprep-retrieval-ci: dataprep-download-retrieval-inputs dataprep-retrieval-ci-local
-
 dataprep-ocr-caption-benchmark: api-install
 	@echo "▶ Running OCR caption benchmark..."
 	cd backend-ts && npm run dataprep:ocr-caption-benchmark
