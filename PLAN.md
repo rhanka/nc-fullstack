@@ -191,12 +191,11 @@
 - [x] L7.2a Supprimer le double téléchargement retrieval entre `api-image-check` et `api-build`. Recette: le workflow CD API télécharge `retrieval` une seule fois par run, réutilise le workspace pour la préparation d'image, et les tests Makefile/workflow prouvent l'absence de second `dataprep-download-retrieval-inputs`. `TEST`
 - [x] L7.3 Basculer le CD API du sync multi-objets vers le bundle runtime versionné. Recette: le workflow build/deploy télécharge une archive unique `tar.zst` + manifest/hash, l'extrait avant build image, et n'utilise plus les `sync` S3 de milliers de fichiers pour les corpus runtime. `TEST`
 - [x] L7.4 Introduire un bundle runtime data versionné par manifest/hash. Recette: artefacts corpus empaquetés en archive unique (`tar.zst` par défaut, `tar.gz` acceptable seulement si contrainte outillage), avec `knowledge-manifest.json`/hash explicite pour décider si une hydratation est nécessaire. `TEST`
-- [x] L7.5 Formaliser la décision court terme runtime data. Recette: note d'architecture versionnée actant que la cible retenue à ce stade est `Serverless Containers + bundle tar.zst + manifest/hash` dans le CD actuel; une migration vers volume persistant reste une option future seulement si le gain obtenu reste insuffisant. `AUTO`
-- [ ] L7.6 Option future: réévaluer une migration vers un support Scaleway avec volume persistant si le budget CD reste insuffisant après bascule bundle. Recette: note de décision mise à jour avec mesure avant/après `L7.3/L7.7`, et migration d'hébergement seulement si le bundle `zst` ne suffit pas. `AUTO`
+- [x] L7.5 Formaliser la décision court terme runtime data. Recette: note d'architecture versionnée actant que la cible retenue à ce stade est `Serverless Containers + bundle tar.zst + manifest/hash` dans le CD actuel, sans migration d'hébergement dans ce lot. `AUTO`
 - [x] L7.7 N'hydrater ou rafraîchir la data runtime que si le manifest/hash change. Recette: si le code API change sans changement de données, le CD saute l'étape de refresh bundle/extraction et redéploie seulement l'image; si le manifest change, la préparation data est rejouée avant le build/deploy. `TEST`
 - [x] L7.8 Ajouter rollback et smoke post-déploiement pour l'API avant publication UI. Recette: en cas d'échec hydratation ou smoke API, l'UI n'est pas déployée et la version précédente continue de servir. `TEST` + `UAT`
-- Note: ordre de priorité désormais verrouillé: `L7.1 -> L7.2 -> L7.2a -> L7.4 -> L7.5 -> L7.3 -> L7.7 -> L7.8`, puis seulement `L7.6` si les gains restent insuffisants.
-- Note: à ce stade on reste volontairement sur `scw container container update` (`Serverless Containers`) et on optimise le CD autour d'un bundle `tar.zst`; la migration vers volume persistant n'est plus la cible active du lot.
+- Note: ordre de priorité désormais verrouillé: `L7.1 -> L7.2 -> L7.2a -> L7.4 -> L7.5 -> L7.3 -> L7.7 -> L7.8`.
+- Note: à ce stade on reste volontairement sur `scw container container update` (`Serverless Containers`) et on optimise le CD autour d'un bundle `tar.zst`.
 
 ## Critères de sortie
 

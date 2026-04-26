@@ -67,13 +67,6 @@ Implication:
   - deterministic integrity check
   - explicit change detection for later skip logic
 
-### Deferred architecture
-
-5. Migrate to a mounted persistent volume target.
-- Defer.
-- Reason: this is **not** the active plan anymore.
-- It remains an optional future path only if the gains from bundle-based CI hydration are insufficient.
-
 ## Resulting Execution Order
 
 The practical order for `Lot 7` is now:
@@ -86,7 +79,6 @@ The practical order for `Lot 7` is now:
 6. `L7.3` switch the API CD from flat-file sync to bundle download/extract
 7. `L7.7` skip bundle refresh when the manifest/hash is unchanged
 8. `L7.8` add rollback + smoke gate before UI publication
-9. `L7.6` only if the previous steps still leave the CD too slow
 
 ## Target CD Principle
 
@@ -104,17 +96,7 @@ On the current hosting target:
 ## Non-Goals For This Lot
 
 - no API hosting migration
-- no mounted persistent volume
 - no runtime cold-start extraction inside the live serverless container
-
-## Future Decision Gate
-
-If, after `L7.3` and `L7.7`, the measured API CD budget is still not acceptable, then reopen the infra branch:
-
-- `Instance + Block Storage`
-- or another Scaleway target with mounted persistent storage
-
-That is explicitly a **later** decision, not the current target.
 
 ## Sources
 

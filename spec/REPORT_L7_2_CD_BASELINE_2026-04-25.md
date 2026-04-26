@@ -131,7 +131,6 @@ Order of execution updated after `L7.4` validation:
 5. `L7.5` lock the short-term decision: keep `Serverless Containers`, optimize around the bundle path
 6. `L7.3` switch API CD from flat-file sync to bundle download/extract
 7. `L7.7+` add manifest-driven refresh and rollback/smoke gating
-8. `L7.6` only if bundle-based CI hydration still leaves the CD too slow
 
 ## Source Notes
 
