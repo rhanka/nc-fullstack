@@ -89,9 +89,32 @@ jobs:
           secret-key: ${{ secrets.SCW_SECRET_KEY }}
           default-project-id: ${{ secrets.SCW_PROJECT_ID }}
           default-organization-id: ${{ secrets.SCW_ORGANIZATION_ID }}
+
+      - name: Capture current API deploy state
+        id: current_state
+        run: |
+          API_CONTAINER_JSON="$(scw container container list name="${API_IMAGE_NAME}" -o json | jq -er '.[0]')"
+          echo "container_id=$(printf '%s' "$API_CONTAINER_JSON" | jq -r '.id')" >> "$GITHUB_OUTPUT"
+          echo "previous_image=$(printf '%s' "$API_CONTAINER_JSON" | jq -r '.registry_image')" >> "$GITHUB_OUTPUT"
+        env:
+          API_IMAGE_NAME: nc-chatbot-api
   
       - name: Deploy API
         run: make deploy-api
         env:
           REGISTRY: ${{ secrets.REGISTRY }}
           API_VERSION: ${{ needs.build.outputs.api_version }}
+          API_CONTAINER_ID: ${{ steps.current_state.outputs.container_id }}
+
+      - name: Smoke deployed API
+        run: make deploy-api-smoke
+        env:
+          API_PUBLIC_URL: https://nc-api.sent-tech.ca
+
+      - name: Roll back API if deploy smoke failed
+        if: ${{ failure() && steps.current_state.outputs.previous_image != '' }}
+        run: make rollback-api-container wait-for-container deploy-api-smoke
+        env:
+          API_CONTAINER_ID: ${{ steps.current_state.outputs.container_id }}
+          PREVIOUS_API_IMAGE: ${{ steps.current_state.outputs.previous_image }}
+          API_PUBLIC_URL: https://nc-api.sent-tech.ca

@@ -38,3 +38,10 @@ test("API deploy workflow checks image existence through the runtime bundle CI p
   assert.match(deployApiWorkflow, /- name: Check if API image is up to date[\s\S]*make api-image-check-ci/u);
   assert.doesNotMatch(deployApiWorkflow, /- name: Check if API image is up to date[\s\S]*make api-image-check\s*$/mu);
 });
+
+test("API deploy workflow captures previous image, smokes the deploy, and rolls back on failure", () => {
+  assert.match(deployApiWorkflow, /- name: Capture current API deploy state[\s\S]*registry_image/u);
+  assert.match(deployApiWorkflow, /- name: Smoke deployed API[\s\S]*make deploy-api-smoke/u);
+  assert.match(deployApiWorkflow, /- name: Roll back API if deploy smoke failed[\s\S]*make rollback-api-container wait-for-container deploy-api-smoke/u);
+  assert.match(deployApiWorkflow, /API_PUBLIC_URL:\s+https:\/\/nc-api\.sent-tech\.ca/u);
+});
