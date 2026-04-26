@@ -11,7 +11,7 @@
 # ----------------------------
 export UI_DIR          ?= ui
 export API_IMAGE_NAME  ?= nc-chatbot-api
-export API_VERSION     ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/package-lock.json backend-ts/Dockerfile shared api/src api/requirements.txt api/data/${TECH_DOCS_DIR}/lexical api/data/${TECH_DOCS_DIR}/ontology api/data/${TECH_DOCS_DIR}/vector-export api/data/${TECH_DOCS_DIR}/wiki api/data/${TECH_DOCS_DIR}/knowledge-manifest.json api/data/${NC_DIR}/lexical api/data/${NC_DIR}/ontology api/data/${NC_DIR}/vector-export api/data/${NC_DIR}/wiki api/data/${NC_DIR}/knowledge-manifest.json" | tr ' ' '\n' | xargs -I '{}' sh -c 'test -e "$$1" && find "$$1" -type f || true' sh '{}' | egrep -v '(__pycache__|/ontology/index\.json)' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION     ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/package-lock.json backend-ts/Dockerfile shared api/src api/requirements.txt api/data/${TECH_DOCS_DIR}/lexical api/data/${TECH_DOCS_DIR}/ontology api/data/${TECH_DOCS_DIR}/vector-export api/data/${TECH_DOCS_DIR}/wiki api/data/${TECH_DOCS_DIR}/knowledge-manifest.json api/data/${NC_DIR}/lexical api/data/${NC_DIR}/ontology api/data/${NC_DIR}/vector-export api/data/${NC_DIR}/wiki api/data/${NC_DIR}/knowledge-manifest.json ${RUNTIME_BUNDLE_DIR}/${RUNTIME_BUNDLE_NAME}.manifest.json" | tr ' ' '\n' | xargs -I '{}' sh -c 'test -e "$$1" && find "$$1" -type f || true' sh '{}' | egrep -v '(__pycache__|/ontology/index\.json)' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_CPU_LIMIT   ?= 250
 export API_MEM_LIMIT   ?= 512
 export UI_VERSION      ?= $(shell echo "ui/src ui/static ui/package.json ui/Dockerfile ui/vite.config.ts ui/svelte.config.js ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
@@ -26,6 +26,7 @@ export NC_DIR          ?= a220-non-conformities
 export RUNTIME_BUNDLE_DIR ?= api/data/runtime-bundles
 export RUNTIME_BUNDLE_NAME ?= api-runtime-data
 export RUNTIME_BUNDLE_S3_PREFIX ?= runtime-bundles
+export API_PUBLIC_URL  ?= https://nc-api.sent-tech.ca
 export API_PORT        ?= 8000
 export UI_PORT         ?= 5177
 export NGINX_PORT      ?= 8080
@@ -236,23 +237,49 @@ check-scw:
 # Deploy API container
 # ----------------------------
 
-deploy-api-container: check-scw
+deploy-api-container: check-scw check-jq
 	@echo "▶️ Updating container $(API_IMAGE_NAME) to image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)..."
-	API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
+	API_CONTAINER_ID=$${API_CONTAINER_ID:-$$(scw container container list name="$(API_IMAGE_NAME)" -o json | jq -er '.[0].id')}; \
 	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" > .deploy_output.log
 	@echo "✅ API deployment initiated."
 
-wait-for-container: check-scw
+wait-for-container: check-scw check-jq
 	@printf "⌛ Waiting for container to become ready.."
+	API_CONTAINER_ID=$${API_CONTAINER_ID:-$$(scw container container list name="$(API_IMAGE_NAME)" -o json | jq -er '.[0].id')}; \
 	API_CONTAINER_STATUS="pending"; \
 	while [ "$${API_CONTAINER_STATUS}" != "ready" ]; do \
-		API_CONTAINER_STATUS=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$4}'); \
+		API_CONTAINER_STATUS=$$(scw container container get "$${API_CONTAINER_ID}" -o json | jq -r '.status'); \
 		printf "."; \
 		sleep 1; \
 	done; \
 	printf "\n✅ New container is ready.\n"
 
 deploy-api: deploy-api-container wait-for-container
+
+deploy-api-smoke: check-jq
+	@echo "▶ Running API smoke against $(API_PUBLIC_URL)..."
+	@set -eu; \
+	for attempt in $$(seq 1 20); do \
+		if curl --silent --show-error --fail --connect-timeout 5 --max-time 15 "$(API_PUBLIC_URL)/ping" | jq -e '.status == "ok" and .service == "nc-backend-ts"' >/dev/null; then \
+			echo "✅ API smoke passed."; \
+			exit 0; \
+		fi; \
+		echo "↷ API smoke retry $$attempt/20"; \
+		sleep 5; \
+	done; \
+	echo "❌ API smoke failed for $(API_PUBLIC_URL)."; \
+	exit 1
+
+rollback-api-container: check-scw check-jq
+	@if [ -z "${PREVIOUS_API_IMAGE}" ]; then \
+		echo "❌ PREVIOUS_API_IMAGE must be set"; \
+		exit 1; \
+	fi
+	@echo "↩ Rolling back container $(API_IMAGE_NAME) to $(PREVIOUS_API_IMAGE)..."
+	@set -eu; \
+	API_CONTAINER_ID=$${API_CONTAINER_ID:-$$(scw container container list name="$(API_IMAGE_NAME)" -o json | jq -er '.[0].id')}; \
+	scw container container update "$${API_CONTAINER_ID}" registry-image="$(PREVIOUS_API_IMAGE)" > .deploy_output.log
+	@echo "✅ API rollback initiated."
 
 # ----------------------------
 # Data upload to Scaleway
@@ -448,16 +475,16 @@ dataprep-download-runtime-bundle: check-s5cmd
 	@echo "▶ Downloading API runtime bundle from Scaleway..."
 	@set -eu; \
 	mkdir -p '$(RUNTIME_BUNDLE_DIR)'; \
-	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).tar.zst" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst"; \
-	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"; \
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).manifest.json" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).manifest.json"; \
 	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).filelist" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).filelist"; \
-	sha256sum -c "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"; \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"; \
 	BUNDLE_SHA=$$(awk '{print $$1}' "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"); \
 	EXTRACT_MARKER="$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).extracted.sha256"; \
 	if [ -f "$$EXTRACT_MARKER" ] && [ "$$(cat "$$EXTRACT_MARKER")" = "$$BUNDLE_SHA" ]; then \
-		echo "↷ Runtime bundle already extracted for $$BUNDLE_SHA."; \
+		echo "↷ Runtime bundle already current for $$BUNDLE_SHA."; \
 	else \
+		s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).tar.zst" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst"; \
+		sha256sum -c "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"; \
 		echo "▶ Extracting API runtime bundle..."; \
 		rm -rf "api/data/${TECH_DOCS_DIR}/managed_dataset" "api/data/${TECH_DOCS_DIR}/vector-export" "api/data/${TECH_DOCS_DIR}/lexical" "api/data/${TECH_DOCS_DIR}/ontology" "api/data/${TECH_DOCS_DIR}/wiki" "api/data/${TECH_DOCS_DIR}/pages" "api/data/${TECH_DOCS_DIR}/knowledge-manifest.json" "api/data/${NC_DIR}/managed_dataset" "api/data/${NC_DIR}/vector-export" "api/data/${NC_DIR}/lexical" "api/data/${NC_DIR}/ontology" "api/data/${NC_DIR}/wiki" "api/data/${NC_DIR}/json" "api/data/${NC_DIR}/knowledge-manifest.json"; \
 		zstd -dc "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst" | tar -xf -; \

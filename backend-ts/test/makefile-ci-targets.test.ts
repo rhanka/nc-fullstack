@@ -37,7 +37,7 @@ test("API build CI reuses the already extracted runtime bundle", () => {
 test("CD workflow reuses the runtime bundle extraction done by image check", () => {
   assert.match(makefile, /^api-build-ci: api-prepare-data-ci$/m);
   assert.match(makefile, /^dataprep-retrieval-ci-local: api-install$/m);
-  assert.match(makefile, /Runtime bundle already extracted/u);
+  assert.match(makefile, /Runtime bundle already current/u);
 });
 
 test("runtime bundle packaging target builds a tar.zst bundle plus manifest", () => {
@@ -51,6 +51,7 @@ test("runtime bundle packaging target builds a tar.zst bundle plus manifest", ()
 test("runtime bundle download target restores the bundle from object storage and verifies checksum", () => {
   assert.match(makefile, /^dataprep-download-runtime-bundle:/m);
   assert.match(makefile, /runtime-bundles/u);
+  assert.match(makefile, /Runtime bundle already current/u);
   assert.match(makefile, /sha256sum -c/u);
   assert.match(makefile, /zstd -dc .*tar -xf -/u);
 });
@@ -94,4 +95,15 @@ test("retrieval ensure script emits a rebuild marker for CI upload gating", () =
   assert.match(ensureRetrievalScript, /DATAPREP_REBUILD_MARKER/);
   assert.match(ensureRetrievalScript, /writeFileSync\(rebuildMarkerPath/);
   assert.match(ensureRetrievalScript, /rebuiltCorpora/);
+});
+
+test("deploy targets support smoke checks and rollback", () => {
+  assert.match(makefile, /^deploy-api-smoke: check-jq$/m);
+  assert.match(makefile, /^rollback-api-container: check-scw check-jq$/m);
+  assert.match(makefile, /API_PUBLIC_URL\s+\?=\s+https:\/\/nc-api\.sent-tech\.ca/u);
+  assert.match(makefile, /PREVIOUS_API_IMAGE must be set/u);
+});
+
+test("API version hash includes the runtime bundle manifest", () => {
+  assert.match(makefile, /RUNTIME_BUNDLE_DIR\}\/\$\{RUNTIME_BUNDLE_NAME\}\.manifest\.json/u);
 });
