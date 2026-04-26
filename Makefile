@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-prepare-data-ci api-runtime-data-ci api-build api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-upload-retrieval-cache dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
+.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-image-check-ci api-prepare-data-ci api-runtime-data-ci api-build api-build-ci api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-retrieval-ci-local dataprep-upload-retrieval-cache dataprep-upload-runtime-bundle dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-download-runtime-bundle dataprep-package-runtime-bundle dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
 
 # ----------------------------
 # Helpers
@@ -11,7 +11,7 @@
 # ----------------------------
 export UI_DIR          ?= ui
 export API_IMAGE_NAME  ?= nc-chatbot-api
-export API_VERSION     ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/package-lock.json backend-ts/Dockerfile shared api/src api/requirements.txt api/data/${TECH_DOCS_DIR}/lexical api/data/${TECH_DOCS_DIR}/ontology api/data/${TECH_DOCS_DIR}/vector-export api/data/${TECH_DOCS_DIR}/wiki api/data/${TECH_DOCS_DIR}/knowledge-manifest.json api/data/${NC_DIR}/lexical api/data/${NC_DIR}/ontology api/data/${NC_DIR}/vector-export api/data/${NC_DIR}/wiki api/data/${NC_DIR}/knowledge-manifest.json" | tr ' ' '\n' | xargs -I '{}' sh -c 'test -e "$$1" && find "$$1" -type f || true' sh '{}' | egrep -v '(__pycache__|/ontology/index\.json)' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION     ?= $(shell echo "backend-ts/src backend-ts/scripts backend-ts/package.json backend-ts/package-lock.json backend-ts/Dockerfile shared api/src api/requirements.txt api/data/${TECH_DOCS_DIR}/lexical api/data/${TECH_DOCS_DIR}/ontology api/data/${TECH_DOCS_DIR}/vector-export api/data/${TECH_DOCS_DIR}/wiki api/data/${TECH_DOCS_DIR}/knowledge-manifest.json api/data/${NC_DIR}/lexical api/data/${NC_DIR}/ontology api/data/${NC_DIR}/vector-export api/data/${NC_DIR}/wiki api/data/${NC_DIR}/knowledge-manifest.json ${RUNTIME_BUNDLE_DIR}/${RUNTIME_BUNDLE_NAME}.manifest.json" | tr ' ' '\n' | xargs -I '{}' sh -c 'test -e "$$1" && find "$$1" -type f || true' sh '{}' | egrep -v '(__pycache__|/ontology/index\.json)' | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_CPU_LIMIT   ?= 250
 export API_MEM_LIMIT   ?= 512
 export UI_VERSION      ?= $(shell echo "ui/src ui/static ui/package.json ui/Dockerfile ui/vite.config.ts ui/svelte.config.js ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
@@ -23,6 +23,10 @@ export S3_ENDPOINT_URL ?= https://s3.fr-par.scw.cloud
 export VITE_API_URL    ?=
 export TECH_DOCS_DIR   ?= a220-tech-docs
 export NC_DIR          ?= a220-non-conformities
+export RUNTIME_BUNDLE_DIR ?= api/data/runtime-bundles
+export RUNTIME_BUNDLE_NAME ?= api-runtime-data
+export RUNTIME_BUNDLE_S3_PREFIX ?= runtime-bundles
+export API_PUBLIC_URL  ?= https://nc-api.sent-tech.ca
 export API_PORT        ?= 8000
 export UI_PORT         ?= 5177
 export NGINX_PORT      ?= 8080
@@ -89,14 +93,18 @@ ui-test:
 # Containerisation
 # ----------------------------
 
-api-prepare-data-ci: dataprep-retrieval-ci
+api-prepare-data-ci: dataprep-download-runtime-bundle dataprep-retrieval-ci-local
 	@echo "✔️ API data artifacts ready for CI image build."
 
 api-runtime-data-ci: dataprep-download-runtime-assets
 	@echo "✔️ API runtime data artifacts ready for CI image build."
 
-api-build: api-prepare-data-ci api-runtime-data-ci
+api-build: dataprep-retrieval-ci api-runtime-data-ci
 	@echo "▶ Building Docker image for API: $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
+	docker compose build api
+
+api-build-ci: api-prepare-data-ci
+	@echo "▶ Building Docker image for API (CI reuse): $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"
 	docker compose build api
 
 api-install:
@@ -151,7 +159,7 @@ dataprep-knowledge-ci: dataprep-download-retrieval-inputs dataprep-download-tech
 	@echo "▶ Preparing knowledge artifacts for API image..."
 	cd backend-ts && npm run dataprep:knowledge:ci && KNOWLEDGE_PUBLIC_CHECK_REQUIRE_TECH_DOC_IMAGES=1 npm run dataprep:knowledge:public-check
 
-dataprep-retrieval-ci: dataprep-download-retrieval-inputs api-install
+dataprep-retrieval-ci-local: api-install
 	@rm -f .dataprep-retrieval-rebuilt
 	@echo "▶ Ensuring retrieval artifacts for API image..."
 	cd backend-ts && DATAPREP_REBUILD_MARKER=../.dataprep-retrieval-rebuilt npm run dataprep:ensure-retrieval:ci
@@ -161,6 +169,7 @@ dataprep-retrieval-ci: dataprep-download-retrieval-inputs api-install
 		echo "↷ Retrieval artifacts fresh; retrieval cache upload skipped."; \
 	fi
 
+dataprep-retrieval-ci: dataprep-download-retrieval-inputs dataprep-retrieval-ci-local
 dataprep-ocr-caption-benchmark: api-install
 	@echo "▶ Running OCR caption benchmark..."
 	cd backend-ts && npm run dataprep:ocr-caption-benchmark
@@ -196,6 +205,10 @@ api-image-check: dataprep-download-retrieval-inputs docker-login
 	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
 	docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
 
+api-image-check-ci: dataprep-download-runtime-bundle docker-login
+	@echo "▶ Checking if image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists"
+	docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) >/dev/null 2>&1 && echo "✅ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) exists" || (echo "❌ Image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) does not exist" && exit 1)
+
 api-image-publish: docker-login
 	@echo "▶ Pushing API image to registry"
 	docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
@@ -223,23 +236,49 @@ check-scw:
 # Deploy API container
 # ----------------------------
 
-deploy-api-container: check-scw
+deploy-api-container: check-scw check-jq
 	@echo "▶️ Updating container $(API_IMAGE_NAME) to image $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)..."
-	API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
+	API_CONTAINER_ID=$${API_CONTAINER_ID:-$$(scw container container list name="$(API_IMAGE_NAME)" -o json | jq -er '.[0].id')}; \
 	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" > .deploy_output.log
 	@echo "✅ API deployment initiated."
 
-wait-for-container: check-scw
+wait-for-container: check-scw check-jq
 	@printf "⌛ Waiting for container to become ready.."
+	API_CONTAINER_ID=$${API_CONTAINER_ID:-$$(scw container container list name="$(API_IMAGE_NAME)" -o json | jq -er '.[0].id')}; \
 	API_CONTAINER_STATUS="pending"; \
 	while [ "$${API_CONTAINER_STATUS}" != "ready" ]; do \
-		API_CONTAINER_STATUS=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$4}'); \
+		API_CONTAINER_STATUS=$$(scw container container get "$${API_CONTAINER_ID}" -o json | jq -r '.status'); \
 		printf "."; \
 		sleep 1; \
 	done; \
 	printf "\n✅ New container is ready.\n"
 
 deploy-api: deploy-api-container wait-for-container
+
+deploy-api-smoke: check-jq
+	@echo "▶ Running API smoke against $(API_PUBLIC_URL)..."
+	@set -eu; \
+	for attempt in $$(seq 1 20); do \
+		if curl --silent --show-error --fail --connect-timeout 5 --max-time 15 "$(API_PUBLIC_URL)/ping" | jq -e '.status == "ok" and .service == "nc-backend-ts"' >/dev/null; then \
+			echo "✅ API smoke passed."; \
+			exit 0; \
+		fi; \
+		echo "↷ API smoke retry $$attempt/20"; \
+		sleep 5; \
+	done; \
+	echo "❌ API smoke failed for $(API_PUBLIC_URL)."; \
+	exit 1
+
+rollback-api-container: check-scw check-jq
+	@if [ -z "${PREVIOUS_API_IMAGE}" ]; then \
+		echo "❌ PREVIOUS_API_IMAGE must be set"; \
+		exit 1; \
+	fi
+	@echo "↩ Rolling back container $(API_IMAGE_NAME) to $(PREVIOUS_API_IMAGE)..."
+	@set -eu; \
+	API_CONTAINER_ID=$${API_CONTAINER_ID:-$$(scw container container list name="$(API_IMAGE_NAME)" -o json | jq -er '.[0].id')}; \
+	scw container container update "$${API_CONTAINER_ID}" registry-image="$(PREVIOUS_API_IMAGE)" > .deploy_output.log
+	@echo "✅ API rollback initiated."
 
 # ----------------------------
 # Data upload to Scaleway
@@ -326,7 +365,22 @@ dataprep-upload-retrieval-cache: check-s5cmd
 		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" 'api/data/${NC_DIR}/knowledge-manifest.json' s3://${S3_BUCKET_NC}/knowledge-manifest.json; \
 	fi
 
-dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs
+dataprep-upload-runtime-bundle: dataprep-package-runtime-bundle check-s5cmd
+	@if [ -z "${S3_DATAPREP_ACCESS_KEY}" ] || [ -z "${S3_DATAPREP_SECRET_KEY}" ]; then \
+		echo "❌ Error: S3_DATAPREP_ACCESS_KEY and S3_DATAPREP_SECRET_KEY must be set in env"; \
+		exit 1; \
+	fi
+	@echo "▶ Uploading runtime bundle to Scaleway..."
+	@set -eu; \
+	export AWS_ACCESS_KEY_ID=${S3_DATAPREP_ACCESS_KEY}; \
+	export AWS_SECRET_ACCESS_KEY=${S3_DATAPREP_SECRET_KEY}; \
+	for file in "$(RUNTIME_BUNDLE_NAME).tar.zst" "$(RUNTIME_BUNDLE_NAME).tar.zst.sha256" "$(RUNTIME_BUNDLE_NAME).manifest.json" "$(RUNTIME_BUNDLE_NAME).filelist"; do \
+		test -f "$(RUNTIME_BUNDLE_DIR)/$$file" || { echo "❌ Missing runtime bundle artifact: $(RUNTIME_BUNDLE_DIR)/$$file"; exit 1; }; \
+		echo "  - $$file"; \
+		s5cmd --endpoint-url ${S3_ENDPOINT_URL} cp --acl "public-read" "$(RUNTIME_BUNDLE_DIR)/$$file" "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$$file"; \
+	done
+
+dataprep-upload-all: dataprep-upload-nc-data dataprep-upload-tech-docs dataprep-upload-runtime-bundle
 	@echo "✔️  All data upload completed."
 
 # ----------------------------
@@ -415,6 +469,50 @@ dataprep-download-runtime-assets: check-s5cmd
 
 dataprep-download-minimal: dataprep-download-retrieval-inputs dataprep-download-runtime-assets
 	@echo "✔️  Minimal data download completed."
+
+dataprep-download-runtime-bundle: check-s5cmd
+	@echo "▶ Downloading API runtime bundle from Scaleway..."
+	@set -eu; \
+	mkdir -p '$(RUNTIME_BUNDLE_DIR)'; \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).manifest.json" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).manifest.json"; \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).filelist" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).filelist"; \
+	s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"; \
+	BUNDLE_SHA=$$(awk '{print $$1}' "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"); \
+	EXTRACT_MARKER="$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).extracted.sha256"; \
+	if [ -f "$$EXTRACT_MARKER" ] && [ "$$(cat "$$EXTRACT_MARKER")" = "$$BUNDLE_SHA" ]; then \
+		echo "↷ Runtime bundle already current for $$BUNDLE_SHA."; \
+	else \
+		s5cmd --no-sign-request --endpoint-url ${S3_ENDPOINT_URL} cp "s3://${S3_BUCKET_DOCS}/$(RUNTIME_BUNDLE_S3_PREFIX)/$(RUNTIME_BUNDLE_NAME).tar.zst" "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst"; \
+		sha256sum -c "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256"; \
+		echo "▶ Extracting API runtime bundle..."; \
+		rm -rf "api/data/${TECH_DOCS_DIR}/managed_dataset" "api/data/${TECH_DOCS_DIR}/vector-export" "api/data/${TECH_DOCS_DIR}/lexical" "api/data/${TECH_DOCS_DIR}/ontology" "api/data/${TECH_DOCS_DIR}/wiki" "api/data/${TECH_DOCS_DIR}/pages" "api/data/${TECH_DOCS_DIR}/knowledge-manifest.json" "api/data/${NC_DIR}/managed_dataset" "api/data/${NC_DIR}/vector-export" "api/data/${NC_DIR}/lexical" "api/data/${NC_DIR}/ontology" "api/data/${NC_DIR}/wiki" "api/data/${NC_DIR}/json" "api/data/${NC_DIR}/knowledge-manifest.json"; \
+		zstd -dc "$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst" | tar -xf -; \
+		printf '%s\n' "$$BUNDLE_SHA" > "$$EXTRACT_MARKER"; \
+	fi
+	@echo "✔️  API runtime bundle download completed."
+
+dataprep-package-runtime-bundle:
+	@echo "▶ Packaging runtime data bundle..."
+	@mkdir -p '$(RUNTIME_BUNDLE_DIR)'
+	@cd backend-ts && node --experimental-strip-types scripts/build_runtime_bundle_manifest.ts \
+		--repo-root .. \
+		--tech-docs-dir '$(TECH_DOCS_DIR)' \
+		--nc-dir '$(NC_DIR)' \
+		--file-list '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).filelist' \
+		--bundle '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst' \
+		--bundle-sha '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256' \
+		--output '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).manifest.json'
+	@tar -cf - -T '$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).filelist' | zstd -3 -q -c > '$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst'
+	@sha256sum '$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst' > '$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256'
+	@cd backend-ts && node --experimental-strip-types scripts/build_runtime_bundle_manifest.ts \
+		--repo-root .. \
+		--tech-docs-dir '$(TECH_DOCS_DIR)' \
+		--nc-dir '$(NC_DIR)' \
+		--file-list '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).filelist' \
+		--bundle '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst' \
+		--bundle-sha '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst.sha256' \
+		--output '../$(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).manifest.json'
+	@echo "✔️  Runtime bundle ready: $(RUNTIME_BUNDLE_DIR)/$(RUNTIME_BUNDLE_NAME).tar.zst"
 
 .PHONY: deps env config clean
 clean:
