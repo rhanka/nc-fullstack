@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nc-chatbot-api
+  namespace: nc-fullstack
+  labels:
+    app: nc-chatbot-api
+    app.kubernetes.io/name: nc-chatbot-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nc-chatbot-api
+  template:
+    metadata:
+      labels:
+        app: nc-chatbot-api
+    spec:
+      imagePullSecrets:
+        - name: nc-reg-pull
+      containers:
+        - name: api
+          # __API_VERSION__ is substituted by the deploy-k8s workflow with `make api-version`.
+          image: rg.fr-par.scw.cloud/nc-reg/nc-chatbot-api:__API_VERSION__
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: PORT
+              value: "8000"
+            - name: TECH_DOCS_DIR
+              value: "a220-tech-docs"
+            - name: NC_DIR
+              value: "a220-non-conformities"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nc-chatbot-api-secrets
+                  key: OPENAI_API_KEY
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 3
+            failureThreshold: 20
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3

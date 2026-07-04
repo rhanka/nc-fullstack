@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nc-chatbot-api
+  namespace: nc-fullstack
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # BOTH required by the shared Traefik: entrypoints pins the router to websecure,
+    # router.tls=true makes it a TLS router. Without router.tls the router is built as
+    # plain-HTTP on the :8443 TLS entrypoint -> cert serves but no TLS router matches -> silent 404.
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - nc-api.sent-tech.ca
+      secretName: nc-fullstack-tls
+  rules:
+    - host: nc-api.sent-tech.ca
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nc-chatbot-api
+                port:
+                  name: http
