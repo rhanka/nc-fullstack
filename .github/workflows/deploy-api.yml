@@ -80,6 +80,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
 
       - name: Publish API docker image to GHCR
         run: make api-image-publish-ghcr
@@ -87,6 +88,7 @@ jobs:
           REGISTRY: ${{ secrets.REGISTRY }}
           API_VERSION: ${{ steps.api_version.outputs.api_version }}
         if: steps.image-check.outcome == 'failure'
+        continue-on-error: true
 
   deploy:
     name: Deploy API
