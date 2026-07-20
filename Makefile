@@ -1,5 +1,5 @@
 .SILENT:
-.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-image-check-ci api-prepare-data-ci api-runtime-data-ci api-build api-build-ci api-install api-image-publish api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-retrieval-ci-local dataprep-upload-retrieval-cache dataprep-upload-runtime-bundle dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-download-runtime-bundle dataprep-package-runtime-bundle dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
+.PHONY: dev dev-stop up down ui-install ui-build ui-check ui-test docker-build docker-push build deploy deps env config clean help api-version api-image-check-ci api-prepare-data-ci api-runtime-data-ci api-build api-build-ci api-install api-image-publish api-image-publish-ghcr api-test api-smoke api-contracts api-review-routing check deploy-api dataprep dataprep-prepare-tech-docs dataprep-tech-docs dataprep-nc dataprep-knowledge dataprep-knowledge-tech-docs dataprep-knowledge-ci dataprep-retrieval-ci dataprep-retrieval-ci-local dataprep-upload-retrieval-cache dataprep-upload-runtime-bundle dataprep-download-retrieval-inputs dataprep-download-runtime-assets dataprep-download-runtime-bundle dataprep-package-runtime-bundle dataprep-ocr-tech-docs dataprep-ocr-caption-benchmark dataprep-ocr-routing-calibration dataprep-ocr-caption-batch-create dataprep-ocr-caption-batch-status dataprep-ocr-caption-batch-import dataprep-ocr-caption-batch-refresh dataprep-download-tech-docs-ocr
 
 # ----------------------------
 # Helpers
@@ -16,6 +16,8 @@ export API_CPU_LIMIT   ?= 250
 export API_MEM_LIMIT   ?= 512
 export UI_VERSION      ?= $(shell echo "ui/src ui/static ui/package.json ui/Dockerfile ui/vite.config.ts ui/svelte.config.js ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | egrep -v '__pycache__'  | sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export REGISTRY        ?= rg.fr-par.scw.cloud
+export GHCR_REGISTRY   ?= ghcr.io
+export GHCR_NAMESPACE  ?= rhanka
 export S3_BUCKET_DOCS  ?= a220-tech-docs
 export S3_BUCKET_NC    ?= a220-non-conformities
 export S3_REGION       ?= fr-par
@@ -212,6 +214,14 @@ api-image-check-ci: dataprep-download-runtime-bundle docker-login
 api-image-publish: docker-login
 	@echo "▶ Pushing API image to registry"
 	docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
+
+# GHCR login is handled by docker/login-action in CI; this target only
+# (re)tags the image already built/pushed to SCR above and pushes it to
+# GHCR as an additional registry (double-publish, SCR stays primary).
+api-image-publish-ghcr:
+	@echo "▶ Tagging and pushing API image to GHCR"
+	docker tag $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) $(GHCR_REGISTRY)/$(GHCR_NAMESPACE)/$(API_IMAGE_NAME):$(API_VERSION)
+	docker push $(GHCR_REGISTRY)/$(GHCR_NAMESPACE)/$(API_IMAGE_NAME):$(API_VERSION)
 
 build: ui-build api-build
 
