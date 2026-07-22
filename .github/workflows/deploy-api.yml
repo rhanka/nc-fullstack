@@ -21,9 +21,12 @@ jobs:
   build:
     name: Build and Deploy API
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     outputs:
       api_version: ${{ steps.api_version.outputs.api_version }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -69,6 +72,23 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
           API_VERSION: ${{ steps.api_version.outputs.api_version }}
         if: steps.image-check.outcome == 'failure'
+
+      - name: Login to GHCR
+        if: steps.image-check.outcome == 'failure'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Publish API docker image to GHCR
+        run: make api-image-publish-ghcr
+        env:
+          REGISTRY: ${{ secrets.REGISTRY }}
+          API_VERSION: ${{ steps.api_version.outputs.api_version }}
+        if: steps.image-check.outcome == 'failure'
+        continue-on-error: true
 
   deploy:
     name: Deploy API
