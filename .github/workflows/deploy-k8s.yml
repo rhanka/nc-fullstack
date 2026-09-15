@@ -1,4 +1,8 @@
-name: Deploy API to Scaleway
+name: Deploy API to Kubernetes
+
+# Replaces the former "Deploy API to Scaleway" serverless workflow (container decommissioned
+# 2026-07-03). Builds/pushes the image to nc-reg, then applies the k8s manifests to the
+# nc-fullstack namespace using a scoped kubeconfig (KUBE_CONFIG_DATA secret).
 
 on:
   push:
@@ -10,23 +14,22 @@ on:
       - 'backend-ts/**'
       - 'shared/**'
       - 'dataprep/**'
+      - 'k8s/**'
       - 'docker-compose.yml'
       - '.dockerignore'
       - 'Makefile'
-      - '.github/workflows/deploy-api.yml'
-      - '.github/workflows/deploy-ui.yml'
+      - '.github/workflows/deploy-k8s.yml'
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build and Deploy API
+    name: Build and Publish API image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     outputs:
       api_version: ${{ steps.api_version.outputs.api_version }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -91,7 +94,7 @@ jobs:
         continue-on-error: true
 
   deploy:
-    name: Deploy API
+    name: Deploy to k8s (nc-fullstack)
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/master'
@@ -99,42 +102,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Use CLI
-        uses: scaleway/action-scw@v0
-        with:
-          save-config: true
-          export-config: true
-          version: v2.24.0
-          access-key: ${{ secrets.SCW_ACCESS_KEY }}
-          secret-key: ${{ secrets.SCW_SECRET_KEY }}
-          default-project-id: ${{ secrets.SCW_PROJECT_ID }}
-          default-organization-id: ${{ secrets.SCW_ORGANIZATION_ID }}
-
-      - name: Capture current API deploy state
-        id: current_state
+      - name: Install kubectl
         run: |
-          API_CONTAINER_JSON="$(scw container container list name="${API_IMAGE_NAME}" -o json | jq -er '.[0]')"
-          echo "container_id=$(printf '%s' "$API_CONTAINER_JSON" | jq -r '.id')" >> "$GITHUB_OUTPUT"
-          echo "previous_image=$(printf '%s' "$API_CONTAINER_JSON" | jq -r '.registry_image')" >> "$GITHUB_OUTPUT"
+          curl -sfLO "https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
+          kubectl version --client
+
+      - name: Configure kubeconfig
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 -d > "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Apply secret + manifests
         env:
-          API_IMAGE_NAME: nc-chatbot-api
-  
-      - name: Deploy API
-        run: make deploy-api
-        env:
-          REGISTRY: ${{ secrets.REGISTRY }}
           API_VERSION: ${{ needs.build.outputs.api_version }}
-          API_CONTAINER_ID: ${{ steps.current_state.outputs.container_id }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          kubectl -n nc-fullstack create secret generic nc-chatbot-api-secrets \
+            --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          sed "s|__API_VERSION__|${API_VERSION}|g" k8s/deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/service.yaml -f k8s/networkpolicy.yaml
+          kubectl -n nc-fullstack rollout status deploy/nc-chatbot-api --timeout=180s
 
       - name: Smoke deployed API
-        run: make deploy-api-smoke
-        env:
-          API_PUBLIC_URL: https://nc-api.sent-tech.ca
-
-      - name: Roll back API if deploy smoke failed
-        if: ${{ failure() && steps.current_state.outputs.previous_image != '' }}
-        run: make rollback-api-container wait-for-container deploy-api-smoke
-        env:
-          API_CONTAINER_ID: ${{ steps.current_state.outputs.container_id }}
-          PREVIOUS_API_IMAGE: ${{ steps.current_state.outputs.previous_image }}
-          API_PUBLIC_URL: https://nc-api.sent-tech.ca
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://nc-api.sent-tech.ca/ping || true)
+            if [ "$code" = "200" ]; then echo "smoke OK (200)"; exit 0; fi
+            echo "attempt $i -> $code, retrying..."; sleep 6
+          done
+          echo "smoke failed"; exit 1
