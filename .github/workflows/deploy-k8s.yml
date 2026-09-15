@@ -122,7 +122,7 @@ jobs:
             --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY" \
             --dry-run=client -o yaml | kubectl apply -f -
           sed "s|__API_VERSION__|${API_VERSION}|g" k8s/deployment.yaml | kubectl apply -f -
-          kubectl apply -f k8s/service.yaml -f k8s/ingress.yaml -f k8s/networkpolicy.yaml
+          kubectl apply -f k8s/service.yaml -f k8s/networkpolicy.yaml
           kubectl -n nc-fullstack rollout status deploy/nc-chatbot-api --timeout=180s
 
       - name: Smoke deployed API
