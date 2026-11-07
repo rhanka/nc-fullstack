@@ -20,7 +20,7 @@
       extensions: [StarterKit, Markdown],
       content: value,
       onUpdate: ({ editor }) => {
-        const content = editor.storage.markdown.getMarkdown();
+        const content = /** @type {any} */ (editor.storage).markdown.getMarkdown();
         if (content !== value) {
             lastValue = content;
             value = content;
