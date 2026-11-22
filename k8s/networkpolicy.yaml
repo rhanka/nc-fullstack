@@ -1,0 +1,21 @@
+# The nc-fullstack namespace is default-deny-ingress, so Traefik cannot reach the pod
+# without this allow rule. Egress is not denied, so OpenAI/DNS egress works.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-traefik
+  namespace: nc-fullstack
+spec:
+  podSelector:
+    matchLabels:
+      app: nc-chatbot-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - protocol: TCP
+          port: 8000
