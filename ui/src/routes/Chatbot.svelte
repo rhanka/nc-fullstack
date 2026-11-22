@@ -1,7 +1,6 @@
 <script lang="ts">
   import { marked } from "marked";
-  import type { UIMessage } from "@ai-sdk/svelte";
-  import { parsePartialJson } from "@ai-sdk/ui-utils";
+  import { parsePartialJson } from "$lib/chat/partial-json";
   import Icon from "@iconify/svelte";
   import { afterUpdate, onMount, tick } from "svelte";
   import { getApiBaseUrl } from "$lib/api-base";
@@ -87,6 +86,14 @@
   };
 
   type StructuredMessagePart = TextPart | ReasoningSummaryPart | SourcesPart | NcUpdatePart;
+
+  type UIMessage = {
+    id: string;
+    role: "user" | "assistant" | "system";
+    content: string;
+    createdAt?: Date;
+    parts?: unknown[];
+  };
 
   type ChatMessage = UIMessage;
 
