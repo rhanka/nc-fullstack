@@ -18,7 +18,7 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "deep-chat": "2.1.1",
     "marked": "^15.0.5",
-    "svelte": "^5.55.3",
+    "svelte": "^5.55.7",
     "svelte-check": "^4.1.1",
     "svelte-file-dropzone": "^2.0.9",
     "typescript": "^5.7.2",
